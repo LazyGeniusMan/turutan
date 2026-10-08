@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "tombi-toml.tombi",
+        "hverlin.mise-vscode",
+        "charliermarsh.ruff",
+        "astral-sh.ty",
+        "void-zero.vite-plus-extension-pack"
+    ]
+}

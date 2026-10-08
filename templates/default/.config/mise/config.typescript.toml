@@ -1,0 +1,42 @@
+[settings]
+npm.package_manager = "bun"
+
+[tools]
+bun = "1"
+node = "24"
+vp = "1"
+
+[bootstrap.packages]
+# dev
+"apk:musl-dev" = "latest"
+"apk:libstdc++-dev" = "latest"
+"apk:linux-headers" = "latest"
+"apt:libc6-dev" = "latest"
+"apt:libstdc++-16-dev" = "latest"
+"apt:linux-libc-dev" = "latest"
+"dnf:glibc-devel" = "latest"
+"dnf:libstdc++-devel" = "latest"
+"dnf:kernel-headers" = "latest"
+"pacman:glibc" = "latest"
+"pacman:gcc-libs" = "latest"
+"pacman:linux-api-headers" = "latest"
+"winget:Microsoft.WindowsSDK.10.0.26100" = "latest"
+"zypper:glibc-devel" = "latest"
+"zypper:libstdc++-devel" = "latest"
+"zypper:linux-glibc-devel" = "latest"
+# rt
+"apk:musl" = "latest"
+"apk:libstdc++" = "latest"
+"apk:libgcc" = "latest"
+"apt:libc6" = "latest"
+"apt:libstdc++6" = "latest"
+"apt:libgcc-s1" = "latest"
+"dnf:glibc" = "latest"
+"dnf:libstdc++" = "latest"
+"dnf:libgcc" = "latest"
+# "pacman:glibc" = "latest"
+# "pacman:gcc-libs" = "latest"
+"winget:Microsoft.VCRedist.2015+.x64" = "latest"
+"zypper:glibc" = "latest"
+"zypper:libstdc++6" = "latest"
+"zypper:libgcc_s1" = "latest"
