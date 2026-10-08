@@ -1,0 +1,60 @@
+[settings]
+npm.package_manager = "bun"
+minimum_release_age_excludes = [
+  "github:Goldziher/ai-rulez",
+  "github:Goldziher/basemind",
+  "npm:@opencode/cli",
+  "npm:t3",
+  "npm:@earendil-works/pi-coding-agent",
+]
+
+[env]
+BASEMIND_ALLOW_HTTP = 1
+T3CODE_SERVER_BROWSER_SANDBOX = 0
+
+[tools]
+"github:Goldziher/ai-rulez" = "4"
+"github:Goldziher/basemind" = "0"
+bun = "1"
+node = "24"
+"npm:@opencode/cli" = { version = "2", bun_args = "--trust" }
+"npm:@earendil-works/pi-coding-agent" = "1.1.0"
+"npm:t3" = { prefix = "0.0.46-nightly", prerelease = 1 }
+
+[daemons.opencode]
+run = "exec opencode serve --port $PORT"
+port = 4096
+
+[daemons.t3code]
+run = "exec t3 serve --port $PORT --dev-url {{ env.PROXY_URI | replace(from='{{port}}', to=env.PORT) }}"
+port = 3773
+
+[daemons.basemind-comms]
+run = "exec basemind comms daemon"
+
+[tasks."dev-setup:ai-rulez"]
+depends = "dev-setup:fnox"
+run = "fnox exec -- ai-rulez generate -p {{ mise_env | join(sep=',') }}"
+
+[tasks."dev-setup:basemind"]
+run = "basemind scan"
+
+[tasks."dev:basemind"]
+daemons = "basemind-comms"
+run = "echo 'basemind comms is running '"
+
+[tasks."dev:opencode:start"]
+daemons = "opencode"
+run = "echo 'OpenCode Web UI is running on {{ env.PROXY_URI | replace(from='{{port}}', to=env.OPENCODE_PORT) }}'"
+
+[tasks."dev:opencode:pair"]
+depends = "dev:opencode:start"
+run = "opencode pair --url {{ env.PROXY_URI | replace(from='{{port}}', to=env.OPENCODE_PORT) }}"
+
+[tasks."dev:t3code:start"]
+daemons = "t3code"
+run = "t3 browser setup && echo 'T3 Code Web UI is running on {{ env.PROXY_URI | replace(from='{{port}}', to=env.T3CODE_PORT) }}'"
+
+[tasks."dev:t3code:pair"]
+depends = "dev:t3code:start"
+run = "t3 pair"

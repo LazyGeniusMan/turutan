@@ -1,0 +1,102 @@
+amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+// Using a coding agent? See https://hk.jdx.dev/agents
+
+local linters = new Mapping<String, Step> {
+  ["newlines"] = (Builtins.newlines) {
+    profiles = List("core")
+  }
+  ["mixed-line-ending"] = (Builtins.mixed_line_ending) {
+    profiles = List("core")
+    depends = "newlines"
+  }
+  ["pkl-format"] = (Builtins.pkl_format) {
+    profiles = List("core")
+    depends = "mixed-line-ending"
+  }
+  ["pkl"] = (Builtins.pkl) {
+    profiles = List("core")
+    depends = "pkl-format"
+  }
+  ["tombi-format"] = (Builtins.tombi_format) {
+    profiles = List("core")
+    depends = "mixed-line-ending"
+  }
+  ["tombi"] = (Builtins.tombi) {
+    profiles = List("core")
+    depends = "tombi-format"
+  }
+  ["mise"] = (Builtins.mise) {
+    profiles = List("core")
+    depends = "tombi"
+  }
+  ["betterleaks"] = (Builtins.betterleaks) {
+    profiles = List("core")
+  }
+  ["fnox-check"] {
+    profiles = List("core")
+    glob = ".config/fnox.toml"
+    check = "fnox check"
+    depends = "mixed-line-ending"
+  }
+  ["fnox-scan"] {
+    profiles = List("core")
+    check = "fnox scan"
+    depends = "fnox-check"
+  }
+  ["ai-rulez"] {
+    profiles = List("ai")
+    glob = ".ai-rulez/config.toml"
+    check = "ai-rulez validate"
+    depends = "fnox-check"
+  }
+  ["go-fix"] = (Builtins.go_fix) {
+    profiles = List("go")
+    depends = "mixed-line-ending"
+  }
+  ["go-fmt"] = (Builtins.go_fmt) {
+    profiles = List("go")
+    depends = "go-fix"
+  }
+  ["go-vet"] = (Builtins.go_vet) {
+    profiles = List("go")
+    depends = "go-fix"
+  }
+  ["gomod-tidy"] = (Builtins.gomod_tidy) {
+    profiles = List("go")
+    depends = "go-fix"
+  }
+  ["ryl"] = (Builtins.ryl) {
+    profiles = List("docker", "github", "kubernetes")
+    depends = "mixed-line-ending"
+  }
+}
+
+hooks {
+  ["check"] {
+    steps = linters
+  }
+  ["fix"] {
+    steps = linters
+  }
+  ["commit-msg"] {
+    steps {
+      ["conventional-commit"] = Builtins.check_conventional_commit
+    }
+  }
+  ["pre-commit"] {
+    fix = true
+    stage = true
+    stash = "git"
+    steps = linters
+  }
+  ["post-checkout"] {
+    steps {
+      ["install-deps"] {
+        step_condition = "is_branch_checkout"
+        check = "mise install"
+      }
+    }
+  }
+}

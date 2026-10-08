@@ -1,0 +1,23 @@
+[tools]
+clang = "23"
+
+[bootstrap.packages]
+# dev
+"apk:musl-dev" = "latest"
+"apk:linux-headers" = "latest"
+"apt:libc6-dev" = "latest"
+"apt:linux-libc-dev" = "latest"
+"dnf:glibc-devel" = "latest"
+"dnf:kernel-headers" = "latest"
+"pacman:glibc" = "latest"
+"pacman:linux-api-headers" = "latest"
+"winget:Microsoft.WindowsSDK.10.0.26100" = "latest"
+"zypper:glibc-devel" = "latest"
+"zypper:linux-glibc-devel" = "latest"
+# rt
+"apk:musl" = "latest"
+"apt:libc6" = "latest"
+"dnf:glibc" = "latest"
+# "pacman:glibc" = "latest"
+"winget:Microsoft.VCRedist.2015+.x64" = "latest"
+"zypper:glibc" = "latest"

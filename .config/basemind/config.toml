@@ -1,0 +1,63 @@
+"$schema" = "v1"
+
+[scan]
+include = ["**/*"]
+exclude = []
+floor_allow = []
+respect_gitignore = true
+follow_symlinks = false
+max_file_bytes = 2097152
+skip_submodules = true
+eager_l2 = true
+extra_roots = []
+
+[languages]
+
+[code_intel]
+precise_resolution = true
+
+[watch]
+debounce_ms = 250
+live_l2 = false
+
+[cache]
+file_map_lru = 256
+
+[mcp]
+transport = "stdio"
+
+[documents]
+enabled = true
+embed = true
+# fast        — smallest / fastest, lowest quality
+# balanced    — default; 768-dim, good quality/cost tradeoff
+# quality     — larger model, best English quality, slower
+# multilingual— multilingual model for non-English corpora
+embedding_preset = "balanced"
+include = []
+exclude = []
+max_file_bytes = 52428800
+extension_denylist = []
+embed_include = []
+embed_exclude = []
+extract_archives = false
+
+[code_search]
+enabled = true
+embed = false
+embed_include = []
+embed_exclude = []
+
+[resources]
+scan_threads = 0
+embed_threads = 0
+max_concurrent_documents = 0
+embed_batch_size = 32
+max_footprint_mb = 0
+max_map_cache_mb = 256
+
+[crawl]
+respect_robots_txt = true
+allow_private_network = false
+
+[llm]

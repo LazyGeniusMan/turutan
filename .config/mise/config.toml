@@ -1,0 +1,32 @@
+[settings]
+lockfile = true
+experimental = true
+minimum_release_age_excludes = ["pitchfork"]
+
+[env]
+PROXY_URI = "{{ env?.VSCODE_PROXY_URI or 'http://localhost:{{port}}' }}"
+HK_MISE = 1
+HK_PROFILE = "{{ mise_env | join(sep=',') }}"
+PITCHFORK_WEB_PORT = 3120
+
+[tools]
+betterleaks = "1"
+fnox = "1"
+hk = "2"
+"github:protonpass/pass-cli" = "2"
+pitchfork = "2"
+pkl = "0"
+tombi = "1"
+
+[daemons.fnox]
+run = "exec fnox daemon start"
+
+[tasks.pre-commit]
+run = "hk run pre-commit"
+
+[tasks."dev-setup:hk"]
+run = "hk install --mise"
+
+[tasks."dev-setup:fnox"]
+daemons = "fnox"
+run = "fnox daemon start"
