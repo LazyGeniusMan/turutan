@@ -1,0 +1,7 @@
+// Package app implements the demo application logic.
+package app
+
+// Greet returns the project greeting.
+func Greet() string {
+	return "demo"
+}

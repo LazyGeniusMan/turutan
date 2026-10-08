@@ -1,0 +1,274 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package git
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	git "github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/config"
+	"github.com/go-git/go-git/v6/plumbing/object"
+)
+
+// advertisedFixture returns a synthetic ls-remote advertisement so
+// ResolveRef tests run offline.
+func advertisedFixture() []Ref {
+	return []Ref{
+		{Name: "HEAD", Target: "refs/heads/main"},
+		{Name: "refs/heads/main", Hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{Name: "refs/heads/master", Hash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+		{Name: "refs/tags/v1.2.0", Hash: "cccccccccccccccccccccccccccccccccccccccc"},
+		{Name: "refs/tags/v2.1.0", Hash: "dddddddddddddddddddddddddddddddddddddddd"},
+	}
+}
+
+func TestResolveRef(t *testing.T) {
+	const url = "https://example.com/org/web.git"
+	full := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	tests := []struct {
+		name       string
+		expr       string
+		advertised []Ref
+		want       string
+		wantErr    bool
+	}{
+		{name: "empty selects HEAD target", expr: "", advertised: advertisedFixture(), want: full},
+		{
+			name: "empty falls back to main",
+			expr: "",
+			advertised: []Ref{
+				{Name: "refs/heads/main", Hash: full},
+			},
+			want: full,
+		},
+		{
+			name: "empty falls back to master",
+			expr: "",
+			advertised: []Ref{
+				{Name: "refs/heads/other", Hash: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
+				{Name: "refs/heads/master", Hash: full},
+			},
+			want: full,
+		},
+		{name: "exact branch", expr: "master", advertised: advertisedFixture(), want: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+		{name: "exact tag", expr: "v2.1.0", advertised: advertisedFixture(), want: "dddddddddddddddddddddddddddddddddddddddd"},
+		{name: "full SHA passes through", expr: full, advertised: advertisedFixture(), want: full},
+		{name: "short SHA resolves", expr: "aaaaaaa", advertised: advertisedFixture(), want: full},
+		{name: "semver picks highest satisfying tag", expr: "^1.0", advertised: advertisedFixture(), want: "cccccccccccccccccccccccccccccccccccccccc"},
+		{name: "semver caret major picks v2", expr: "^2.0", advertised: advertisedFixture(), want: "dddddddddddddddddddddddddddddddddddddddd"},
+		{name: "unknown ref errors", expr: "nope", advertised: advertisedFixture(), wantErr: true},
+		{name: "no default branch errors", expr: "", advertised: []Ref{{Name: "refs/heads/other", Hash: full}}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveRef(url, tt.expr, tt.advertised)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ResolveRef(%q) succeeded, want error", tt.expr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResolveRef(%q) error: %v", tt.expr, err)
+			}
+			if got != tt.want {
+				t.Errorf("ResolveRef(%q) = %q, want %q", tt.expr, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveRefAmbiguousShortSHA(t *testing.T) {
+	t.Run("ambiguous prefix is not resolved", func(t *testing.T) {
+		advertised := []Ref{
+			{Name: "refs/heads/a", Hash: "abcdef000000000000000000000000000000000000"},
+			{Name: "refs/heads/b", Hash: "abcdef111111111111111111111111111111111111"},
+		}
+		if _, err := ResolveRef("https://example.com/r.git", "abcdef", advertised); err == nil {
+			t.Error("ambiguous short SHA should not resolve")
+		}
+	})
+}
+
+// commitFile writes path into repo's worktree and commits it.
+func commitFile(t *testing.T, repoPath, name, content, message string) string {
+	t.Helper()
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		t.Fatalf("opening repo %q: %v", repoPath, err)
+	}
+	if err := os.WriteFile(filepath.Join(repoPath, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	worktree, err := repo.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktree.Add(name); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := worktree.Commit(message, &git.CommitOptions{
+		Author: &object.Signature{Name: "turutan-test", Email: "test@example.com", When: time.Now()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hash.String()
+}
+
+// initRepo creates a non-bare repo with one commit on the default branch.
+// It disables commit signing explicitly so the suite passes on machines
+// with commit.gpgSign enabled globally.
+func initRepo(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	if err != nil {
+		t.Fatalf("init repo: %v", err)
+	}
+	disableGPGSign(t, repo)
+	sha := commitFile(t, dir, "README.md", "hello\n", "initial")
+	return dir, sha
+}
+
+// disableGPGSign clears commit.gpgSign in repo config; without it commits
+// fail on hosts that enable signing globally.
+func disableGPGSign(t *testing.T, repo *git.Repository) {
+	t.Helper()
+	cfg, err := repo.Config()
+	if err != nil {
+		t.Fatalf("reading repo config: %v", err)
+	}
+	cfg.Commit.GpgSign = config.OptBoolFalse
+	if err := repo.SetConfig(cfg); err != nil {
+		t.Fatalf("disabling gpgSign: %v", err)
+	}
+}
+
+func TestIsGitRepo(t *testing.T) {
+	t.Run("worktree repo detected", func(t *testing.T) {
+		dir, _ := initRepo(t)
+		if !IsGitRepo(dir) {
+			t.Errorf("IsGitRepo(%q) = false, want true", dir)
+		}
+	})
+	t.Run("bare repo detected", func(t *testing.T) {
+		dir := t.TempDir()
+		bare := filepath.Join(dir, "repo.git")
+		if _, err := git.PlainInit(bare, true); err != nil {
+			t.Fatalf("init bare repo: %v", err)
+		}
+		if !IsGitRepo(bare) {
+			t.Errorf("IsGitRepo(%q) = false, want true for bare repo", bare)
+		}
+	})
+	t.Run("plain dir rejected", func(t *testing.T) {
+		if IsGitRepo(t.TempDir()) {
+			t.Error("IsGitRepo(plain dir) = true, want false")
+		}
+	})
+}
+
+func TestCloneFromLocalPath(t *testing.T) {
+	t.Run("clone checks out HEAD by default", func(t *testing.T) {
+		src, want := initRepo(t)
+		dst := filepath.Join(t.TempDir(), "clone")
+		got, err := Clone(src, "", dst, ShallowDepth)
+		if err != nil {
+			t.Fatalf("Clone error: %v", err)
+		}
+		if got != want {
+			t.Errorf("Clone SHA = %q, want %q", got, want)
+		}
+		content, err := os.ReadFile(filepath.Join(dst, "README.md"))
+		if err != nil {
+			t.Fatalf("reading cloned file: %v", err)
+		}
+		if string(content) != "hello\n" {
+			t.Errorf("cloned content = %q, want %q", content, "hello\n")
+		}
+	})
+	t.Run("clone resolves branch ref", func(t *testing.T) {
+		src, _ := initRepo(t)
+		second := commitFile(t, src, "second.txt", "two\n", "second")
+		dst := filepath.Join(t.TempDir(), "clone")
+		got, err := Clone(src, "master", dst, ShallowDepth)
+		if err != nil {
+			if strings.Contains(err.Error(), "resolving ref") {
+				got, err = Clone(src, "main", dst, ShallowDepth)
+			}
+			if err != nil {
+				t.Fatalf("Clone with branch ref error: %v", err)
+			}
+		}
+		if got != second {
+			t.Errorf("Clone SHA = %q, want %q", got, second)
+		}
+	})
+	t.Run("unknown ref fails clearly", func(t *testing.T) {
+		src, _ := initRepo(t)
+		if _, err := Clone(src, "does-not-exist", filepath.Join(t.TempDir(), "clone"), ShallowDepth); err == nil {
+			t.Error("Clone with unknown ref succeeded, want error")
+		}
+	})
+}
+
+func TestResolveLocal(t *testing.T) {
+	t.Run("empty resolves HEAD", func(t *testing.T) {
+		dir, want := initRepo(t)
+		got, err := ResolveLocal(dir, "")
+		if err != nil {
+			t.Fatalf("ResolveLocal error: %v", err)
+		}
+		if got != want {
+			t.Errorf("ResolveLocal = %q, want %q", got, want)
+		}
+	})
+	t.Run("unknown ref errors", func(t *testing.T) {
+		dir, _ := initRepo(t)
+		if _, err := ResolveLocal(dir, "does-not-exist"); err == nil {
+			t.Error("ResolveLocal with unknown ref succeeded, want error")
+		}
+	})
+	t.Run("non-repo errors", func(t *testing.T) {
+		if _, err := ResolveLocal(t.TempDir(), ""); err == nil {
+			t.Error("ResolveLocal on plain dir succeeded, want error")
+		}
+	})
+}
+
+func TestRedacted(t *testing.T) {
+	t.Run("https userinfo stripped", func(t *testing.T) {
+		got := redacted("https://token123@github.com/org/web.git")
+		if strings.Contains(got, "token123") {
+			t.Errorf("redacted URL still contains credentials: %q", got)
+		}
+		if !strings.Contains(got, "github.com/org/web.git") {
+			t.Errorf("redacted URL lost the repo path: %q", got)
+		}
+	})
+	t.Run("plain URL unchanged", func(t *testing.T) {
+		if got := redacted("https://github.com/org/web.git"); got != "https://github.com/org/web.git" {
+			t.Errorf("redacted = %q, want unchanged", got)
+		}
+	})
+}
+
+func TestListRefsNetwork(t *testing.T) {
+	if testing.Short() {
+		t.Skip("network test skipped in -short mode")
+	}
+	t.Run("lists default template refs", func(t *testing.T) {
+		refs, err := ListRefs("https://github.com/LazyGeniusMan/turutan.git")
+		if err != nil {
+			t.Skipf("network unavailable: %v", err)
+		}
+		if len(refs) == 0 {
+			t.Error("ListRefs returned no refs")
+		}
+	})
+}
