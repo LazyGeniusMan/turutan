@@ -2,6 +2,7 @@
     "recommendations": [
         "tombi-toml.tombi",
         "hverlin.mise-vscode",
+        "golang.go",
         "charliermarsh.ruff",
         "astral-sh.ty",
         "void-zero.vite-plus-extension-pack"
