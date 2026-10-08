@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+# license: Apache-2.0 (CLI); default template + generated output: MIT-0.
+# GoReleaser v2 plain config (no goreleaser-cross: pure-Go, CGO_ENABLED=0).
+# Matrix 3x2: linux/darwin/windows x amd64/arm64. macOS floor 13 comes from
+# the Go 1.27 toolchain itself, not a releaser knob.
+version: 2
+project_name: turutan
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: turutan
+    binary: turutan
+    main: ./cmd/turutan
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    targets:
+      - linux-amd64
+      - linux-arm64
+      - darwin-amd64
+      - darwin-arm64
+      - windows-amd64
+      - windows-arm64
+archives:
+  - id: turutan
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+checksum:
+  name_template: checksums.txt
+snapshot:
+  version_template: "{{ .Tag }}-next"
+release:
+  header: |-
+    CLI: Apache-2.0; default template: MIT-0; generated projects: MIT-0 or user choice.
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - ^docs:
+      - ^test:

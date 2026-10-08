@@ -1,0 +1,12 @@
+// Command {{.project_name}} is the rendered project entry point.
+package main
+
+import (
+	"fmt"
+
+	"{{.project_name}}/internal/app"
+)
+
+func main() {
+	fmt.Println(app.Greet())
+}
