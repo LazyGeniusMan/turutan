@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/CivNode/diff3-go"
+
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 	"github.com/LazyGeniusMan/turutan/internal/template"
@@ -87,6 +89,9 @@ func Update(projectDir string, opts UpdateOptions) (*UpdateResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)
 	}
+	if err := filter.ValidateGlobs(state.Skip); err != nil {
+		return nil, fmt.Errorf("update: bad skip entry in state: %w", err)
+	}
 	answers, err := updateAnswers(projectDir, state, opts)
 	if err != nil {
 		return nil, err
@@ -149,6 +154,7 @@ func Update(projectDir string, opts UpdateOptions) (*UpdateResult, error) {
 		manifest:   manifest,
 		conflict:   conflict,
 		newSHA:     fresh,
+		baseDir:    baseDirFor(projectDir, old),
 		stderr:     stderr,
 	}
 	updated, conflicts, err := merger.merge(rendered, lock)
@@ -162,9 +168,29 @@ func Update(projectDir string, opts UpdateOptions) (*UpdateResult, error) {
 	if err := refreshStateLock(projectDir, state, lock, src, wantRef, answers, fresh, rendered); err != nil {
 		return nil, err
 	}
+	// The staged render is the pristine new base: future updates merge
+	// against it. A missing old base only downgraded this run to the v1
+	// overlay; storing the new base upgrades the next one.
+	if err := StoreBase(projectDir, fresh, stage); err != nil {
+		return nil, fmt.Errorf("update: %w", err)
+	}
 	result := &UpdateResult{Old: old, New: fresh, Updated: updated, Conflicts: conflicts, Migrations: migrated}
 	fmt.Fprintf(stdout, "updated %s -> %s (%d files, %d conflicts)\n", shortSHA(old), shortSHA(fresh), len(updated), len(conflicts))
 	return result, nil
+}
+
+// baseDirFor returns the pristine base-copy directory for the stored old
+// identity, or "" when no base exists and the merge must use the v1
+// overlay fallback (pre-M5 projects, or a deleted store).
+func baseDirFor(projectDir, old string) string {
+	if old == "" || !HasBase(projectDir, old) {
+		return ""
+	}
+	dir, err := BasePath(projectDir, old)
+	if err != nil {
+		return ""
+	}
+	return dir
 }
 
 // updateStreams resolves the effective output streams.
@@ -203,12 +229,13 @@ func updateAnswers(projectDir string, state *config.State, opts UpdateOptions) (
 }
 
 // dirtyFiles lists lock-tracked paths whose workdir content differs from
-// the lock (missing counts as dirty). User-only files outside the lock
-// never count: the guard protects template-tracked content.
+// the lock (missing counts as dirty). Reads go through os.Root so symlinks
+// escaping the project are refused instead of followed. User-only files
+// outside the lock never count: the guard protects template-tracked content.
 func dirtyFiles(projectDir string, lock *config.Lock) ([]string, error) {
 	var dirty []string
 	for _, entry := range lock.Files {
-		data, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(entry.Path)))
+		data, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				dirty = append(dirty, entry.Path)
@@ -277,12 +304,15 @@ func templateLockEntries(rendered map[string]renderedEntry) []config.LockFile {
 }
 
 // merger holds per-run merge state so the hot loop stays small.
+// baseDir is the pristine base copy (.turutan/templates/<old-sha>/) when
+// present; an empty baseDir selects the v1 overlay for every file.
 type merger struct {
 	projectDir string
 	state      *config.State
 	manifest   *config.Manifest
 	conflict   ConflictMode
 	newSHA     string
+	baseDir    string
 	stderr     io.Writer
 }
 
@@ -336,7 +366,8 @@ func inRendered(rendered map[string]renderedEntry, path string) bool {
 }
 
 // mergeOne merges a single path and reports whether the main file was
-// written and whether the path needs attention. Lock rebuilding happens
+// written and whether the path needs attention. The project file is read
+// through os.Root (escaping symlinks refused); lock rebuilding happens
 // after the full loop (plus migrations), so this only touches workdir.
 func (m *merger) mergeOne(path string, locked config.LockFile, fresh renderedEntry, hasLocked, hasFresh bool) (bool, bool, error) {
 	ignored, err := filter.MatchAny(m.manifest.Ignore, path)
@@ -350,29 +381,28 @@ func (m *merger) mergeOne(path string, locked config.LockFile, fresh renderedEnt
 	if err != nil {
 		return false, false, err
 	}
-	dst, err := filter.SafeJoin(m.projectDir, filepath.FromSlash(path))
-	if err != nil {
+	if _, err := filter.SafeJoin(m.projectDir, filepath.FromSlash(path)); err != nil {
 		return false, false, fmt.Errorf("update: %w", err)
 	}
-	local, err := os.ReadFile(dst)
+	local, err := filter.ReadFileWithinRoot(m.projectDir, path)
 	if err != nil && !os.IsNotExist(err) {
 		return false, false, fmt.Errorf("update: reading project file %q: %w", path, err)
 	}
 	localExists := err == nil
 	switch {
 	case hasFresh && !hasLocked:
-		return m.mergeAdded(path, dst, fresh.Data, local, localExists, preserved)
+		return m.mergeAdded(path, fresh.Data, local, localExists, preserved)
 	case !hasFresh && hasLocked:
-		return m.mergeDropped(path, dst, locked, local, localExists)
+		return m.mergeDropped(path, locked, local, localExists)
 	default:
-		return m.mergeBoth(path, dst, locked, fresh.Data, local, localExists, preserved)
+		return m.mergeBoth(path, locked, fresh.Data, local, localExists, preserved)
 	}
 }
 
 // mergeAdded handles a file the new template introduces.
-func (m *merger) mergeAdded(path, dst string, fresh, local []byte, localExists, preserved bool) (bool, bool, error) {
+func (m *merger) mergeAdded(path string, fresh, local []byte, localExists, preserved bool) (bool, bool, error) {
 	if !localExists {
-		if err := writeFile(dst, fresh); err != nil {
+		if err := m.write(path, fresh); err != nil {
 			return false, false, err
 		}
 		return true, false, nil
@@ -383,18 +413,18 @@ func (m *merger) mergeAdded(path, dst string, fresh, local []byte, localExists, 
 	if preserved {
 		return false, false, nil
 	}
-	return m.conflictBoth(path, dst, local, fresh)
+	return m.conflictBoth(path, local, fresh)
 }
 
 // mergeDropped handles a file the new template no longer renders: an
 // unchanged local copy is deleted, a locally modified one is kept as a
 // user file with a stderr note (and leaves the lock).
-func (m *merger) mergeDropped(path, dst string, locked config.LockFile, local []byte, localExists bool) (bool, bool, error) {
+func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte, localExists bool) (bool, bool, error) {
 	if !localExists {
 		return false, false, nil
 	}
 	if config.FileEntry(path, local).SHA256 == locked.SHA256 {
-		if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+		if err := filter.RemoveWithinRoot(m.projectDir, path); err != nil && !os.IsNotExist(err) {
 			return false, false, fmt.Errorf("update: removing dropped file %q: %w", path, err)
 		}
 		return true, false, nil
@@ -404,15 +434,17 @@ func (m *merger) mergeDropped(path, dst string, locked config.LockFile, local []
 }
 
 // mergeBoth handles a path tracked in the lock and present in the fresh
-// render following the overlay rules: template-only change takes new,
-// local-only change keeps local, both-changed conflicts (or prefers local
-// for preserve globs and binary sidecars).
-func (m *merger) mergeBoth(path, dst string, locked config.LockFile, fresh, local []byte, localExists, preserved bool) (bool, bool, error) {
+// render. With a pristine base copy it merges base↔local↔new per file
+// (template-only takes new, local-only keeps local, disjoint both-changed
+// regions merge cleanly); without a base it falls back to the v1 overlay
+// (both-changed always conflicts). Preserve globs and binary sidecars
+// behave the same in both modes.
+func (m *merger) mergeBoth(path string, locked config.LockFile, fresh, local []byte, localExists, preserved bool) (bool, bool, error) {
 	if !localExists {
 		if config.FileEntry(path, fresh).SHA256 == locked.SHA256 {
 			return false, false, nil
 		}
-		if err := writeFile(dst, fresh); err != nil {
+		if err := m.write(path, fresh); err != nil {
 			return false, false, err
 		}
 		fmt.Fprintf(m.stderr, "turutan: restoring %q changed in the template but deleted locally\n", path)
@@ -429,7 +461,7 @@ func (m *merger) mergeBoth(path, dst string, locked config.LockFile, fresh, loca
 	case !templateChanged && localChanged:
 		return false, false, nil
 	case templateChanged && !localChanged:
-		if err := writeFile(dst, fresh); err != nil {
+		if err := m.write(path, fresh); err != nil {
 			return false, false, err
 		}
 		return true, false, nil
@@ -441,36 +473,89 @@ func (m *merger) mergeBoth(path, dst string, locked config.LockFile, fresh, loca
 			return false, false, nil
 		}
 		if isBinary(local) || isBinary(fresh) {
-			if err := writeFile(dst+".new", fresh); err != nil {
+			if err := m.write(path+".new", fresh); err != nil {
 				return false, false, err
 			}
 			fmt.Fprintf(m.stderr, "turutan: binary %q changed both locally and in the template; keeping local, wrote %q\n", path, path+".new")
 			return false, true, nil
 		}
-		return m.conflictBoth(path, dst, local, fresh)
+		if m.baseDir != "" {
+			wrote, conflicted, handled, err := m.threeWay(path, local, fresh)
+			if err != nil {
+				return false, false, err
+			}
+			if handled {
+				return wrote, conflicted, nil
+			}
+			// No usable base entry (the file postdates the stored base):
+			// fall through to the v1 overlay below.
+			fmt.Fprintf(m.stderr, "turutan: no base copy for %q; using overlay merge\n", path)
+		}
+		return m.conflictBoth(path, local, fresh)
 	}
 }
 
-// conflictBoth records an unmergeable text hunk per the effective mode:
+// threeWay merges a both-changed text file against its pristine base copy.
+// Single-side changes apply directly; disjoint both-side changes merge via
+// diff3-go; overlapping changes fall back to the v1 conflict recorder so
+// inline|rej UX stays uniform. handled=false means the base holds no entry
+// for path and the caller must use the v1 overlay instead.
+
+func (m *merger) threeWay(path string, local, fresh []byte) (wrote, conflicted, handled bool, err error) {
+	base, err := filter.ReadFileWithinRoot(m.baseDir, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, false, false, nil
+		}
+		return false, false, true, fmt.Errorf("update: reading base copy of %q: %w", path, err)
+	}
+	if bytes.Equal(base, local) {
+		if err := m.write(path, fresh); err != nil {
+			return false, false, true, err
+		}
+		return true, false, true, nil
+	}
+	if bytes.Equal(base, fresh) {
+		return false, false, true, nil
+	}
+	merged, hadConflicts, mergeErr := diff3.Merge(string(base), string(local), string(fresh), diff3.Options{})
+	if mergeErr != nil {
+		return m.conflictBothAs(path, local, fresh, true)
+	}
+	if !hadConflicts {
+		if err := m.write(path, []byte(merged)); err != nil {
+			return false, false, true, err
+		}
+		return true, false, true, nil
+	}
+	return m.conflictBothAs(path, local, fresh, true)
+}
+
+// conflictBothAs records an unmergeable text hunk per the effective mode.
 // inline writes markers into the file, rej keeps local and writes the
 // unified diff to <file>.rej.
-func (m *merger) conflictBoth(path, dst string, local, fresh []byte) (bool, bool, error) {
+func (m *merger) conflictBoth(path string, local, fresh []byte) (bool, bool, error) {
+	wrote, conflicted, _, err := m.conflictBothAs(path, local, fresh, true)
+	return wrote, conflicted, err
+}
+
+func (m *merger) conflictBothAs(path string, local, fresh []byte, handled bool) (wrote, conflicted bool, _ bool, err error) {
 	if m.conflict == ConflictRej {
 		diff, changed := newFileDiff(path, local, fresh, false, false)
 		if !changed {
-			return false, false, nil
+			return false, false, handled, nil
 		}
-		if err := writeFile(dst+".rej", []byte(diff.Unified)); err != nil {
-			return false, false, err
+		if err := m.write(path+".rej", []byte(diff.Unified)); err != nil {
+			return false, false, handled, err
 		}
 		fmt.Fprintf(m.stderr, "turutan: conflict in %q; keeping local, wrote %q\n", path, path+".rej")
-		return false, true, nil
+		return false, true, handled, nil
 	}
-	if err := writeFile(dst, inlineConflict(local, fresh, shortSHA(m.newSHA))); err != nil {
-		return false, false, err
+	if err := m.write(path, inlineConflict(local, fresh, shortSHA(m.newSHA))); err != nil {
+		return false, false, handled, err
 	}
 	fmt.Fprintf(m.stderr, "turutan: conflict in %q; wrote inline markers\n", path)
-	return true, true, nil
+	return true, true, handled, nil
 }
 
 // inlineConflict renders local and fresh with conflict markers: the local
@@ -498,13 +583,14 @@ func isBinary(data []byte) bool {
 	return bytes.IndexByte(data, 0) != -1
 }
 
-// writeFile creates parent dirs and writes data with regular file perms.
-func writeFile(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("update: creating parent dir: %w", err)
+// write stores data at the project-relative path through os.Root, which
+// refuses escapes and escaping symlinks. Parent dirs are created first.
+func (m *merger) write(rel string, data []byte) error {
+	if _, err := filter.SafeJoin(m.projectDir, filepath.FromSlash(rel)); err != nil {
+		return fmt.Errorf("update: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("update: writing %q: %w", filepath.Base(path), err)
+	if err := filter.WriteFileWithinRoot(m.projectDir, rel, data, 0o644); err != nil {
+		return fmt.Errorf("update: %w", err)
 	}
 	return nil
 }
@@ -554,8 +640,12 @@ func runMigrationCmd(projectDir, cmd, old, fresh string, stderr io.Writer) error
 	}
 	argv := []string{"-c", cmd}
 	if !strings.ContainsAny(cmd, " \t\n|&;()<>$`\\\"'") {
-		if info, err := os.Stat(filepath.Join(projectDir, filepath.FromSlash(cmd))); err == nil && !info.IsDir() {
-			argv = []string{filepath.Join(projectDir, filepath.FromSlash(cmd))}
+		// A manifest-declared command doubles as a script path only when
+		// it stays inside the project; escaping names run via sh -c.
+		if safe, joinErr := filter.SafeJoin(projectDir, filepath.FromSlash(cmd)); joinErr == nil {
+			if info, err := os.Stat(safe); err == nil && !info.IsDir() {
+				argv = []string{safe}
+			}
 		}
 	}
 	executed := exec.Command("sh", argv...)
@@ -585,7 +675,7 @@ func refreshStateLock(projectDir string, state *config.State, lock *config.Lock,
 	// template files, user deletions) are absent from workdir and skipped.
 	final := make([]config.LockFile, 0, len(paths))
 	for _, path := range paths {
-		data, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(path)))
+		data, err := filter.ReadFileWithinRoot(projectDir, path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue

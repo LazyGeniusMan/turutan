@@ -22,6 +22,15 @@ turutan version        # version/commit/date plus license notice
 Releases stamp the version via `go build -ldflags "-X main.version=$V -X main.commit=$C -X main.date=$D"`
 (GoReleaser does this automatically; dev builds report `dev/none/unknown`).
 
+## Remote authentication
+
+Git transport credentials come from the environment only and are never
+logged. SSH remotes try `TURUTAN_SSH_KEY` (PEM content or key-file path),
+then `TURUTAN_SSH_PASSWORD`, then the ssh-agent; HTTPS remotes use
+`GITHUB_TOKEN` as `x-access-token` credentials when set. Host-key (`known_hosts`)
+and TLS verification is strict by default; `TURUTAN_INSECURE_SKIP_VERIFY=1`
+disables it with a loud warning (never in production).
+
 ## Self-hosting
 
 This repo's own skeleton comes from the default template: the M4 e2e gate

@@ -30,6 +30,9 @@ func Bootstrap(source, target string, opts Options) error {
 	if err := opts.Conflict.Validate(); err != nil {
 		return err
 	}
+	if err := filter.ValidateGlobs(opts.Skip); err != nil {
+		return fmt.Errorf("bootstrap: bad --skip entry: %w", err)
+	}
 	if opts.NonInteractive && !opts.Defaults && opts.AnswersFile == "" {
 		return fmt.Errorf("bootstrap: non-interactive mode requires --answers-file or --defaults")
 	}
@@ -91,6 +94,10 @@ func Bootstrap(source, target string, opts Options) error {
 	}
 	if err := writeStateAndLock(absTarget, src, resolved, answers, opts, files, engine); err != nil {
 		return err
+	}
+	// The staged render is the pristine base for future 3-way updates.
+	if err := StoreBase(absTarget, resolved, staged); err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
 	}
 	if err := gateHooks(manifest, opts, stdout, stdin); err != nil {
 		return err
@@ -226,23 +233,37 @@ func publish(staged, target string, manifest *config.Manifest, opts Options) ([]
 		if ignored {
 			return nil
 		}
-		dst, err := filter.SafeJoin(target, filepath.FromSlash(slash))
-		if err != nil {
+		// Target access goes through lexical SafeJoin plus os.Root I/O so
+		// symlinks escaping the target are refused instead of followed.
+		// (d comes from our own staging dir; dst is the untrusted side.)
+		if _, err := filter.SafeJoin(target, filepath.FromSlash(slash)); err != nil {
 			return fmt.Errorf("bootstrap: %w", err)
 		}
 		if d.IsDir() {
-			return os.MkdirAll(dst, 0o755)
+			root, err := os.OpenRoot(target)
+			if err != nil {
+				return fmt.Errorf("bootstrap: opening target: %w", err)
+			}
+			mkdirErr := root.MkdirAll(filepath.FromSlash(slash), 0o755)
+			closeErr := root.Close()
+			if mkdirErr != nil {
+				return fmt.Errorf("bootstrap: creating dir %q: %w", slash, mkdirErr)
+			}
+			if closeErr != nil {
+				return fmt.Errorf("bootstrap: closing target: %w", closeErr)
+			}
+			return nil
 		}
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		if _, statErr := os.Stat(dst); statErr == nil {
+		if _, statErr := filter.StatWithinRoot(target, slash); statErr == nil {
 			kept, err := keepExisting(slash, manifest, opts)
 			if err != nil {
 				return err
 			}
 			if kept {
-				data, err := os.ReadFile(dst)
+				data, err := filter.ReadFileWithinRoot(target, slash)
 				if err != nil {
 					return err
 				}
@@ -261,10 +282,7 @@ func publish(staged, target string, manifest *config.Manifest, opts Options) ([]
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(dst, data, info.Mode().Perm()); err != nil {
+		if err := filter.WriteFileWithinRoot(target, slash, data, info.Mode().Perm()); err != nil {
 			return fmt.Errorf("bootstrap: writing %q: %w", slash, err)
 		}
 		files = append(files, config.FileEntry(slash, data))

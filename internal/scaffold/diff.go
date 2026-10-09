@@ -89,7 +89,7 @@ func ComputeDiff(projectDir string, opts DiffOptions) ([]FileDiff, error) {
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
 		entry := rendered[path]
-		local, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(entry.Path)))
+		local, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("diff: reading project file %q: %w", entry.Path, err)
@@ -113,7 +113,7 @@ func ComputeDiff(projectDir string, opts DiffOptions) ([]FileDiff, error) {
 		if ignored {
 			continue
 		}
-		local, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(entry.Path)))
+		local, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue

@@ -16,6 +16,8 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"gopkg.in/yaml.v3"
+
+	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
 // State/lock/manifest file names and schema constants.
@@ -247,12 +249,19 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 }
 
 // ValidateManifest rejects unknown conflict modes, unparsable
-// min-engine constraints and empty migration commands.
+// min-engine constraints, empty migration commands and glob patterns
+// that could reach outside the subpath root (see filter.ValidateGlobs).
 func ValidateManifest(manifest *Manifest) error {
 	switch manifest.Conflict {
 	case "", "inline", "rej":
 	default:
 		return fmt.Errorf("invalid manifest: unknown conflict mode %q", manifest.Conflict)
+	}
+	if err := filter.ValidateGlobs(manifest.Ignore); err != nil {
+		return fmt.Errorf("invalid manifest: bad ignore pattern: %w", err)
+	}
+	if err := filter.ValidateGlobs(manifest.Preserve); err != nil {
+		return fmt.Errorf("invalid manifest: bad preserve pattern: %w", err)
 	}
 	if manifest.MinEngine != "" {
 		if _, err := semver.NewConstraint(manifest.MinEngine); err != nil {

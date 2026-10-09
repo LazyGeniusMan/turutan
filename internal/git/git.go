@@ -55,12 +55,21 @@ func redacted(raw string) string {
 
 // ListRefs runs the ls-remote equivalent against url and returns every
 // advertised reference. It performs no checkout and writes nothing to disk.
+// Transport authentication comes from the environment (see ClientOptions);
+// https tokens and SSH keys are never logged (see redacted).
 func ListRefs(url string) ([]Ref, error) {
+	clientOpts, insecure, err := ClientOptions(url)
+	if err != nil {
+		return nil, err
+	}
+	if insecure {
+		warnInsecure()
+	}
 	remote := git.NewRemote(memory.NewStorage(), &config.RemoteConfig{
 		Name: "origin",
 		URLs: []string{url},
 	})
-	refs, err := remote.List(&git.ListOptions{})
+	refs, err := remote.List(&git.ListOptions{ClientOptions: clientOpts})
 	if err != nil {
 		return nil, fmt.Errorf("listing refs of %q: %w", redacted(url), err)
 	}
@@ -148,7 +157,14 @@ func Clone(url, ref, dir string, depth int) (string, error) {
 	if depth <= 0 {
 		depth = ShallowDepth
 	}
-	repo, err := git.PlainClone(dir, &git.CloneOptions{URL: url, Depth: depth})
+	clientOpts, insecure, err := ClientOptions(url)
+	if err != nil {
+		return "", err
+	}
+	if insecure {
+		warnInsecure()
+	}
+	repo, err := git.PlainClone(dir, &git.CloneOptions{URL: url, Depth: depth, ClientOptions: clientOpts})
 	if err != nil {
 		return "", fmt.Errorf("cloning %q: %w", redacted(url), err)
 	}

@@ -7,6 +7,7 @@ package filter
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -45,11 +46,12 @@ func MatchAny(patterns []string, name string) (bool, error) {
 	return false, nil
 }
 
-// SafeJoin joins user-controlled path p onto root and refuses anything
-// that would escape root: absolute paths, non-local paths such as "..",
-// and joins whose cleaned result leaves root. Callers must use it for
-// every template entry before touching the filesystem.
-func SafeJoin(root, p string) (string, error) {
+// SecureJoin joins user-controlled path p onto root using lexical
+// containment only (no filesystem access): absolute paths and any ".."
+// segment escaping root are refused. It is the fallback when os.Root is
+// unavailable; prefer SafeJoin plus an os.Root read/write (see
+// ReadFileWithinRoot) so symlinks resolving outside root are refused too.
+func SecureJoin(root, p string) (string, error) {
 	if p == "" || p == "." {
 		return root, nil
 	}
@@ -60,10 +62,69 @@ func SafeJoin(root, p string) (string, error) {
 		return "", fmt.Errorf("joining path %q: path escapes its root", p)
 	}
 	joined := filepath.Join(root, p)
+	cleanRoot := filepath.Clean(root)
+	rel, err := filepath.Rel(cleanRoot, joined)
+	if err != nil {
+		return "", fmt.Errorf("relativizing path %q: %w", p, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes root %q", p, root)
+	}
+	return joined, nil
+}
+
+// SafeJoin joins user-controlled path p onto root and refuses anything
+// that would escape root: absolute paths, non-local paths such as "..",
+// and joins whose cleaned result leaves root. Callers must use it for
+// every template entry before touching the filesystem.
+func SafeJoin(root, p string) (string, error) {
+	joined, err := SecureJoin(root, p)
+	if err != nil {
+		return "", err
+	}
 	if err := EnsureWithinRoot(root, joined); err != nil {
 		return "", err
 	}
 	return joined, nil
+}
+
+// ValidatePattern rejects ignore/preserve/skip globs that could reach
+// outside the subpath root: absolute patterns and any ".." segment.
+// Glob matching itself is always scoped per file inside the root, so a
+// validated pattern can only select files under it.
+func ValidatePattern(pattern string) error {
+	if pattern == "" {
+		return fmt.Errorf("invalid glob %q: pattern is empty", pattern)
+	}
+	slash := ToSlash(pattern)
+	if strings.HasPrefix(slash, "/") {
+		return fmt.Errorf("invalid glob %q: absolute patterns are not allowed", pattern)
+	}
+	for segment := range strings.SplitSeq(slash, "/") {
+		if segment == ".." {
+			return fmt.Errorf("invalid glob %q: \"..\" escapes its root", pattern)
+		}
+	}
+	return nil
+}
+
+// ValidateGlobs validates every pattern in the list (see ValidatePattern).
+func ValidateGlobs(patterns []string) error {
+	for _, pattern := range patterns {
+		if err := ValidatePattern(pattern); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// IsSpecialFile reports whether info describes a special file that must
+// never be copied, rendered or merged: fifos, sockets and devices. Callers
+// copy regular files, create directories and resolve symlinks explicitly;
+// everything else is skipped via this helper.
+func IsSpecialFile(info fs.FileInfo) bool {
+	mode := info.Mode()
+	return !mode.IsRegular() && !info.IsDir() && mode&fs.ModeSymlink == 0
 }
 
 // EnsureWithinRoot reports an error when target (typically a
