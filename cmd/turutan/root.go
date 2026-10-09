@@ -29,9 +29,6 @@ var (
 	noColor        bool
 )
 
-// errNotImplemented marks M0 stubs; M1+ replaces each command body.
-var errNotImplemented = errors.New("not implemented (M1+)")
-
 var rootCmd = &cobra.Command{
 	Use:   "turutan",
 	Short: "Manage project-template lifecycle",

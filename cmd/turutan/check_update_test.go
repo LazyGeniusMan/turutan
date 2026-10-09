@@ -120,7 +120,7 @@ func TestExitCodeMapping(t *testing.T) {
 	}{
 		{name: "nil is success", err: nil, want: 0},
 		{name: "drift is scriptable", err: &exitError{code: exitDriftOrAvailable, msg: "x"}, want: 2},
-		{name: "runtime error is 1", err: errNotImplemented, want: 1},
+		{name: "runtime error is 1", err: errors.New("boom"), want: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

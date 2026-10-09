@@ -1,6 +1,14 @@
 [tools]
 go = "1"
 
+[tasks.build]
+description = "Build the turutan static binary per spec §9 (CGO_ENABLED=0, -trimpath, version ldflags)"
+run = "CGO_ENABLED=0 go build -trimpath -ldflags \"-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev) -X main.commit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o turutan ./cmd/turutan"
+
+[tasks.vulncheck]
+description = "Run govulncheck over the module (M5 gate); skips with an install hint when the tool is missing"
+run = "if ! command -v govulncheck >/dev/null 2>&1; then echo 'turutan: govulncheck not installed; install with: go install golang.org/x/vuln/cmd/govulncheck@latest'; exit 0; fi; govulncheck ./..."
+
 [bootstrap.packages]
 # dev
 "apk:musl-dev" = "latest"
