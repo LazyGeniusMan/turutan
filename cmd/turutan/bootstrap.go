@@ -47,7 +47,7 @@ func newBootstrapCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.subpath, "subpath", "", "override the URI //subpath at bootstrap")
 	cmd.Flags().StringVar(&flags.answersFile, "answers-file", "", "load template answers from a YAML/JSON file")
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "accept all template defaults non-interactively")
-	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej)")
+	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej; reserved for update, validated only at bootstrap)")
 	cmd.Flags().StringVar(&flags.skip, "skip", "", "comma-separated template paths kept as-is")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "bootstrap into a non-empty directory")
 	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared hooks")
@@ -79,6 +79,7 @@ func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags)
 		AllowHooks:     flags.allowHooks,
 		Skip:           skip,
 		Engine:         version,
+		Verbose:        verbose,
 		Stdout:         cmd.OutOrStdout(),
 		Stderr:         cmd.ErrOrStderr(),
 		Stdin:          os.Stdin,

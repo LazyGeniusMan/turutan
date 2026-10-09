@@ -8,6 +8,7 @@ package scaffold
 import (
 	"fmt"
 	"io"
+	"os"
 )
 
 // ConflictMode selects how unmergeable hunks are recorded.
@@ -49,8 +50,24 @@ type Options struct {
 	// Engine is the bare CLI version (for example "0.1.0" or "dev")
 	// used for the min-engine gate and recorded in state.
 	Engine string
+	// Verbose enables per-run diagnostics on Stderr (resolved refs,
+	// fetch decisions, file counts); quiet by default.
+	Verbose bool
 	// Stdin, Stdout and Stderr default to the OS streams when nil.
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+}
+
+// vlogf writes a verbose diagnostic to stderr when verbose is set. A nil
+// stderr falls back to os.Stderr; callers pass their configured stream so
+// tests can capture the output. Quiet runs emit nothing.
+func vlogf(stderr io.Writer, verbose bool, format string, args ...any) {
+	if !verbose {
+		return
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	fmt.Fprintf(stderr, "turutan: "+format+"\n", args...)
 }

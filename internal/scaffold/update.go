@@ -44,6 +44,8 @@ type UpdateOptions struct {
 	// Defaults seeds project_name from the project dir when the stored
 	// answers plus the overlay still miss it.
 	Defaults bool
+	// Verbose enables per-run diagnostics on Stderr.
+	Verbose bool
 	// Engine is the bare CLI version for the min-engine gate.
 	Engine string
 	// Stdout/Stderr/Stdin default to the OS streams when nil.
@@ -96,6 +98,7 @@ func Update(projectDir string, opts UpdateOptions) (*UpdateResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	vlogf(stderr, opts.Verbose, "update: stored commit %s requested ref %q", state.ResolvedCommit, state.RequestedRef)
 	if !opts.Force {
 		if dirty, err := dirtyFiles(projectDir, lock); err != nil {
 			return nil, err
@@ -124,7 +127,7 @@ func Update(projectDir string, opts UpdateOptions) (*UpdateResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)
 	}
-	if _, err := checkMinEngine(manifest, opts.Engine, stderr); err != nil {
+	if _, err := checkMinEngine(manifest, opts.Engine, stderr, opts.Verbose); err != nil {
 		return nil, err
 	}
 	conflict := effectiveConflict(opts.Conflict, manifest)
@@ -147,6 +150,11 @@ func Update(projectDir string, opts UpdateOptions) (*UpdateResult, error) {
 	fresh := fetched.ResolvedCommit
 	if fresh == "" {
 		fresh = strings.TrimPrefix(config.ComputeManifestHash(templateLockEntries(rendered)), "sha256:")
+	}
+	if baseDirFor(projectDir, old) != "" {
+		vlogf(stderr, opts.Verbose, "update: fresh commit %s base 3-way", fresh)
+	} else {
+		vlogf(stderr, opts.Verbose, "update: fresh commit %s base overlay (no pristine copy)", fresh)
 	}
 	merger := &merger{
 		projectDir: projectDir,

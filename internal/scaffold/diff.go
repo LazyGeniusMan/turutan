@@ -26,6 +26,14 @@ type DiffOptions struct {
 	// Ref overrides the stored requestedRef for this run only; the stored
 	// state is never modified.
 	Ref string
+	// NoColor guarantees the plain rendering carries no ANSI escapes;
+	// WriteDiff output is plain text either way.
+	NoColor bool
+	// Verbose enables per-run diagnostics on Stderr.
+	Verbose bool
+	// Stderr receives verbose diagnostics; it defaults to the OS
+	// stderr when nil.
+	Stderr io.Writer
 }
 
 // FileDiff is one drifted file: Unified holds the Context-3 unified diff
@@ -63,6 +71,7 @@ func ComputeDiff(projectDir string, opts DiffOptions) ([]FileDiff, error) {
 	if opts.Ref != "" {
 		src.RequestedRef = opts.Ref
 	}
+	vlogf(opts.Stderr, opts.Verbose, "diff: template %q ref %q", state.Template, src.RequestedRef)
 	fetched, err := template.Fetch(src)
 	if err != nil {
 		return nil, fmt.Errorf("diff: %w", err)
@@ -123,6 +132,7 @@ func ComputeDiff(projectDir string, opts DiffOptions) ([]FileDiff, error) {
 		diff, _ := newFileDiff(entry.Path, local, nil, false, true)
 		diffs = append(diffs, diff)
 	}
+	vlogf(opts.Stderr, opts.Verbose, "diff: compared %d rendered file(s), %d drifted", len(rendered), len(diffs))
 	return diffs, nil
 }
 
@@ -239,9 +249,16 @@ func splitDiffLines(s string) []string {
 	return lines
 }
 
+// WriteOptions selects plain-diff formatting. NoColor guarantees the
+// rendering carries no ANSI escapes (difflib output is plain text).
+type WriteOptions struct {
+	NoColor bool
+}
+
 // WriteDiff writes the plain (piped, byte-stable) rendering of diffs to w:
 // each file's unified diff in path order. An empty set writes nothing.
-func WriteDiff(w io.Writer, diffs []FileDiff) error {
+func WriteDiff(w io.Writer, diffs []FileDiff, opts WriteOptions) error {
+	_ = opts.NoColor // plain rendering never emits ANSI; the flag is the guarantee.
 	sorted := make([]FileDiff, len(diffs))
 	copy(sorted, diffs)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })

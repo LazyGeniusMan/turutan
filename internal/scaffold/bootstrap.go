@@ -46,6 +46,7 @@ func Bootstrap(source, target string, opts Options) error {
 	if opts.Subpath != "" {
 		src.Subpath = filepath.ToSlash(filepath.Clean(opts.Subpath))
 	}
+	vlogf(stderr, opts.Verbose, "bootstrap: source %q kind %s ref %q depth %d", src.String(), src.Kind, src.RequestedRef, src.Depth)
 	// Local sources are stored as absolute paths: the state outlives the
 	// bootstrap working directory, and check-update/diff re-resolve the
 	// stored URI from inside the project. Remote locators are untouched.
@@ -60,6 +61,7 @@ func Bootstrap(source, target string, opts Options) error {
 	if err != nil {
 		return err
 	}
+	vlogf(stderr, opts.Verbose, "bootstrap: fetched %s commit %q", src.Kind, fetched.ResolvedCommit)
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
@@ -67,7 +69,7 @@ func Bootstrap(source, target string, opts Options) error {
 	if err != nil {
 		return err
 	}
-	engine, err := checkMinEngine(manifest, opts.Engine, stderr)
+	engine, err := checkMinEngine(manifest, opts.Engine, stderr, opts.Verbose)
 	if err != nil {
 		return err
 	}
@@ -103,6 +105,7 @@ func Bootstrap(source, target string, opts Options) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n", absTarget, src.String(), shortSHA(resolved), len(files))
+	vlogf(stderr, opts.Verbose, "bootstrap: wrote %d file(s) state %s lock %s", len(files), config.StateFileName, config.LockFileName)
 	return nil
 }
 
@@ -125,8 +128,8 @@ func streams(opts Options) (io.Writer, io.Writer, io.Reader) {
 
 // checkMinEngine enforces the template min-engine floor before rendering
 // and returns the normalized engine version for state. Dev builds (empty
-// or unparsable version) skip the gate with a stderr note.
-func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer) (string, error) {
+// or unparsable version) skip the gate with a verbose stderr note.
+func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, verbose bool) (string, error) {
 	version := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(engine), "turutan/"), "v")
 	if version == "" {
 		version = "dev"
@@ -140,7 +143,7 @@ func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer) 
 	}
 	current, err := semver.NewVersion(version)
 	if err != nil {
-		fmt.Fprintf(stderr, "turutan: dev engine %q skips min-engine check %q\n", version, manifest.MinEngine)
+		vlogf(stderr, verbose, "dev engine %q skips min-engine check %q", version, manifest.MinEngine)
 		return version, nil
 	}
 	if !constraint.Check(current) {

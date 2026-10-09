@@ -34,7 +34,7 @@ func viewString(t *testing.T, m diffModel) string {
 
 func TestDiffModelView(t *testing.T) {
 	t.Run("lists files and selected hunk", func(t *testing.T) {
-		got := viewString(t, newDiffModel(testFiles()))
+		got := viewString(t, newDiffModel(testFiles(), false))
 		for _, want := range []string{"turutan diff", "a.txt", "b.txt", "+1/-1", "-old", "+new"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("view missing %q:\n%s", want, got)
@@ -44,8 +44,16 @@ func TestDiffModelView(t *testing.T) {
 			t.Errorf("view missing selection marker:\n%s", got)
 		}
 	})
+	t.Run("no ANSI escapes with NoColor", func(t *testing.T) {
+		for _, noColor := range []bool{false, true} {
+			got := viewString(t, newDiffModel(testFiles(), noColor))
+			if strings.Contains(got, "\x1b") {
+				t.Errorf("view with noColor=%v contains ANSI escapes:\n%q", noColor, got)
+			}
+		}
+	})
 	t.Run("window size accepted", func(t *testing.T) {
-		m := newDiffModel(testFiles())
+		m := newDiffModel(testFiles(), false)
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 		m, ok := updated.(diffModel)
 		if !ok {
@@ -59,7 +67,7 @@ func TestDiffModelView(t *testing.T) {
 
 func TestDiffModelNavigation(t *testing.T) {
 	t.Run("j moves down k moves up", func(t *testing.T) {
-		m := newDiffModel(testFiles())
+		m := newDiffModel(testFiles(), false)
 		updated, _ := m.Update(press("j"))
 		m = updated.(diffModel)
 		if m.cursor != 1 {
@@ -75,7 +83,7 @@ func TestDiffModelNavigation(t *testing.T) {
 		}
 	})
 	t.Run("cursor clamps at ends", func(t *testing.T) {
-		m := newDiffModel(testFiles())
+		m := newDiffModel(testFiles(), false)
 		updated, _ := m.Update(press("k"))
 		m = updated.(diffModel)
 		if m.cursor != 0 {
@@ -90,7 +98,7 @@ func TestDiffModelNavigation(t *testing.T) {
 		}
 	})
 	t.Run("scroll clamps to hunk", func(t *testing.T) {
-		m := newDiffModel(testFiles())
+		m := newDiffModel(testFiles(), false)
 		updated, _ := m.Update(press("d"))
 		m = updated.(diffModel)
 		if m.hunkOffset != m.maxHunkOffset() {
@@ -114,7 +122,7 @@ func TestDiffModelNavigation(t *testing.T) {
 			"ETX":    tea.KeyPressMsg(tea.Key{Code: 3}),
 		}
 		for name, msg := range msgs {
-			_, cmd := newDiffModel(testFiles()).Update(msg)
+			_, cmd := newDiffModel(testFiles(), false).Update(msg)
 			if cmd == nil {
 				t.Errorf("key %s returned nil cmd, want quit", name)
 				continue

@@ -24,9 +24,14 @@ type CheckUpdateOptions struct {
 	// Ref overrides the stored requestedRef for this run only; the stored
 	// state is never modified.
 	Ref string
+	// Verbose enables per-run diagnostics on Stderr.
+	Verbose bool
 	// Stdout receives the one human result line; it defaults to the OS
 	// stdout when nil so diagnostics stay capturable in tests.
 	Stdout io.Writer
+	// Stderr receives verbose diagnostics; it defaults to the OS
+	// stderr when nil.
+	Stderr io.Writer
 }
 
 // CheckUpdateResult reports the re-resolve outcome: Available is true when
@@ -59,10 +64,12 @@ func CheckUpdate(projectDir string, opts CheckUpdateOptions) (*CheckUpdateResult
 	if opts.Ref != "" {
 		ref = opts.Ref
 	}
+	vlogf(opts.Stderr, opts.Verbose, "check-update: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
 	fresh, changed, err := reresolve(state, ref, projectDir)
 	if err != nil {
 		return nil, err
 	}
+	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
 	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
 	if changed {
 		fmt.Fprintf(stdout, "turutan: update available: %s -> %s\n", shortSHA(state.ResolvedCommit), shortSHA(fresh))

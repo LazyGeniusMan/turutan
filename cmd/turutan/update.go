@@ -62,6 +62,7 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 		AnswersFile: flags.answersFile,
 		Defaults:    flags.defaults,
 		Engine:      version,
+		Verbose:     verbose,
 		Stdout:      cmd.OutOrStdout(),
 		Stderr:      cmd.ErrOrStderr(),
 		Stdin:       os.Stdin,

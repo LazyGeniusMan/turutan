@@ -238,12 +238,15 @@ func TestWriteDiffGolden(t *testing.T) {
 		}
 		// Deliberately unsorted: golden pins the sorted plain output.
 		var out strings.Builder
-		if err := WriteDiff(&out, []FileDiff{added, changed}); err != nil {
+		if err := WriteDiff(&out, []FileDiff{added, changed}, WriteOptions{NoColor: true}); err != nil {
 			t.Fatalf("WriteDiff error: %v", err)
 		}
 		want, err := os.ReadFile("testdata/diff_basic.golden")
 		if err != nil {
 			t.Fatal(err)
+		}
+		if strings.Contains(out.String(), "\x1b") {
+			t.Errorf("plain diff with NoColor contains ANSI escapes:\n%q", out.String())
 		}
 		if out.String() != string(want) {
 			t.Errorf("plain diff mismatch:\ngot:\n%s\nwant:\n%s", out.String(), want)
@@ -251,7 +254,7 @@ func TestWriteDiffGolden(t *testing.T) {
 	})
 	t.Run("empty set writes nothing", func(t *testing.T) {
 		var out strings.Builder
-		if err := WriteDiff(&out, nil); err != nil {
+		if err := WriteDiff(&out, nil, WriteOptions{}); err != nil {
 			t.Fatalf("WriteDiff error: %v", err)
 		}
 		if out.String() != "" {

@@ -19,8 +19,10 @@ func newCheckUpdateCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			result, err := scaffold.CheckUpdate(".", scaffold.CheckUpdateOptions{
-				Ref:    ref,
-				Stdout: cmd.OutOrStdout(),
+				Ref:     ref,
+				Verbose: verbose,
+				Stdout:  cmd.OutOrStdout(),
+				Stderr:  cmd.ErrOrStderr(),
 			})
 			if err != nil {
 				return err

@@ -7,7 +7,9 @@ package tui
 
 import "io"
 
-// Options selects the presentation mode.
+// Options selects the presentation mode. NoColor guarantees the UI
+// emits no ANSI escape sequences; the review view is plain text either
+// way, and the flag guards any future styling.
 type Options struct {
 	NoColor        bool
 	NonInteractive bool

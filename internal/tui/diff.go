@@ -27,23 +27,26 @@ type FileDiff struct {
 
 // RunDiff starts the file-list + hunk review UI over files. It returns nil
 // once the user quits (q, Esc or Ctrl+C); quitting is not an error because
-// the drift itself is reported through the command exit code.
-func RunDiff(files []FileDiff) error {
+// the drift itself is reported through the command exit code. opts.NoColor
+// guarantees no ANSI escapes in the review view (it is plain text).
+func RunDiff(files []FileDiff, opts Options) error {
 	if len(files) == 0 {
 		return nil
 	}
-	_, err := tea.NewProgram(newDiffModel(files)).Run()
+	_, err := tea.NewProgram(newDiffModel(files, opts.NoColor)).Run()
 	return err
 }
 
 // diffModel is the Bubbletea model for drift review: a file list with a
-// hunk view of the selected file.
+// hunk view of the selected file. noColor disables all styling so the
+// view stays free of ANSI escapes (see Options.NoColor).
 type diffModel struct {
 	files      []FileDiff
 	cursor     int
 	width      int
 	height     int
 	hunkOffset int
+	noColor    bool
 }
 
 // keyName normalizes a key press to its matchable name. Keystroke covers
@@ -56,9 +59,10 @@ func keyName(msg tea.KeyPressMsg) string {
 	return msg.String()
 }
 
-// newDiffModel returns the review model over files.
-func newDiffModel(files []FileDiff) diffModel {
-	return diffModel{files: files, height: defaultHeight}
+// newDiffModel returns the review model over files. noColor selects
+// unstyled rendering (see Options.NoColor).
+func newDiffModel(files []FileDiff, noColor bool) diffModel {
+	return diffModel{files: files, height: defaultHeight, noColor: noColor}
 }
 
 // Init implements tea.Model.

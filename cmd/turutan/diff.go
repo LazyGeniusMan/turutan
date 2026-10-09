@@ -36,9 +36,16 @@ func newDiffCmd() *cobra.Command {
 
 // runDiff computes the drift and presents it: interactive UI on a TTY,
 // plain stdout otherwise. Logs go to stderr; the diff itself to stdout.
+// The global --no-color flag threads into both presentations (the plain
+// rendering is byte-stable text; the review UI stays unstyled).
 func runDiff(cmd *cobra.Command, ref string, noPager bool) error {
 	stdout := cmd.OutOrStdout()
-	diffs, err := scaffold.ComputeDiff(".", scaffold.DiffOptions{Ref: ref})
+	diffs, err := scaffold.ComputeDiff(".", scaffold.DiffOptions{
+		Ref:     ref,
+		NoColor: noColor,
+		Verbose: verbose,
+		Stderr:  cmd.ErrOrStderr(),
+	})
 	if err != nil {
 		return err
 	}
@@ -47,12 +54,12 @@ func runDiff(cmd *cobra.Command, ref string, noPager bool) error {
 		return nil
 	}
 	if !noPager && !nonInteractive && isTerminal(stdout) {
-		if err := tui.RunDiff(toTUIDiffs(diffs)); err != nil {
+		if err := tui.RunDiff(toTUIDiffs(diffs), tui.Options{NoColor: noColor}); err != nil {
 			return err
 		}
 		return &exitError{code: exitDriftOrAvailable, msg: "drift found"}
 	}
-	if err := scaffold.WriteDiff(stdout, diffs); err != nil {
+	if err := scaffold.WriteDiff(stdout, diffs, scaffold.WriteOptions{NoColor: noColor}); err != nil {
 		return err
 	}
 	return &exitError{code: exitDriftOrAvailable, msg: "drift found"}
