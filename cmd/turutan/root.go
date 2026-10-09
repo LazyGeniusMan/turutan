@@ -44,9 +44,14 @@ template updates back into them (bootstrap, check-update, diff, update).`,
 	},
 }
 
-// Execute runs the root command; main maps any error to exit 1.
+// Execute runs the root command. Scriptable outcomes (exitError) are
+// already reported on the command streams and pass through untouched so
+// main can exit with their code; any other error prints here and exits 1.
 func Execute() error {
 	if err := rootCmd.Execute(); err != nil {
+		if _, ok := errors.AsType[*exitError](err); ok {
+			return err
+		}
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		return err
 	}

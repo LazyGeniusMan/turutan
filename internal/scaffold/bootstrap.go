@@ -43,6 +43,16 @@ func Bootstrap(source, target string, opts Options) error {
 	if opts.Subpath != "" {
 		src.Subpath = filepath.ToSlash(filepath.Clean(opts.Subpath))
 	}
+	// Local sources are stored as absolute paths: the state outlives the
+	// bootstrap working directory, and check-update/diff re-resolve the
+	// stored URI from inside the project. Remote locators are untouched.
+	if src.Kind == template.KindLocalGit || src.Kind == template.KindFilesystem {
+		abs, err := filepath.Abs(src.Repo)
+		if err != nil {
+			return fmt.Errorf("bootstrap: resolving source %q: %w", src.Raw, err)
+		}
+		src.Repo = abs
+	}
 	fetched, err := template.Fetch(src)
 	if err != nil {
 		return err
@@ -335,8 +345,8 @@ func gateHooks(manifest *config.Manifest, opts Options, stdout io.Writer, stdin 
 
 // shortSHA abbreviates a hex identity for the summary line.
 func shortSHA(sha string) string {
-	if len(sha) > 12 {
-		return sha[:12]
+	if len(sha) > shortSHALen {
+		return sha[:shortSHALen]
 	}
 	return sha
 }

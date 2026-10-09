@@ -3,19 +3,34 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
+
+	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-// newCheckUpdateCmd returns the check-update stub; M2 implements re-resolve.
+// newCheckUpdateCmd returns the check-update command: re-resolve the stored
+// template ref and report whether the template moved. Exit 0 means
+// up-to-date, 2 means update available, 1 means runtime error.
 func newCheckUpdateCmd() *cobra.Command {
-	return &cobra.Command{
+	var ref string
+	cmd := &cobra.Command{
 		Use:   "check-update",
 		Short: "Check whether the template has a newer resolvable ref",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return fmt.Errorf("check-update: %w", errNotImplemented)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			result, err := scaffold.CheckUpdate(".", scaffold.CheckUpdateOptions{
+				Ref:    ref,
+				Stdout: cmd.OutOrStdout(),
+			})
+			if err != nil {
+				return err
+			}
+			if result.Available {
+				return &exitError{code: exitDriftOrAvailable, msg: "update available"}
+			}
+			return nil
 		},
 	}
+	cmd.Flags().StringVar(&ref, "ref", "", "override the stored requestedRef for this run")
+	return cmd
 }

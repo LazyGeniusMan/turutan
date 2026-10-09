@@ -1,0 +1,13 @@
+--- a/hello.txt
++++ b/hello.txt
+@@ -1,5 +1,5 @@
+ aaa
+-bbb
++BBB
+ ccc
+ ddd
+ eee
+--- a/new.txt
++++ b/new.txt
+@@ -0,0 +1 @@
++hello
