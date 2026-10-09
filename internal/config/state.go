@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 
 	"github.com/Masterminds/semver/v3"
@@ -81,15 +82,24 @@ type ManifestHooks struct {
 	Post []string `yaml:"post"`
 }
 
+// ManifestMigration is one ordered update migration (spec §§6.4,7):
+// From optionally constrains the old identity the migration applies to
+// (a commit prefix or semver range; empty means always apply), and Run
+// lists shell commands executed in order in the project directory.
+type ManifestMigration struct {
+	From string   `yaml:"from"`
+	Run  []string `yaml:"run"`
+}
+
 // Manifest is the .turutan.yml template manifest (spec §4.3).
 type Manifest struct {
-	Source     string        `yaml:"source"`
-	MinEngine  string        `yaml:"min-engine"`
-	Ignore     []string      `yaml:"ignore"`
-	Preserve   []string      `yaml:"preserve"`
-	Conflict   string        `yaml:"conflict"`
-	Hooks      ManifestHooks `yaml:"hooks"`
-	Migrations []any         `yaml:"migrations"`
+	Source     string              `yaml:"source"`
+	MinEngine  string              `yaml:"min-engine"`
+	Ignore     []string            `yaml:"ignore"`
+	Preserve   []string            `yaml:"preserve"`
+	Conflict   string              `yaml:"conflict"`
+	Hooks      ManifestHooks       `yaml:"hooks"`
+	Migrations []ManifestMigration `yaml:"migrations"`
 }
 
 // LoadState reads and validates .turutan.json from fsys (os.DirFS of the
@@ -236,8 +246,8 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// ValidateManifest rejects unknown conflict modes and unparsable
-// min-engine constraints.
+// ValidateManifest rejects unknown conflict modes, unparsable
+// min-engine constraints and empty migration commands.
 func ValidateManifest(manifest *Manifest) error {
 	switch manifest.Conflict {
 	case "", "inline", "rej":
@@ -247,6 +257,11 @@ func ValidateManifest(manifest *Manifest) error {
 	if manifest.MinEngine != "" {
 		if _, err := semver.NewConstraint(manifest.MinEngine); err != nil {
 			return fmt.Errorf("invalid manifest: bad min-engine %q: %w", manifest.MinEngine, err)
+		}
+	}
+	for i, migration := range manifest.Migrations {
+		if slices.Contains(migration.Run, "") {
+			return fmt.Errorf("invalid manifest: migrations[%d] has an empty run command", i)
 		}
 	}
 	return nil
