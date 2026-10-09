@@ -197,15 +197,53 @@ func TestBootstrapFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("hooks consented with allow-hooks", func(t *testing.T) {
-		src := makeTemplate(t, "hooks:\n  post: [\"./hooks/post.sh\"]\n", basicFiles)
+		src := makeTemplate(t, "hooks:\n  post: [\"hooks/post.sh\"]\n", map[string]string{
+			"go.mod.tmpl":   "module {{.project_name}}\n",
+			"hooks/post.sh": "touch hook-ran.txt\n",
+		})
+		target := filepath.Join(t.TempDir(), "p")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.AllowHooks = true
-		if err := Bootstrap(src, filepath.Join(t.TempDir(), "p"), opts); err != nil {
+		if err := Bootstrap(src, target, opts); err != nil {
 			t.Fatalf("Bootstrap with --allow-hooks error: %v", err)
 		}
-		if !strings.Contains(stdout.String(), "not implemented in M1") {
+		if !strings.Contains(stdout.String(), "ran 1 template hook") {
+			t.Errorf("hooks ran notice missing: %q", stdout.String())
+		}
+		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err != nil {
+			t.Errorf("hook did not run (hook-ran.txt missing): %v", err)
+		}
+	})
+	t.Run("interactive decline skips hooks with notice", func(t *testing.T) {
+		src := makeTemplate(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
+		target := filepath.Join(t.TempDir(), "p")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.NonInteractive = false
+		opts.Stdin = strings.NewReader("n\n")
+		if err := Bootstrap(src, target, opts); err != nil {
+			t.Fatalf("Bootstrap with declined hooks error: %v", err)
+		}
+		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
 			t.Errorf("hooks skip notice missing: %q", stdout.String())
+		}
+		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err == nil {
+			t.Error("declined hook ran, want it skipped")
+		}
+	})
+	t.Run("interactive accept runs hooks", func(t *testing.T) {
+		src := makeTemplate(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
+		target := filepath.Join(t.TempDir(), "p")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.NonInteractive = false
+		opts.Stdin = strings.NewReader("y\n")
+		if err := Bootstrap(src, target, opts); err != nil {
+			t.Fatalf("Bootstrap with accepted hooks error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err != nil {
+			t.Errorf("accepted hook did not run: %v", err)
 		}
 	})
 	t.Run("interactive prompt supplies missing key", func(t *testing.T) {

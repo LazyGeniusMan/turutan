@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -94,14 +95,16 @@ func Bootstrap(source, target string, opts Options) error {
 	if resolved == "" {
 		resolved = strings.TrimPrefix(config.ComputeManifestHash(files), "sha256:")
 	}
-	if err := writeStateAndLock(absTarget, src, resolved, answers, opts, files, engine); err != nil {
+	license := resolveTemplateLicense(os.DirFS(fetched.Dir))
+	vlogf(stderr, opts.Verbose, "bootstrap: template license %s", license)
+	if err := writeStateAndLock(absTarget, src, resolved, answers, opts, files, engine, license); err != nil {
 		return err
 	}
 	// The staged render is the pristine base for future 3-way updates.
 	if err := StoreBase(absTarget, resolved, staged); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
-	if err := gateHooks(manifest, opts, stdout, stdin); err != nil {
+	if err := gateHooks(manifest, absTarget, opts, stdout, stderr, stdin); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n", absTarget, src.String(), shortSHA(resolved), len(files))
@@ -315,7 +318,8 @@ func keepExisting(slash string, manifest *config.Manifest, opts Options) (bool, 
 }
 
 // writeStateAndLock records .turutan.json and .turutan.lock in target.
-func writeStateAndLock(target string, src *template.Source, resolved string, answers map[string]any, opts Options, files []config.LockFile, engine string) error {
+// license is the source template SPDX (see resolveTemplateLicense).
+func writeStateAndLock(target string, src *template.Source, resolved string, answers map[string]any, opts Options, files []config.LockFile, engine, license string) error {
 	state := &config.State{
 		Version:         config.StateVersion,
 		Template:        src.String(),
@@ -326,7 +330,7 @@ func writeStateAndLock(target string, src *template.Source, resolved string, ans
 		Answers:         answers,
 		Skip:            opts.Skip,
 		Engine:          "turutan/" + engine,
-		TemplateLicense: config.TemplateLicenseMIT0,
+		TemplateLicense: license,
 	}
 	if err := config.SaveState(target, state); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
@@ -344,10 +348,13 @@ func writeStateAndLock(target string, src *template.Source, resolved string, ans
 	return nil
 }
 
-// gateHooks enforces consent for template-declared hooks. M1 gates only:
-// non-interactive runs refuse hooks unless --allow-hooks consents, and
-// even consented hooks are reported as skipped (execution arrives later).
-func gateHooks(manifest *config.Manifest, opts Options, stdout io.Writer, stdin io.Reader) error {
+// gateHooks enforces consent for template-declared hooks and runs them.
+// Non-interactive runs refuse hook-bearing templates unless --allow-hooks
+// consents (default-deny); interactive runs prompt, and a declined answer
+// skips the hooks with a notice instead of failing. Consented hooks run in
+// order (pre then post) via sh in the new project directory; a failing
+// hook fails the bootstrap so a half-hooked project is never reported.
+func gateHooks(manifest *config.Manifest, target string, opts Options, stdout, stderr io.Writer, stdin io.Reader) error {
 	hooks := append(append([]string{}, manifest.Hooks.Pre...), manifest.Hooks.Post...)
 	if len(hooks) == 0 {
 		return nil
@@ -357,10 +364,47 @@ func gateHooks(manifest *config.Manifest, opts Options, stdout io.Writer, stdin 
 			return fmt.Errorf("bootstrap: template declares hooks %q: refusing in --non-interactive mode without --allow-hooks", hooks)
 		}
 		if !promptConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks)) {
-			return fmt.Errorf("bootstrap: template declares hooks %q: consent declined", hooks)
+			fmt.Fprintf(stdout, "turutan: template hooks %q skipped (consent declined)\n", hooks)
+			return nil
 		}
 	}
-	fmt.Fprintf(stdout, "turutan: template hooks %q declared but execution is not implemented in M1; skipping\n", hooks)
+	for _, hook := range hooks {
+		if err := runHookCmd(target, hook, stderr); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(stdout, "turutan: ran %d template hook(s)\n", len(hooks))
+	return nil
+}
+
+// runHookCmd executes one template-declared hook inside target: a plain
+// path to a file in the project runs via sh, anything else via sh -c
+// (mirroring update migration execution). Combined output goes to stderr;
+// failures fail the caller.
+func runHookCmd(target, hook string, stderr io.Writer) error {
+	if hook == "" {
+		return fmt.Errorf("bootstrap: hook has an empty command")
+	}
+	argv := []string{"-c", hook}
+	if !strings.ContainsAny(hook, " \t\n|&;()<>$`\"'") {
+		// A manifest-declared command doubles as a script path only when
+		// it stays inside the project; escaping names run via sh -c.
+		if safe, joinErr := filter.SafeJoin(target, filepath.FromSlash(hook)); joinErr == nil {
+			if info, err := os.Stat(safe); err == nil && !info.IsDir() {
+				argv = []string{safe}
+			}
+		}
+	}
+	executed := exec.Command("sh", argv...)
+	executed.Dir = target
+	executed.Env = os.Environ()
+	output, err := executed.CombinedOutput()
+	if len(output) > 0 {
+		fmt.Fprintf(stderr, "turutan: hook %q output:\n%s", hook, output)
+	}
+	if err != nil {
+		return fmt.Errorf("bootstrap: hook %q failed: %w", hook, err)
+	}
 	return nil
 }
 
