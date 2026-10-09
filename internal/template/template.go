@@ -8,6 +8,8 @@ package template
 import (
 	"fmt"
 	"strings"
+
+	"github.com/LazyGeniusMan/turutan/internal/git"
 )
 
 // Production default template coordinates (spec §8).
@@ -105,9 +107,11 @@ func (s *Source) String() string {
 }
 
 // isRemoteURL reports whether repo parses as a remote (non-local) locator.
+// Scp-like detection shares git.IsScpLike with source parsing so the two
+// never disagree.
 func isRemoteURL(repo string) bool {
 	if strings.Contains(repo, "://") {
 		return true
 	}
-	return scpLike.MatchString(repo)
+	return git.IsScpLike(repo)
 }

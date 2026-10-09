@@ -18,7 +18,7 @@ import (
 	"github.com/go-git/go-git/v6/storage/memory"
 )
 
-// ShoreDepth is the default shallow fetch depth (spec §3: depth defaults to 1).
+// ShallowDepth is the default shallow fetch depth (spec §3: depth defaults to 1).
 const ShallowDepth = 1
 
 // maxShortHashLen bounds short-SHA prefix matching so absurd inputs fail fast.
@@ -190,6 +190,25 @@ func CloneWithOptions(opts CloneOptions) (string, error) {
 	return Clone(opts.URL, opts.Ref, opts.Dir, opts.Depth)
 }
 
+// IsBare reports whether path is a bare git repository (no worktree).
+// It opens the repository with PlainOpen, so worktrees, bare repos and
+// non-repos are distinguished without touching the network: a bare repo
+// has no worktree, so Repository.Worktree fails for it and succeeds for
+// a worktree checkout.
+func IsBare(path string) (bool, error) {
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		return false, fmt.Errorf("opening git repository %q: %w", path, err)
+	}
+	return isBareRepo(repo), nil
+}
+
+// isBareRepo reports whether the opened repo lacks a worktree.
+func isBareRepo(repo *git.Repository) bool {
+	_, err := repo.Worktree()
+	return err != nil
+}
+
 // IsGitRepo reports whether path is a git repository (bare-aware) by
 // probing it with PlainOpen. It never mutates path.
 func IsGitRepo(path string) bool {
@@ -199,8 +218,9 @@ func IsGitRepo(path string) bool {
 
 // ResolveLocal resolves expr inside the repository at path without
 // mutating it: empty expression reads HEAD (falling back to main, then
-// master for bare repositories with an unborn HEAD); otherwise it uses
-// ResolveRevision, so branches, tags and SHAs all work offline.
+// master for bare repositories with an unborn HEAD, detected via IsBare
+// semantics); otherwise it uses ResolveRevision, so branches, tags and
+// SHAs all work offline.
 func ResolveLocal(path, expr string) (string, error) {
 	repo, err := git.PlainOpen(path)
 	if err != nil {
@@ -214,6 +234,9 @@ func ResolveLocal(path, expr string) (string, error) {
 			if hash, err := repo.ResolveRevision(plumbing.Revision("refs/heads/" + branch)); err == nil {
 				return hash.String(), nil
 			}
+		}
+		if isBareRepo(repo) {
+			return "", fmt.Errorf("resolving HEAD of bare repository %q: no HEAD, main or master ref", path)
 		}
 		return "", fmt.Errorf("resolving HEAD of %q: no HEAD, main or master ref", path)
 	}

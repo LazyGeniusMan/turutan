@@ -7,10 +7,13 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	gossh "golang.org/x/crypto/ssh"
 )
 
 // clearAuthEnv isolates each test from the developer's environment.
@@ -20,10 +23,12 @@ func clearAuthEnv(t *testing.T) {
 	t.Setenv(EnvSSHPassword, "")
 	t.Setenv(EnvGitHubToken, "")
 	t.Setenv(EnvInsecureSkipVerify, "")
+	t.Setenv(EnvKnownHosts, "")
 	os.Unsetenv(EnvSSHKey)
 	os.Unsetenv(EnvSSHPassword)
 	os.Unsetenv(EnvGitHubToken)
 	os.Unsetenv(EnvInsecureSkipVerify)
+	os.Unsetenv(EnvKnownHosts)
 }
 
 // testKeyPEM generates an ed25519 PEM for EnvSSHKey tests.
@@ -193,6 +198,83 @@ func TestClientOptionsMatrix(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestKnownHosts(t *testing.T) {
+	t.Run("missing path fails closed", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv(EnvSSHPassword, "s3cr3t")
+		t.Setenv(EnvKnownHosts, filepath.Join(t.TempDir(), "no-such-file"))
+		if _, _, err := ClientOptions("git@github.com:org/web.git"); err == nil {
+			t.Error("ClientOptions with missing known_hosts succeeded, want error")
+		}
+	})
+	t.Run("empty directory fails closed", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv(EnvSSHPassword, "s3cr3t")
+		t.Setenv(EnvKnownHosts, t.TempDir())
+		if _, _, err := ClientOptions("git@github.com:org/web.git"); err == nil {
+			t.Error("ClientOptions with empty known_hosts dir succeeded, want error")
+		}
+	})
+	t.Run("file override honored", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv(EnvSSHPassword, "s3cr3t")
+		t.Setenv(EnvKnownHosts, testKnownHostsFile(t, "github.com"))
+		opts, insecure, err := ClientOptions("git@github.com:org/web.git")
+		if err != nil {
+			t.Fatalf("ClientOptions error: %v", err)
+		}
+		if len(opts) == 0 {
+			t.Error("ClientOptions returned no options, want SSH auth")
+		}
+		if insecure {
+			t.Error("insecure = true, want strict with known_hosts override")
+		}
+	})
+	t.Run("directory override honored", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv(EnvSSHPassword, "s3cr3t")
+		dir := t.TempDir()
+		data, err := os.ReadFile(testKnownHostsFile(t, "github.com"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "known_hosts"), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(EnvKnownHosts, dir)
+		if _, _, err := ClientOptions("git@github.com:org/web.git"); err != nil {
+			t.Fatalf("ClientOptions error: %v", err)
+		}
+	})
+	t.Run("unset keeps strict default", func(t *testing.T) {
+		clearAuthEnv(t)
+		t.Setenv(EnvSSHPassword, "s3cr3t")
+		if _, insecure, err := ClientOptions("git@github.com:org/web.git"); err != nil || insecure {
+			t.Errorf("ClientOptions = (_, %v, %v); want strict defaults", insecure, err)
+		}
+	})
+}
+
+// testKnownHostsFile writes a known_hosts file holding one generated key
+// for host and returns its path.
+func testKnownHostsFile(t *testing.T, host string) string {
+	t.Helper()
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := gossh.NewPublicKey(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := fmt.Sprintf("%s %s", host, strings.TrimSpace(string(gossh.MarshalAuthorizedKey(key))))
+	path := filepath.Join(t.TempDir(), "known_hosts")
+	if err := os.WriteFile(path, []byte(line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestAuthRedaction(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,11 @@ const (
 	// Strict verification is the default; setting this prints a loud
 	// warning on every use.
 	EnvInsecureSkipVerify = "TURUTAN_INSECURE_SKIP_VERIFY"
+	// EnvKnownHosts overrides the SSH known_hosts database: either a file
+	// or a directory of files. Strict verification stays on; this only
+	// selects which database it checks against. Unset means go-git
+	// checks its default locations.
+	EnvKnownHosts = "TURUTAN_KNOWN_HOSTS"
 )
 
 // InsecureWarning is the loud opt-out notice emitted on stderr whenever
@@ -61,17 +67,23 @@ func isSSHURL(raw string) bool {
 	if strings.HasPrefix(raw, "ssh://") || strings.HasPrefix(raw, "git://") {
 		return true
 	}
-	return !strings.Contains(raw, "://") && scpLikeURL(raw)
+	return !strings.Contains(raw, "://") && IsScpLike(raw)
 }
 
-// scpLikeURL matches scp-like SSH locators without "://".
-func scpLikeURL(s string) bool {
+// IsScpLike reports whether s looks like an scp-like SSH locator
+// (user@host:path) without "://". It is the single shared matcher for
+// scp-like detection (see template parsing): the user part must not hold
+// a slash, so local paths containing "@" never misclassify as SSH.
+func IsScpLike(s string) bool {
 	if strings.Contains(s, "://") {
 		return false
 	}
 	at := strings.Index(s, "@")
 	colon := strings.Index(s, ":")
-	return at > 0 && colon > at+1
+	if at <= 0 || colon <= at+1 || colon >= len(s)-1 {
+		return false
+	}
+	return !strings.Contains(s[:at], "/")
 }
 
 // isHTTPURL reports whether raw is an http(s) remote.
@@ -133,7 +145,9 @@ func httpClientOptions(insecure bool) []client.Option {
 
 // sshClientOptions builds options for SSH remotes following the key >
 // password > agent precedence. Host-key verification stays strict
-// (known_hosts) unless the insecure opt-out wraps the auth to ignore it.
+// (known_hosts) unless the insecure opt-out wraps the auth to ignore it;
+// TURUTAN_KNOWN_HOSTS selects an explicit known_hosts file or directory
+// instead of the defaults (see knownHostsFiles).
 func sshClientOptions(raw string, insecure bool) ([]client.Option, error) {
 	user := sshUser(raw)
 	var auth client.SSHAuth
@@ -158,6 +172,14 @@ func sshClientOptions(raw string, insecure bool) ([]client.Option, error) {
 	}
 	if insecure {
 		auth = insecureHostKeyAuth{inner: auth}
+	} else if files, err := knownHostsFiles(); err != nil {
+		return nil, err
+	} else if files != nil {
+		callback, err := ssh.NewKnownHostsCallback(files...)
+		if err != nil {
+			return nil, fmt.Errorf("reading known_hosts from %s: %w", EnvKnownHosts, err)
+		}
+		auth = knownHostsAuth{inner: auth, callback: callback}
 	}
 	return []client.Option{client.WithSSHAuth(auth)}, nil
 }
@@ -185,6 +207,43 @@ func sshKeyBytes(value string) ([]byte, error) {
 	return []byte(value), nil
 }
 
+// knownHostsFiles resolves EnvKnownHosts to key files: a single file,
+// or every regular file in a directory. It returns nil when unset, so
+// go-git checks its default locations. A set-but-missing path fails
+// closed, so a typo never silently changes what gets verified.
+func knownHostsFiles() ([]string, error) {
+	raw, ok := os.LookupEnv(EnvKnownHosts)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	path := strings.TrimSpace(raw)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s %q: %w", EnvKnownHosts, path, err)
+	}
+	if !info.IsDir() {
+		return []string{path}, nil
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s %q: %w", EnvKnownHosts, path, err)
+	}
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if info, err := entry.Info(); err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		files = append(files, filepath.Join(path, entry.Name()))
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("reading %s %q: directory holds no key files", EnvKnownHosts, path)
+	}
+	return files, nil
+}
+
 // insecureHostKeyAuth wraps an SSH auth to ignore host-key verification.
 // It exists only for the TURUTAN_INSECURE_SKIP_VERIFY opt-out, which
 // always pairs with the loud InsecureWarning.
@@ -200,6 +259,25 @@ func (a insecureHostKeyAuth) ClientConfig(ctx context.Context, req *transport.Re
 		return nil, err
 	}
 	cfg.HostKeyCallback = gossh.InsecureIgnoreHostKey()
+	return cfg, nil
+}
+
+// knownHostsAuth wraps an SSH auth to verify host keys against an
+// explicit known_hosts database (see EnvKnownHosts). It exists only for
+// the path-override case; unset means go-git checks its defaults.
+type knownHostsAuth struct {
+	inner    client.SSHAuth
+	callback gossh.HostKeyCallback
+}
+
+// ClientConfig delegates to the wrapped auth then pins host-key
+// verification to the override database.
+func (a knownHostsAuth) ClientConfig(ctx context.Context, req *transport.Request) (*gossh.ClientConfig, error) {
+	cfg, err := a.inner.ClientConfig(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	cfg.HostKeyCallback = a.callback
 	return cfg, nil
 }
 

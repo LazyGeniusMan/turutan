@@ -10,10 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/CivNode/diff3-go"
+
+	"github.com/Masterminds/semver/v3"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
@@ -605,10 +608,10 @@ func (m *merger) write(rel string, data []byte) error {
 
 // runMigrations executes the new manifest's migrations in order whose From
 // range matches old→new. An empty From always applies; a commit-prefix
-// From applies on prefix match; any other (semver-style) range applies
-// for M3 v1 with tag-range filtering deferred to the base-store milestone.
-// Each Run entry executes in the project dir: a plain path to a file runs
-// via sh, anything else via sh -c. It returns the executed commands.
+// From applies on prefix match; a semver From is checked against whichever
+// of old/fresh parse as versions (see matchesMigration). Each Run entry
+// executes in the project dir: a plain path to a file runs via sh,
+// anything else via sh -c. It returns the executed commands.
 func runMigrations(projectDir string, manifest *config.Manifest, old, fresh string, stderr io.Writer) ([]string, error) {
 	var executed []string
 	for _, migration := range manifest.Migrations {
@@ -625,7 +628,14 @@ func runMigrations(projectDir string, manifest *config.Manifest, old, fresh stri
 	return executed, nil
 }
 
-// matchesMigration reports whether a migration applies to old→new.
+// matchesMigration reports whether a migration applies to old→new. An
+// empty From always applies, and a commit-prefix From applies on prefix
+// match. Otherwise From parses as a Masterminds/semver constraint checked
+// against whichever of old/fresh parse as versions (tag-derived
+// identities): a satisfied range applies, an unsatisfied one skips. When
+// neither identity carries version info (bare SHAs) the range cannot
+// resolve without tag metadata, so it applies in manifest order
+// (documented match-all); an unparsable From matches all the same way.
 func matchesMigration(from, old, fresh string) bool {
 	if from == "" {
 		return true
@@ -636,9 +646,20 @@ func matchesMigration(from, old, fresh string) bool {
 	if fresh != "" && (fresh == from || strings.HasPrefix(fresh, from) || strings.HasPrefix(from, fresh)) {
 		return true
 	}
-	// Semver-style ranges cannot resolve against commit identities
-	// without tag metadata; M3 v1 applies them in manifest order.
-	return true
+	constraint, err := semver.NewConstraint(from)
+	if err != nil {
+		return true
+	}
+	var versions []*semver.Version
+	for _, ident := range []string{old, fresh} {
+		if version, err := semver.NewVersion(strings.TrimPrefix(strings.TrimSpace(ident), "v")); err == nil {
+			versions = append(versions, version)
+		}
+	}
+	if len(versions) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(versions, constraint.Check)
 }
 
 // runMigrationCmd executes one migration command in projectDir.

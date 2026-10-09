@@ -8,18 +8,17 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/LazyGeniusMan/turutan/internal/git"
 )
 
 // DefaultDepth is the default shallow fetch depth when ?depth= is absent.
-const DefaultDepth = 1
-
-// scpLike matches scp-like SSH locators (user@host:path) without "://".
-// It must be tested before url.Parse because "@" collides with query refs.
-var scpLike = regexp.MustCompile(`^[^/]+@[^:]+:.+$`)
+// It aliases git.ShallowDepth so the two packages share one canonical
+// value (spec §3: depth defaults to 1).
+const DefaultDepth = git.ShallowDepth
 
 // ParseSource parses raw into a Source following the EBNF in spec §3.1:
 //
@@ -56,7 +55,8 @@ func ParseSource(raw string) (*Source, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !strings.Contains(locator, "://") && scpLike.MatchString(locator) {
+	// Scp-like locators are detected before url.Parse (see git.IsScpLike).
+	if !strings.Contains(locator, "://") && git.IsScpLike(locator) {
 		return &Source{Raw: raw, Kind: KindRemoteGit, Repo: locator, Subpath: subpath, RequestedRef: requestedRef, Depth: depth}, nil
 	}
 	parsed, err := url.Parse(locator)
@@ -174,12 +174,22 @@ func parseLocalPath(raw, locator, subpath, requestedRef string, depth int, force
 }
 
 // isGitDir reports whether path holds a git repository: either a worktree
-// (path/.git exists) or a bare repository (HEAD, objects and refs exist).
-// It uses plain filesystem probes so template parsing never imports go-git.
+// (path/.git exists) or a bare repository (see isBareLayout). It uses
+// plain filesystem probes so template parsing stays light; resolve-time
+// code must use git.IsBare/git.ResolveLocal on the opened repository
+// instead of re-probing here.
 func isGitDir(path string) bool {
 	if info, err := os.Stat(filepath.Join(path, ".git")); err == nil && (info.IsDir() || !info.IsDir()) {
 		return true
 	}
+	return isBareLayout(path)
+}
+
+// isBareLayout reports whether path has bare-repository layout: HEAD,
+// objects and refs entries all present. It is the parse-time half of the
+// bare check unified here; git.IsBare is the resolve-time half on the
+// opened repo.
+func isBareLayout(path string) bool {
 	for _, entry := range []string{"HEAD", "objects", "refs"} {
 		if _, err := os.Stat(filepath.Join(path, entry)); err != nil {
 			return false

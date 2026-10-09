@@ -582,7 +582,12 @@ func TestMatchesMigration(t *testing.T) {
 	}{
 		{name: "empty always applies", from: "", old: "aaa", fresh: "bbb", want: true},
 		{name: "old prefix matches", from: "aaa", old: "aaabbb", fresh: "ccc", want: true},
-		{name: "semver range applies in v1", from: "<2.0.0", old: "aaa", fresh: "bbb", want: true},
+		{name: "SHA identities cannot filter a range", from: "<2.0.0", old: "aaa", fresh: "bbb", want: true},
+		{name: "range applies when fresh satisfies", from: ">=2.0.0", old: "v1.9.0", fresh: "v2.1.0", want: true},
+		{name: "range applies when old satisfies", from: "<2.0.0", old: "v1.5.0", fresh: "v2.1.0", want: true},
+		{name: "range skips when neither version satisfies", from: ">=2.0.0", old: "v1.0.0", fresh: "v1.5.0", want: false},
+		{name: "range skips caret mismatch", from: "^1.0", old: "v2.0.0", fresh: "v2.1.0", want: false},
+		{name: "unparsable from matches all", from: "not-a-range", old: "v9.9.9", fresh: "v9.9.9", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

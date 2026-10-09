@@ -239,6 +239,40 @@ func TestResolveLocal(t *testing.T) {
 			t.Error("ResolveLocal on plain dir succeeded, want error")
 		}
 	})
+	t.Run("bare repo resolves HEAD", func(t *testing.T) {
+		dir, want := initRepo(t)
+		bare := filepath.Join(dir, ".git")
+		if isBare, err := IsBare(bare); err != nil || !isBare {
+			t.Fatalf("IsBare(.git) = %v, %v; want true, nil", isBare, err)
+		}
+		got, err := ResolveLocal(bare, "")
+		if err != nil {
+			t.Fatalf("ResolveLocal on bare repo error: %v", err)
+		}
+		if got != want {
+			t.Errorf("ResolveLocal on bare repo = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestIsBare(t *testing.T) {
+	t.Run("worktree is not bare", func(t *testing.T) {
+		dir, _ := initRepo(t)
+		if bare, err := IsBare(dir); err != nil || bare {
+			t.Errorf("IsBare(worktree) = %v, %v; want false, nil", bare, err)
+		}
+	})
+	t.Run("bare layout is bare", func(t *testing.T) {
+		dir, _ := initRepo(t)
+		if bare, err := IsBare(filepath.Join(dir, ".git")); err != nil || !bare {
+			t.Errorf("IsBare(.git) = %v, %v; want true, nil", bare, err)
+		}
+	})
+	t.Run("plain dir errors", func(t *testing.T) {
+		if _, err := IsBare(t.TempDir()); err == nil {
+			t.Error("IsBare on plain dir succeeded, want error")
+		}
+	})
 }
 
 func TestRedacted(t *testing.T) {
@@ -256,6 +290,29 @@ func TestRedacted(t *testing.T) {
 			t.Errorf("redacted = %q, want unchanged", got)
 		}
 	})
+}
+
+func TestIsScpLike(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "scp-like", in: "git@github.com:org/web.git", want: true},
+		{name: "custom user", in: "deploy@example.com:org/web.git", want: true},
+		{name: "ssh scheme is not scp-like", in: "ssh://git@example.com/org/web.git", want: false},
+		{name: "https is not scp-like", in: "https://github.com/org/web.git", want: false},
+		{name: "slash before at is local", in: "a/b@c:d", want: false},
+		{name: "missing path", in: "git@github.com:", want: false},
+		{name: "no colon", in: "git@github.com", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsScpLike(tt.in); got != tt.want {
+				t.Errorf("IsScpLike(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestListRefsNetwork(t *testing.T) {
