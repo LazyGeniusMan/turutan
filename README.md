@@ -11,13 +11,13 @@ Prerequisites: [mise](https://mise.jdx.dev/)
 ```sh
 git clone https://github.com/LazyGeniusMan/turutan.git
 cd turutan
-mise run pre-push
+mise run pre-push:all
 ```
 
 ## Quickstart
 
 ```sh
-mise run pre-push   # release-style static binary with version ldflags
+mise run pre-push:all   # release-style static binary with version ldflags
 
 # Scaffold from the built-in default (a remote-git source in this repo).
 turutan bootstrap git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=templates-default/v1 ./myapp --defaults

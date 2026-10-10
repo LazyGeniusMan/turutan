@@ -2,9 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 version: 2
 project_name: turutan
-before:
-  hooks:
-    - mise run pre-push
 builds:
   - id: turutan
     binary: turutan

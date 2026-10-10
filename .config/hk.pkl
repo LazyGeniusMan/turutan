@@ -90,7 +90,7 @@ local pre_commit = new Mapping<String, Step> {
     depends = "ryl"
   }
   ["updatecli-validate"] {
-    profiles = List("github")
+    profiles = List("core")
     glob = List(".config/updatecli/*.yaml", ".config/updatecli/*.yml")
     batch = true
     check = "updatecli manifest show --config .config/updatecli/"
@@ -134,10 +134,16 @@ local pre_push = new Mapping<String, Step> {
 
 hooks {
   ["check"] {
-    steps = pre_commit
+    steps {
+      ...pre_commit
+      ...pre_push
+    }
   }
   ["fix"] {
-    steps = pre_commit
+    steps {
+      ...pre_commit
+      ...pre_push
+    }
   }
   ["commit-msg"] {
     steps {
@@ -158,6 +164,10 @@ hooks {
       ["install-deps"] {
         step_condition = "is_branch_checkout"
         check = "mise install"
+      }
+      ["dev-setup"] {
+        step_condition = "is_branch_checkout"
+        check = "mise run dev-setup:**"
       }
     }
   }

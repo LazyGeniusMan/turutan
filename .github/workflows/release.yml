@@ -13,8 +13,8 @@ defaults:
   run:
     shell: bash
 jobs:
-  validate:
-    name: Validate
+  check:
+    name: Check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -27,11 +27,11 @@ jobs:
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
       - name: Install
         run: mise install
-      - name: Pre-commit
-        run: mise run pre-commit
+      - name: Check
+        run: mise run check:all
   release:
     name: Release
-    needs: validate
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

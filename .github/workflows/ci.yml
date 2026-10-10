@@ -14,8 +14,8 @@ defaults:
   run:
     shell: bash
 jobs:
-  validate:
-    name: Validate
+  check:
+    name: Check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -28,29 +28,5 @@ jobs:
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
       - name: Install
         run: mise install
-      - name: Pre-commit
-        run: mise run pre-commit
-  test:
-    name: Test
-    needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Install tools
-        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
-      - name: Install
-        run: mise install
-      - name: Pre-push
-        run: mise run pre-push
+      - name: Check
+        run: mise run check:diff

@@ -41,7 +41,8 @@ run = "ai-rulez generate -p {{ mise_env | default(value=[]) | join(sep=',') }}"
 [tasks."dev-setup:basemind"]
 run = "basemind scan"
 
-[tasks."dev:basemind"]
+[tasks."dev-setup:basemind-comms"]
+depends = "dev-setup:basemind"
 daemons = "basemind-comms"
 run = "echo 'basemind comms is running '"
 
