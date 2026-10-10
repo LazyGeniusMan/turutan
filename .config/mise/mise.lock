@@ -292,3 +292,50 @@ checksum = "sha256:6f72039120a4b0b2821a032a1ea6c98b502d2568a650b5cdb106abd67a187
 url = "https://github.com/tombi-toml/tombi/releases/download/v1.7.3/tombi-cli-1.7.3-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/615901924"
 provenance = "github-attestations"
+
+[[tools.updatecli]]
+version = "0.122.1"
+backend = "aqua:updatecli/updatecli"
+specifiers = ["0"]
+
+[tools.updatecli."platforms.linux-arm64"]
+checksum = "sha256:eb54b72cfa801d3ca3fde0e84f093e533021f81ed15dd3a56972723ee2d51344"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288222"
+provenance = "github-attestations"
+
+[tools.updatecli."platforms.linux-arm64-musl"]
+checksum = "sha256:eb54b72cfa801d3ca3fde0e84f093e533021f81ed15dd3a56972723ee2d51344"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288222"
+provenance = "github-attestations"
+
+[tools.updatecli."platforms.linux-x64"]
+checksum = "sha256:8ca11bfa6dae1c0c3aba5df00d7d40ff23e2dc979c966b8d3fc715470b68a0dc"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288219"
+provenance = "github-attestations"
+
+[tools.updatecli."platforms.linux-x64-musl"]
+checksum = "sha256:8ca11bfa6dae1c0c3aba5df00d7d40ff23e2dc979c966b8d3fc715470b68a0dc"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288219"
+provenance = "github-attestations"
+
+[tools.updatecli."platforms.macos-arm64"]
+checksum = "sha256:c36ecadf9c372102645470f875116243a2d536761f03b982631073ca7e5712b7"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288306"
+provenance = "github-attestations"
+
+[tools.updatecli."platforms.macos-x64"]
+checksum = "sha256:c8ebde15908abba6030e3d525cedcca3cd99502de8d055ca2d1418569c833794"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Darwin_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288223"
+provenance = "github-attestations"
+
+[tools.updatecli."platforms.windows-x64"]
+checksum = "sha256:7adf831d20d3eddd07c140fd6f837ab15fd6fafb1f18157a89b0e113f42f6315"
+url = "https://github.com/updatecli/updatecli/releases/download/v0.122.1/updatecli_Windows_x86_64.zip"
+url_api = "https://api.github.com/repos/updatecli/updatecli/releases/assets/607288319"
+provenance = "github-attestations"

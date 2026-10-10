@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 	"testing/fstest"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// renderFixture is a minimal template tree exercising suffix stripping,
-// verbatim copies, sprig functions and metadata skipping.
 func renderFixture() fstest.MapFS {
 	return fstest.MapFS{
-		"go.mod.tmpl":              {Data: []byte("module {{.project_name}}\n\ngo 1.27\n")},
+		"go.mod.tmpl":              {Data: []byte("module {{.project_name}}\n\ngo 1.26\n")},
 		"internal/app/app.go.tmpl": {Data: []byte("// Package app implements the {{.project_name}} application logic.\npackage app\n\n// Greet returns the project greeting.\nfunc Greet() string {\n\treturn \"{{.project_name}}\"\n}\n")},
 		"README.md.tmpl":           {Data: []byte("# {{.project_name | upper}}\n")},
 		"static.txt":               {Data: []byte("verbatim {{not_a_template}}\n")},
@@ -99,6 +99,101 @@ func TestRenderFS(t *testing.T) {
 			t.Error("RenderFS with missing answers succeeded, want error")
 		}
 	})
+}
+
+func TestRenderFSSkipsNestedMetadataDirs(t *testing.T) {
+	tests := []struct {
+		name    string
+		skipped string
+	}{
+		{name: "nested turutan tree", skipped: "a/.turutan/b.yml"},
+		{name: "nested git tree", skipped: "a/.git/config"},
+		{name: "deeply nested turutan file", skipped: "a/b/.turutan/c/d.yml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := assert.New(t)
+			src := fstest.MapFS{
+				"a/keep.txt": {Data: []byte("keep\n")},
+				tt.skipped:   {Data: []byte("must not render\n")},
+			}
+			dst := t.TempDir()
+			is.NoError(RenderFS(src, dst, map[string]any{}))
+			_, err := os.Stat(filepath.Join(dst, filepath.FromSlash(tt.skipped)))
+			is.True(os.IsNotExist(err), "nested metadata file %q must not render", tt.skipped)
+			got, err := os.ReadFile(filepath.Join(dst, "a", "keep.txt"))
+			is.NoError(err)
+			is.Equal("keep\n", string(got))
+		})
+	}
+}
+
+func TestRenderDirSkipsNestedMetadataDirs(t *testing.T) {
+	tests := []struct {
+		name    string
+		skipped string
+	}{
+		{name: "nested turutan tree", skipped: "a/.turutan/b.yml"},
+		{name: "nested git tree", skipped: "a/.git/config"},
+		{name: "deeply nested turutan file", skipped: "a/b/.turutan/c/d.yml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := assert.New(t)
+			src := t.TempDir()
+			skippedPath := filepath.Join(src, filepath.FromSlash(tt.skipped))
+			is.NoError(os.MkdirAll(filepath.Dir(skippedPath), 0o755))
+			is.NoError(os.WriteFile(skippedPath, []byte("must not render\n"), 0o600))
+			is.NoError(os.WriteFile(filepath.Join(src, "a", "keep.txt"), []byte("keep\n"), 0o600))
+			dst := t.TempDir()
+			is.NoError(RenderDir(src, dst, map[string]any{}))
+			_, err := os.Stat(filepath.Join(dst, filepath.FromSlash(tt.skipped)))
+			is.True(os.IsNotExist(err), "nested metadata file %q must not render", tt.skipped)
+			got, err := os.ReadFile(filepath.Join(dst, "a", "keep.txt"))
+			is.NoError(err)
+			is.Equal("keep\n", string(got))
+		})
+	}
+}
+
+func TestSprigEnvBlocked(t *testing.T) {
+	t.Setenv("TURUTAN_CANARY_ENV", "leaked-secret")
+	for _, content := range []string{
+		`{{env "TURUTAN_CANARY_ENV"}}`,
+		`{{expandenv "prefix-$TURUTAN_CANARY_ENV"}}`,
+	} {
+		src := fstest.MapFS{
+			"out.txt.tmpl": {Data: []byte(content)},
+		}
+		dst := t.TempDir()
+		err := RenderFS(src, dst, map[string]any{})
+		if err == nil {
+			t.Errorf("RenderFS with %q succeeded, want env blocked", content)
+			continue
+		}
+		if got, readErr := os.ReadFile(filepath.Join(dst, "out.txt")); readErr == nil {
+			if string(got) == "leaked-secret" || string(got) == "prefix-leaked-secret" {
+				t.Errorf("RenderFS leaked canary env via %q: %q", content, got)
+			}
+		}
+	}
+}
+
+func TestSprigSafeFuncsRetained(t *testing.T) {
+	src := fstest.MapFS{
+		"out.txt.tmpl": {Data: []byte(`{{.name | upper}}`)},
+	}
+	dst := t.TempDir()
+	if err := RenderFS(src, dst, map[string]any{"name": "demo"}); err != nil {
+		t.Fatalf("RenderFS safe func error: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "out.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "DEMO" {
+		t.Errorf("safe sprig func upper = %q, want DEMO", got)
+	}
 }
 
 func TestRenderDirSymlinks(t *testing.T) {

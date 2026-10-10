@@ -2,7 +2,6 @@
 java = "27"
 
 [bootstrap.packages]
-# dev
 "apk:musl-dev" = "latest"
 "apk:libstdc++-dev" = "latest"
 "apk:zlib-dev" = "latest"
@@ -24,7 +23,6 @@ java = "27"
 "zypper:libstdc++-devel" = "latest"
 "zypper:zlib-devel" = "latest"
 "zypper:linux-glibc-devel" = "latest"
-# rt
 "apk:musl" = "latest"
 "apk:zlib" = "latest"
 "apk:libstdc++" = "latest"
@@ -37,9 +35,6 @@ java = "27"
 "dnf:zlib" = "latest"
 "dnf:libstdc++" = "latest"
 "dnf:libgcc" = "latest"
-# "pacman:glibc" = "latest"
-# "pacman:zlib" = "latest"
-# "pacman:gcc-libs" = "latest"
 "winget:Microsoft.VCRedist.2015+.x64" = "latest"
 "zypper:glibc" = "latest"
 "zypper:libz1" = "latest"

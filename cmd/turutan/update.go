@@ -11,19 +11,15 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-// updateFlags stores per-run flag values; fresh per command construction.
 type updateFlags struct {
 	ref         string
 	conflict    string
 	force       bool
 	answersFile string
 	defaults    bool
+	allowHooks  bool
 }
 
-// newUpdateCmd returns the update command: merge template changes into
-// the project with the v1 overlay. Run `turutan diff` before
-// `turutan update` to review pending drift. It requires a clean tree
-// (lock hashes match workdir) unless --force is given.
 func newUpdateCmd() *cobra.Command {
 	flags := &updateFlags{}
 	cmd := &cobra.Command{
@@ -41,12 +37,11 @@ Run 'turutan diff' before 'turutan update' to review pending drift.`,
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej)")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "update even when the tree differs from the lock")
 	cmd.Flags().StringVar(&flags.answersFile, "answers-file", "", "overlay stored answers from a YAML/JSON file")
-	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed missing answers from defaults non-interactively")
+	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed project_name when stored answers lack it")
+	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared migrations")
 	return cmd
 }
 
-// runUpdate maps CLI flags onto scaffold options and runs the flow.
-// Human output goes through the command streams; diagnostics to stderr.
 func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 	var conflict scaffold.ConflictMode
 	if strings.TrimSpace(flags.conflict) != "" {
@@ -55,17 +50,19 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 			return err
 		}
 	}
-	_, err := scaffold.Update(".", scaffold.UpdateOptions{
-		Ref:         flags.ref,
-		Conflict:    conflict,
-		Force:       flags.force,
-		AnswersFile: flags.answersFile,
-		Defaults:    flags.defaults,
-		Engine:      version,
-		Verbose:     verbose,
-		Stdout:      cmd.OutOrStdout(),
-		Stderr:      cmd.ErrOrStderr(),
-		Stdin:       os.Stdin,
+	_, err := scaffold.Update(cmd.Context(), ".", scaffold.UpdateOptions{
+		Ref:            flags.ref,
+		Conflict:       conflict,
+		Force:          flags.force,
+		AnswersFile:    flags.answersFile,
+		Defaults:       flags.defaults,
+		AllowHooks:     flags.allowHooks,
+		NonInteractive: appCfg.nonInteractive,
+		Engine:         version,
+		Verbose:        appCfg.verbose,
+		Stdout:         cmd.OutOrStdout(),
+		Stderr:         cmd.ErrOrStderr(),
+		Stdin:          os.Stdin,
 	})
 	return err
 }

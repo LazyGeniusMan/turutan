@@ -4,19 +4,23 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 )
 
-// newVersionCmd returns the version command printing injected build metadata.
+func printVersion(w io.Writer) {
+	fmt.Fprintf(w, "turutan %s (commit %s, built %s)\n", version, commit, date)
+	fmt.Fprintln(w, "CLI: Apache-2.0; default template: MIT-0")
+}
+
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Fprintf(cmd.OutOrStdout(), "turutan %s (commit %s, built %s)\n", version, commit, date)
-			fmt.Fprintln(cmd.OutOrStdout(), "CLI: Apache-2.0; default template: MIT-0")
+			printVersion(cmd.OutOrStdout())
 			return nil
 		},
 	}

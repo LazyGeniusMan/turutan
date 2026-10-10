@@ -8,9 +8,6 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-// newCheckUpdateCmd returns the check-update command: re-resolve the stored
-// template ref and report whether the template moved. Exit 0 means
-// up-to-date, 2 means update available, 1 means runtime error.
 func newCheckUpdateCmd() *cobra.Command {
 	var ref string
 	cmd := &cobra.Command{
@@ -18,9 +15,10 @@ func newCheckUpdateCmd() *cobra.Command {
 		Short: "Check whether the template has a newer resolvable ref",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			result, err := scaffold.CheckUpdate(".", scaffold.CheckUpdateOptions{
+			result, err := scaffold.CheckUpdate(cmd.Context(), ".", scaffold.CheckUpdateOptions{
 				Ref:     ref,
-				Verbose: verbose,
+				Engine:  version,
+				Verbose: appCfg.verbose,
 				Stdout:  cmd.OutOrStdout(),
 				Stderr:  cmd.ErrOrStderr(),
 			})

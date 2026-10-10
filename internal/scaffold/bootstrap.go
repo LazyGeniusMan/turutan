@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,17 +18,39 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
-// Bootstrap scaffolds a new project from a template source:
-//
-//	parse URI → resolve ref → fetch → read .turutan.yml → answers
-//	→ render → ignore/preserve → write state+lock → hooks consent gate.
-//
-// An empty source resolves the built-in remote-default URL. The target
-// directory must be empty unless Force is set. In NonInteractive mode the
-// caller must supply AnswersFile or Defaults, and hook-bearing templates
-// are refused unless AllowHooks consents.
-func Bootstrap(source, target string, opts Options) error {
+func Bootstrap(
+	ctx context.Context,
+	source, target string,
+	opts Options,
+) error {
 	stdout, stderr, stdin := streams(opts)
+	if err := validateBootstrapOpts(opts); err != nil {
+		return err
+	}
+	src, err := resolveBootstrapSrc(source, opts, stderr)
+	if err != nil {
+		return err
+	}
+	fetched, manifest, engine, err := fetchBootstrapTemplate(
+		ctx, src, opts, stderr)
+	if err != nil {
+		return err
+	}
+	if fetched.Cleanup != nil {
+		defer fetched.Cleanup()
+	}
+	absTarget, answers, staged, cleanupStage, err := stageBootstrap(
+		target, fetched, opts, stdout, stdin)
+	if err != nil {
+		return err
+	}
+	defer cleanupStage()
+	return finishBootstrap(
+		ctx, src, fetched, manifest, absTarget, answers, staged,
+		opts, engine, stdout, stderr, stdin)
+}
+
+func validateBootstrapOpts(opts Options) error {
 	if err := opts.Conflict.Validate(); err != nil {
 		return err
 	}
@@ -35,11 +58,21 @@ func Bootstrap(source, target string, opts Options) error {
 		return fmt.Errorf("bootstrap: bad --skip entry: %w", err)
 	}
 	if opts.NonInteractive && !opts.Defaults && opts.AnswersFile == "" {
-		return fmt.Errorf("bootstrap: non-interactive mode requires --answers-file or --defaults")
+		return fmt.Errorf(
+			"bootstrap: non-interactive mode requires " +
+				"--answers-file or --defaults")
 	}
+	return nil
+}
+
+func resolveBootstrapSrc(
+	source string,
+	opts Options,
+	stderr io.Writer,
+) (*template.Source, error) {
 	src, err := template.ResolveAlias(source)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if opts.Ref != "" {
 		src.RequestedRef = opts.Ref
@@ -47,91 +80,121 @@ func Bootstrap(source, target string, opts Options) error {
 	if opts.Subpath != "" {
 		src.Subpath = filepath.ToSlash(filepath.Clean(opts.Subpath))
 	}
-	vlogf(stderr, opts.Verbose, "bootstrap: source %q kind %s ref %q depth %d", src.String(), src.Kind, src.RequestedRef, src.Depth)
-	// Local sources are stored as absolute paths: the state outlives the
-	// bootstrap working directory, and check-update/diff re-resolve the
-	// stored URI from inside the project. Remote locators are untouched.
-	if src.Kind == template.KindLocalGit || src.Kind == template.KindFilesystem {
+	vlogf(stderr, opts.Verbose,
+		"bootstrap: source %q kind %s ref %q depth %d",
+		src.String(), src.Kind, src.RequestedRef, src.Depth)
+	if src.Kind == template.KindLocalGit ||
+		src.Kind == template.KindFilesystem {
 		abs, err := filepath.Abs(src.Repo)
 		if err != nil {
-			return fmt.Errorf("bootstrap: resolving source %q: %w", src.Raw, err)
+			return nil, fmt.Errorf(
+				"bootstrap: resolving source %q: %w", src.Raw, err)
 		}
 		src.Repo = abs
 	}
-	fetched, err := template.Fetch(src)
+	return src, nil
+}
+
+func fetchBootstrapTemplate(
+	ctx context.Context,
+	src *template.Source,
+	opts Options,
+	stderr io.Writer,
+) (*template.Fetched, *config.Manifest, string, error) {
+	fetched, err := template.Fetch(ctx, src)
 	if err != nil {
-		return err
+		return nil, nil, "", err
 	}
-	vlogf(stderr, opts.Verbose, "bootstrap: fetched %s commit %q", src.Kind, fetched.ResolvedCommit)
-	if fetched.Cleanup != nil {
-		defer fetched.Cleanup()
-	}
+	vlogf(stderr, opts.Verbose,
+		"bootstrap: fetched %s commit %q", src.Kind, fetched.ResolvedCommit)
 	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
 	if err != nil {
-		return err
+		if fetched.Cleanup != nil {
+			fetched.Cleanup()
+		}
+		return nil, nil, "", err
 	}
+	warnManifestSourceMismatch(stderr, manifest, src)
 	engine, err := checkMinEngine(manifest, opts.Engine, stderr, opts.Verbose)
 	if err != nil {
-		return err
+		if fetched.Cleanup != nil {
+			fetched.Cleanup()
+		}
+		return nil, nil, "", err
 	}
+	return fetched, manifest, engine, nil
+}
+
+func stageBootstrap(
+	target string,
+	fetched *template.Fetched,
+	opts Options,
+	stdout io.Writer,
+	stdin io.Reader,
+) (string, map[string]any, string, func(), error) {
 	absTarget, err := prepareTarget(target, opts.Force)
 	if err != nil {
-		return err
+		return "", nil, "", nil, err
 	}
 	answers, err := seedAnswers(absTarget, opts)
 	if err != nil {
-		return err
+		return "", nil, "", nil, err
 	}
-	staged, cleanupStage, err := renderWithAnswers(fetched.Dir, answers, opts, stdout, stdin)
+	staged, cleanup, err := renderWithAnswers(
+		fetched.Dir, answers, opts, stdout, stdin)
 	if err != nil {
-		return err
+		return "", nil, "", cleanup, err
 	}
-	defer cleanupStage()
+	return absTarget, answers, staged, cleanup, nil
+}
+
+func finishBootstrap(
+	_ context.Context,
+	src *template.Source,
+	fetched *template.Fetched,
+	manifest *config.Manifest,
+	absTarget string,
+	answers map[string]any,
+	staged string,
+	opts Options,
+	engine string,
+	stdout, stderr io.Writer,
+	stdin io.Reader,
+) error {
 	files, err := publish(staged, absTarget, manifest, opts)
 	if err != nil {
 		return err
 	}
 	resolved := fetched.ResolvedCommit
 	if resolved == "" {
-		resolved = strings.TrimPrefix(config.ComputeManifestHash(files), "sha256:")
+		resolved = strings.TrimPrefix(
+			config.ComputeManifestHash(files), "sha256:")
 	}
 	license := resolveTemplateLicense(os.DirFS(fetched.Dir))
 	vlogf(stderr, opts.Verbose, "bootstrap: template license %s", license)
-	if err := writeStateAndLock(absTarget, src, resolved, answers, opts, files, engine, license); err != nil {
+	if err := writeStateAndLock(
+		absTarget, src, resolved, answers, opts, files, engine, license,
+	); err != nil {
 		return err
 	}
-	// The staged render is the pristine base for future 3-way updates.
 	if err := StoreBase(absTarget, resolved, staged); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
 	if err := gateHooks(manifest, absTarget, opts, stdout, stderr, stdin); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n", absTarget, src.String(), shortSHA(resolved), len(files))
-	vlogf(stderr, opts.Verbose, "bootstrap: wrote %d file(s) state %s lock %s", len(files), config.StateFileName, config.LockFileName)
+	fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n",
+		absTarget, src.String(), shortSHA(resolved), len(files))
+	vlogf(stderr, opts.Verbose,
+		"bootstrap: wrote %d file(s) state %s lock %s",
+		len(files), config.StateFileName, config.LockFileName)
 	return nil
 }
 
-// streams resolves the effective IO streams, defaulting to the OS ones.
 func streams(opts Options) (io.Writer, io.Writer, io.Reader) {
-	stdout := opts.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := opts.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	stdin := opts.Stdin
-	if stdin == nil {
-		stdin = os.Stdin
-	}
-	return stdout, stderr, stdin
+	return resolveStreams(opts.Stdout, opts.Stderr, opts.Stdin)
 }
 
-// checkMinEngine enforces the template min-engine floor before rendering
-// and returns the normalized engine version for state. Dev builds (empty
-// or unparsable version) skip the gate with a verbose stderr note.
 func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, verbose bool) (string, error) {
 	version := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(engine), "turutan/"), "v")
 	if version == "" {
@@ -155,8 +218,6 @@ func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, 
 	return version, nil
 }
 
-// prepareTarget creates the target dir and enforces the empty-or---force
-// guard, returning the absolute path.
 func prepareTarget(target string, force bool) (string, error) {
 	abs, err := filepath.Abs(target)
 	if err != nil {
@@ -167,7 +228,7 @@ func prepareTarget(target string, force bool) (string, error) {
 		if !os.IsNotExist(err) {
 			return "", fmt.Errorf("bootstrap: reading target %q: %w", target, err)
 		}
-		if err := os.MkdirAll(abs, 0o755); err != nil {
+		if err := os.MkdirAll(abs, 0o750); err != nil {
 			return "", fmt.Errorf("bootstrap: creating target %q: %w", target, err)
 		}
 		return abs, nil
@@ -178,33 +239,37 @@ func prepareTarget(target string, force bool) (string, error) {
 	return abs, nil
 }
 
-// renderWithAnswers renders srcDir into a temp staging dir, prompting for
-// missing keys interactively (up to maxPromptAttempts) and failing with
-// the key name in non-interactive mode.
-func renderWithAnswers(srcDir string, answers map[string]any, opts Options, stdout io.Writer, stdin io.Reader) (string, func(), error) {
+func renderWithAnswers(
+	srcDir string,
+	answers map[string]any,
+	opts Options,
+	stdout io.Writer,
+	stdin io.Reader,
+) (string, func(), error) {
 	stage, err := os.MkdirTemp("", "turutan-stage-*")
 	if err != nil {
 		return "", nil, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 	}
-	cleanup := func() { os.RemoveAll(stage) }
+	cleanup := func() { _ = os.RemoveAll(stage) }
 	for range maxPromptAttempts {
-		// Each attempt starts clean so retried renders never stack.
 		if err := os.RemoveAll(stage); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: resetting staging dir: %w", err)
 		}
-		if err := os.MkdirAll(stage, 0o755); err != nil {
+		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 		}
 		err := template.RenderDir(srcDir, stage, answers)
 		if err == nil {
 			return stage, cleanup, nil
 		}
-		key := missingKey(err)
-		if key == "" {
+		key, ok := AsMissingKey(err)
+		if !ok {
 			return "", cleanup, err
 		}
 		if opts.NonInteractive {
-			return "", cleanup, fmt.Errorf("bootstrap: missing answer for key %q (use --answers-file or --defaults): %w", key, err)
+			return "", cleanup, fmt.Errorf(
+				"bootstrap: missing answer for key %q "+"(use --answers-file or --defaults): %w",
+				key, err)
 		}
 		value, promptErr := promptValue(stdout, stdin, key)
 		if promptErr != nil {
@@ -215,84 +280,17 @@ func renderWithAnswers(srcDir string, answers map[string]any, opts Options, stdo
 	return "", cleanup, fmt.Errorf("bootstrap: too many missing answers (over %d prompts)", maxPromptAttempts)
 }
 
-// publish copies the staged render into target, honoring manifest ignore
-// globs and keeping existing files matched by preserve or --skip. It
-// returns the lock file entries for template-originated files.
-func publish(staged, target string, manifest *config.Manifest, opts Options) ([]config.LockFile, error) {
+func publish(
+	staged, target string,
+	manifest *config.Manifest,
+	opts Options,
+) ([]config.LockFile, error) {
 	var files []config.LockFile
+	pub := &publisher{
+		staged: staged, target: target, manifest: manifest, opts: opts,
+	}
 	err := filepath.WalkDir(staged, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(staged, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		slash := filter.ToSlash(rel)
-		ignored, err := filter.MatchAny(manifest.Ignore, slash)
-		if err != nil {
-			return fmt.Errorf("bootstrap: matching ignore globs: %w", err)
-		}
-		if ignored {
-			return nil
-		}
-		// Target access goes through lexical SafeJoin plus os.Root I/O so
-		// symlinks escaping the target are refused instead of followed.
-		// (d comes from our own staging dir; dst is the untrusted side.)
-		if _, err := filter.SafeJoin(target, filepath.FromSlash(slash)); err != nil {
-			return fmt.Errorf("bootstrap: %w", err)
-		}
-		if d.IsDir() {
-			root, err := os.OpenRoot(target)
-			if err != nil {
-				return fmt.Errorf("bootstrap: opening target: %w", err)
-			}
-			mkdirErr := root.MkdirAll(filepath.FromSlash(slash), 0o755)
-			closeErr := root.Close()
-			if mkdirErr != nil {
-				return fmt.Errorf("bootstrap: creating dir %q: %w", slash, mkdirErr)
-			}
-			if closeErr != nil {
-				return fmt.Errorf("bootstrap: closing target: %w", closeErr)
-			}
-			return nil
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		if _, statErr := filter.StatWithinRoot(target, slash); statErr == nil {
-			kept, err := keepExisting(slash, manifest, opts)
-			if err != nil {
-				return err
-			}
-			if kept {
-				data, err := filter.ReadFileWithinRoot(target, slash)
-				if err != nil {
-					return err
-				}
-				files = append(files, config.FileEntry(slash, data))
-				return nil
-			}
-			if !opts.Force {
-				return fmt.Errorf("bootstrap: %q exists (use --force to overwrite)", slash)
-			}
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if err := filter.WriteFileWithinRoot(target, slash, data, info.Mode().Perm()); err != nil {
-			return fmt.Errorf("bootstrap: writing %q: %w", slash, err)
-		}
-		files = append(files, config.FileEntry(slash, data))
-		return nil
+		return pub.publishEntry(path, d, err, &files)
 	})
 	if err != nil {
 		return nil, err
@@ -300,8 +298,136 @@ func publish(staged, target string, manifest *config.Manifest, opts Options) ([]
 	return files, nil
 }
 
-// keepExisting reports whether an existing target file survives the
-// bootstrap: preserve globs and --skip entries always prefer local content.
+type publisher struct {
+	staged   string
+	target   string
+	manifest *config.Manifest
+	opts     Options
+}
+
+func (p *publisher) publishEntry(
+	path string,
+	d fs.DirEntry,
+	walkErr error,
+	files *[]config.LockFile,
+) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	rel, err := filepath.Rel(p.staged, path)
+	if err != nil {
+		return err
+	}
+	if rel == "." {
+		return nil
+	}
+	slash := filter.ToSlash(rel)
+	if skip, err := p.ignored(slash); err != nil || skip {
+		return err
+	}
+	if _, err := filter.SafeJoin(
+		p.target, filepath.FromSlash(slash)); err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
+	}
+	if d.IsDir() {
+		return p.publishDir(slash)
+	}
+	if d.Type()&fs.ModeSymlink != 0 {
+		return nil
+	}
+	if skip, err := p.skipSpecial(d); err != nil || skip {
+		return err
+	}
+	return p.publishFile(path, d, slash, files)
+}
+
+func (p *publisher) ignored(slash string) (bool, error) {
+	ignored, err := filter.MatchAny(p.manifest.Ignore, slash)
+	if err != nil {
+		return false, fmt.Errorf(
+			"bootstrap: matching ignore globs: %w", err)
+	}
+	return ignored, nil
+}
+
+func (p *publisher) publishDir(slash string) error {
+	root, err := os.OpenRoot(p.target)
+	if err != nil {
+		return fmt.Errorf("bootstrap: opening target: %w", err)
+	}
+	mkdirErr := root.MkdirAll(filepath.FromSlash(slash), 0o755)
+	closeErr := root.Close()
+	if mkdirErr != nil {
+		return fmt.Errorf("bootstrap: creating dir %q: %w", slash, mkdirErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("bootstrap: closing target: %w", closeErr)
+	}
+	return nil
+}
+
+func (p *publisher) skipSpecial(d fs.DirEntry) (bool, error) {
+	info, err := d.Info()
+	if err != nil {
+		return false, err
+	}
+	if filter.IsSpecialFile(info) || !info.Mode().IsRegular() {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (p *publisher) publishFile(
+	path string,
+	d fs.DirEntry,
+	slash string,
+	files *[]config.LockFile,
+) error {
+	if _, statErr := filter.StatWithinRoot(p.target, slash); statErr == nil {
+		done, err := p.keepOrFail(slash, files)
+		if err != nil || done {
+			return err
+		}
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- reads staged render file produced by this run's WalkDir traversal, not caller-controlled inclusion
+	if err != nil {
+		return err
+	}
+	info, err := d.Info()
+	if err != nil {
+		return err
+	}
+	if err := filter.WriteFileWithinRoot(
+		p.target, slash, data, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("bootstrap: writing %q: %w", slash, err)
+	}
+	*files = append(*files, config.FileEntry(slash, data))
+	return nil
+}
+
+func (p *publisher) keepOrFail(
+	slash string,
+	files *[]config.LockFile,
+) (bool, error) {
+	kept, err := keepExisting(slash, p.manifest, p.opts)
+	if err != nil {
+		return false, err
+	}
+	if kept {
+		data, err := filter.ReadFileWithinRoot(p.target, slash)
+		if err != nil {
+			return false, err
+		}
+		*files = append(*files, config.FileEntry(slash, data))
+		return true, nil
+	}
+	if !p.opts.Force {
+		return false, fmt.Errorf(
+			"bootstrap: %q exists (use --force to overwrite)", slash)
+	}
+	return false, nil
+}
+
 func keepExisting(slash string, manifest *config.Manifest, opts Options) (bool, error) {
 	preserved, err := filter.MatchAny(manifest.Preserve, slash)
 	if err != nil {
@@ -317,9 +443,27 @@ func keepExisting(slash string, manifest *config.Manifest, opts Options) (bool, 
 	return skipped, nil
 }
 
-// writeStateAndLock records .turutan.json and .turutan.lock in target.
-// license is the source template SPDX (see resolveTemplateLicense).
-func writeStateAndLock(target string, src *template.Source, resolved string, answers map[string]any, opts Options, files []config.LockFile, engine, license string) error {
+func warnManifestSourceMismatch(stderr io.Writer, manifest *config.Manifest, src *template.Source) {
+	if manifest.Source == "" || manifest.Source == src.String() {
+		return
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	fmt.Fprintf(stderr,
+		"turutan: template manifest source %q differs from requested %q (advisory only)\n",
+		manifest.Source, src.String())
+}
+
+func writeStateAndLock(
+	target string,
+	src *template.Source,
+	resolved string,
+	answers map[string]any,
+	opts Options,
+	files []config.LockFile,
+	engine, license string,
+) error {
 	state := &config.State{
 		Version:         config.StateVersion,
 		Template:        src.String(),
@@ -329,6 +473,7 @@ func writeStateAndLock(target string, src *template.Source, resolved string, ans
 		ResolvedCommit:  resolved,
 		Answers:         answers,
 		Skip:            opts.Skip,
+		Conflict:        string(opts.Conflict),
 		Engine:          "turutan/" + engine,
 		TemplateLicense: license,
 	}
@@ -348,20 +493,22 @@ func writeStateAndLock(target string, src *template.Source, resolved string, ans
 	return nil
 }
 
-// gateHooks enforces consent for template-declared hooks and runs them.
-// Non-interactive runs refuse hook-bearing templates unless --allow-hooks
-// consents (default-deny); interactive runs prompt, and a declined answer
-// skips the hooks with a notice instead of failing. Consented hooks run in
-// order (pre then post) via sh in the new project directory; a failing
-// hook fails the bootstrap so a half-hooked project is never reported.
-func gateHooks(manifest *config.Manifest, target string, opts Options, stdout, stderr io.Writer, stdin io.Reader) error {
+func gateHooks(
+	manifest *config.Manifest,
+	target string,
+	opts Options,
+	stdout, stderr io.Writer,
+	stdin io.Reader,
+) error {
 	hooks := append(append([]string{}, manifest.Hooks.Pre...), manifest.Hooks.Post...)
 	if len(hooks) == 0 {
 		return nil
 	}
 	if !opts.AllowHooks {
 		if opts.NonInteractive {
-			return fmt.Errorf("bootstrap: template declares hooks %q: refusing in --non-interactive mode without --allow-hooks", hooks)
+			return fmt.Errorf(
+				"bootstrap: template declares hooks %q: refusing in "+"--non-interactive mode without --allow-hooks",
+				hooks)
 		}
 		if !promptConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks)) {
 			fmt.Fprintf(stdout, "turutan: template hooks %q skipped (consent declined)\n", hooks)
@@ -377,27 +524,21 @@ func gateHooks(manifest *config.Manifest, target string, opts Options, stdout, s
 	return nil
 }
 
-// runHookCmd executes one template-declared hook inside target: a plain
-// path to a file in the project runs via sh, anything else via sh -c
-// (mirroring update migration execution). Combined output goes to stderr;
-// failures fail the caller.
 func runHookCmd(target, hook string, stderr io.Writer) error {
 	if hook == "" {
 		return fmt.Errorf("bootstrap: hook has an empty command")
 	}
 	argv := []string{"-c", hook}
 	if !strings.ContainsAny(hook, " \t\n|&;()<>$`\"'") {
-		// A manifest-declared command doubles as a script path only when
-		// it stays inside the project; escaping names run via sh -c.
 		if safe, joinErr := filter.SafeJoin(target, filepath.FromSlash(hook)); joinErr == nil {
 			if info, err := os.Stat(safe); err == nil && !info.IsDir() {
 				argv = []string{safe}
 			}
 		}
 	}
-	executed := exec.Command("sh", argv...)
+	executed := exec.Command("sh", argv...) // #nosec G204 -- runs template-declared hook gated by --allow-hooks consent with filtered env (no secrets)
 	executed.Dir = target
-	executed.Env = os.Environ()
+	executed.Env = hookEnv()
 	output, err := executed.CombinedOutput()
 	if len(output) > 0 {
 		fmt.Fprintf(stderr, "turutan: hook %q output:\n%s", hook, output)
@@ -408,7 +549,6 @@ func runHookCmd(target, hook string, stderr io.Writer) error {
 	return nil
 }
 
-// shortSHA abbreviates a hex identity for the summary line.
 func shortSHA(sha string) string {
 	if len(sha) > shortSHALen {
 		return sha[:shortSHALen]

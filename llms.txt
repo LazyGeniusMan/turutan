@@ -1,0 +1,11 @@
+# turutan
+
+> Scaffold new projects from versioned templates, then merge template updates back into them.
+
+- CLI: `turutan bootstrap | check-update | diff | update | version`
+- Start: [README.md](./README.md) (install, quickstart), [CONTRIBUTING.md](./CONTRIBUTING.md) (setup, build, test, PRs)
+- Design map: [docs/architecture.md](./docs/architecture.md)
+- Changes: [CHANGELOG.md](./CHANGELOG.md) (Keep a Changelog)
+- Module: `github.com/LazyGeniusMan/turutan`, Go 1.26.2
+- Layout: `cmd/turutan/` (commands) + `internal/` (`config`, `filter`, `git`, `scaffold`, `template`, `tui`)
+- License: Apache-2.0 for engine/CLI (`LICENSE`); default template is MIT-0 (`templates/default/TEMPLATE_LICENSE`)

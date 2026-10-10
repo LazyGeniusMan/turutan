@@ -1,11 +1,23 @@
 # turutan
 
+[![License](https://img.shields.io/github/license/LazyGeniusMan/turutan)](./LICENSE) [![CI](https://github.com/LazyGeniusMan/turutan/actions/workflows/ci.yml/badge.svg)](https://github.com/LazyGeniusMan/turutan/actions/workflows/ci.yml) [![Go Version](https://img.shields.io/github/go-mod/go-version/LazyGeniusMan/turutan)](https://go.dev/)
+
 Manage project-template lifecycle: scaffold new projects from versioned templates, then merge template updates back into them.
+
+## Installation
+
+Prerequisites: [mise](https://mise.jdx.dev/)
+
+```sh
+git clone https://github.com/LazyGeniusMan/turutan.git
+cd turutan
+mise run pre-push
+```
 
 ## Quickstart
 
 ```sh
-go build -o turutan ./cmd/turutan
+mise run pre-push   # release-style static binary with version ldflags
 
 # Scaffold from the built-in default (a remote-git source in this repo).
 turutan bootstrap git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=templates-default/v1 ./myapp --defaults
@@ -19,9 +31,6 @@ turutan update         # merge template changes (--conflict rej for .rej files)
 turutan version        # version/commit/date plus license notice
 ```
 
-Releases stamp the version via `go build -ldflags "-X main.version=$V -X main.commit=$C -X main.date=$D"`
-(GoReleaser does this automatically; dev builds report `dev/none/unknown`).
-
 ## Remote authentication
 
 Git transport credentials come from the environment only and are never
@@ -31,27 +40,9 @@ then `TURUTAN_SSH_PASSWORD`, then the ssh-agent; HTTPS remotes use
 and TLS verification is strict by default; `TURUTAN_INSECURE_SKIP_VERIFY=1`
 disables it with a loud warning (never in production).
 
-## Self-hosting
-
-This repo's own skeleton comes from the default template: the M4 e2e gate
-(`internal/scaffold/selfhost_integration_test.go`, `//go:build integration`)
-bootstraps `./templates/default`, asserts `turutan diff` exits 0 on the clean
-checkout, and runs the check-update → edit → diff → update cycle in `t.TempDir()`:
-
-```sh
-go test -short ./...                    # unit suite (offline)
-go test -short -tags=integration ./...  # e2e offline steps; remote parity skips
-go test -tags=integration ./...         # full e2e incl. remote render parity
-```
-
 ## License
 
 Dual-licensed: the CLI and all engine code is Apache-2.0 (root `LICENSE`);
 the default template and files generated from it are MIT-0
-(`templates/default/LICENSE`; generated `.turutan.json` records
-`templateLicense: "MIT-0"`). Every release states both licenses.
-Dependency licenses are audited manually at release time:
-
-```sh
-go run github.com/google/go-licenses@latest check ./...
-```
+(`templates/default/TEMPLATE_LICENSE`; generated `.turutan.json` records
+`templateLicense: "MIT-0"`).

@@ -3,6 +3,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -15,22 +16,10 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/git"
 )
 
-// DefaultDepth is the default shallow fetch depth when ?depth= is absent.
-// It aliases git.ShallowDepth so the two packages share one canonical
-// value (spec §3: depth defaults to 1).
 const DefaultDepth = git.ShallowDepth
 
-// ParseSource parses raw into a Source following the EBNF in spec §3.1:
-//
-//	source := [ "git::" ] locator [ "//" subpath ] [ "?" query ]
-//
-// Rules: the optional git:: prefix is stripped first (forcing git
-// interpretation); ?query (ref=/depth=, never @ref) is split off the end;
-// //subpath is split outside "://" (first "//" after the scheme end);
-// scp-like locators are detected before url.Parse; otherwise url.Parse
-// applies and a missing scheme with an existing local path means a
-// filesystem (or local-git when the path holds a repository) source.
-// The literal "default" resolves to DefaultSource.
+var errAtRef = errors.New("use ?ref= instead of @ref")
+
 func ParseSource(raw string) (*Source, error) {
 	if raw == "" {
 		return nil, fmt.Errorf("parsing source: empty source URI")
@@ -55,32 +44,74 @@ func ParseSource(raw string) (*Source, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Scp-like locators are detected before url.Parse (see git.IsScpLike).
+	if err := rejectAtRef(raw, locator); err != nil {
+		return nil, err
+	}
 	if !strings.Contains(locator, "://") && git.IsScpLike(locator) {
-		return &Source{Raw: raw, Kind: KindRemoteGit, Repo: locator, Subpath: subpath, RequestedRef: requestedRef, Depth: depth}, nil
+		return &Source{
+			Raw: raw, Kind: KindRemoteGit, Repo: locator, Subpath: subpath,
+			RequestedRef: requestedRef, Depth: depth,
+		}, nil
 	}
 	parsed, err := url.Parse(locator)
 	if err != nil {
-		return nil, fmt.Errorf("parsing source %q: invalid locator %q: %w", raw, locator, err)
+		return nil, fmt.Errorf(
+			"parsing source %q: invalid locator %q: %w", raw, locator, err)
 	}
+	return dispatchScheme(raw, locator, subpath, requestedRef, depth, forcedGit, parsed)
+}
+
+func dispatchScheme(
+	raw, locator, subpath, requestedRef string,
+	depth int,
+	forcedGit bool,
+	parsed *url.URL,
+) (*Source, error) {
 	if forcedGit && parsed.Scheme == "" {
 		return parseForcedGitPath(raw, locator, subpath, requestedRef, depth)
 	}
 	switch parsed.Scheme {
 	case "https", "http", "ssh", "git":
-		return &Source{Raw: raw, Kind: KindRemoteGit, Repo: locator, Subpath: subpath, RequestedRef: requestedRef, Depth: depth}, nil
+		return &Source{
+			Raw: raw, Kind: KindRemoteGit, Repo: locator, Subpath: subpath,
+			RequestedRef: requestedRef, Depth: depth,
+		}, nil
 	case "file":
-		return parseLocalPath(raw, parsed.Path, subpath, requestedRef, depth, forcedGit)
+		return parseLocalPath(
+			raw, parsed.Path, subpath, requestedRef, depth, forcedGit)
 	case "":
-		return parseLocalPath(raw, locator, subpath, requestedRef, depth, forcedGit)
+		return parseLocalPath(
+			raw, locator, subpath, requestedRef, depth, forcedGit)
 	default:
-		return nil, fmt.Errorf("parsing source %q: unsupported scheme %q", raw, parsed.Scheme)
+		return nil, fmt.Errorf(
+			"parsing source %q: unsupported scheme %q", raw, parsed.Scheme)
 	}
 }
 
-// splitQuery splits "?query" off the end of rest and parses ref=/depth=.
-// Only query style is accepted (?ref=, never @ref) because "@" collides
-// with scp-like user@host:path locators.
+func rejectAtRef(raw, locator string) error {
+	if strings.Contains(locator, "://") {
+		if tail := locator[strings.LastIndex(locator, "/")+1:]; strings.Contains(tail, "@") {
+			return fmt.Errorf(
+				"parsing source %q: invalid locator %q: @ref form "+"is unsupported, use ?ref=: %w",
+				raw, locator, errAtRef)
+		}
+		return nil
+	}
+	if git.IsScpLike(locator) {
+		pathPart := locator[strings.Index(locator, ":")+1:]
+		tail := pathPart
+		if idx := strings.LastIndex(pathPart, "/"); idx >= 0 {
+			tail = pathPart[idx+1:]
+		}
+		if strings.Contains(tail, "@") {
+			return fmt.Errorf(
+				"parsing source %q: invalid locator %q: @ref form "+"is unsupported, use ?ref=: %w",
+				raw, locator, errAtRef)
+		}
+	}
+	return nil
+}
+
 func splitQuery(raw, rest string) (string, string, int, error) {
 	depth := DefaultDepth
 	if idx := strings.Index(rest, "?"); idx >= 0 {
@@ -108,10 +139,6 @@ func splitQuery(raw, rest string) (string, string, int, error) {
 	return rest, "", depth, nil
 }
 
-// splitSubpath splits "//subpath" outside "://" using go-getter
-// SourceDirSubdir semantics: the first "//" after the scheme end delimits
-// the monorepo subdir. "?" is never part of the subpath (splitQuery runs
-// first).
 func splitSubpath(raw, rest string) (string, string, error) {
 	searchFrom := 0
 	if idx := strings.Index(rest, "://"); idx >= 0 {
@@ -140,9 +167,6 @@ func splitSubpath(raw, rest string) (string, string, error) {
 	return locator, cleaned, nil
 }
 
-// parseForcedGitPath handles git:: locators without a URL scheme: the path
-// must exist and hold a git repository, otherwise the forced-git request
-// is unsatisfiable.
 func parseForcedGitPath(raw, locator, subpath, requestedRef string, depth int) (*Source, error) {
 	info, err := os.Stat(locator)
 	if err != nil || !info.IsDir() {
@@ -151,13 +175,14 @@ func parseForcedGitPath(raw, locator, subpath, requestedRef string, depth int) (
 	if !isGitDir(locator) {
 		return nil, fmt.Errorf("parsing source %q: git:: path %q is not a git repository", raw, locator)
 	}
-	return &Source{Raw: raw, Kind: KindLocalGit, Repo: locator, Subpath: subpath, RequestedRef: requestedRef, Depth: depth}, nil
+	return &Source{
+		Raw: raw, Kind: KindLocalGit, Repo: locator, Subpath: subpath,
+		RequestedRef: requestedRef, Depth: depth,
+	}, nil
 }
 
-// parseLocalPath maps a scheme-less or file:// locator onto local-git
-// (path holds a repository) or filesystem (anything else that exists).
 func parseLocalPath(raw, locator, subpath, requestedRef string, depth int, forcedGit bool) (*Source, error) {
-	info, err := os.Stat(locator)
+	info, err := os.Stat(locator) // #nosec G703 -- locator is the explicit CLI source path; read-only existence probe with no write
 	if err != nil || !info.IsDir() {
 		if forcedGit {
 			return nil, fmt.Errorf("parsing source %q: git:: path %q does not exist or is not a directory", raw, locator)
@@ -165,33 +190,30 @@ func parseLocalPath(raw, locator, subpath, requestedRef string, depth int, force
 		return nil, fmt.Errorf("parsing source %q: local path %q does not exist", raw, locator)
 	}
 	if isGitDir(locator) {
-		return &Source{Raw: raw, Kind: KindLocalGit, Repo: locator, Subpath: subpath, RequestedRef: requestedRef, Depth: depth}, nil
+		return &Source{
+			Raw: raw, Kind: KindLocalGit, Repo: locator, Subpath: subpath,
+			RequestedRef: requestedRef, Depth: depth,
+		}, nil
 	}
 	if forcedGit {
 		return nil, fmt.Errorf("parsing source %q: git:: path %q is not a git repository", raw, locator)
 	}
-	return &Source{Raw: raw, Kind: KindFilesystem, Repo: locator, Subpath: subpath, RequestedRef: requestedRef, Depth: depth}, nil
+	return &Source{
+		Raw: raw, Kind: KindFilesystem, Repo: locator, Subpath: subpath,
+		RequestedRef: requestedRef, Depth: depth,
+	}, nil
 }
 
-// isGitDir reports whether path holds a git repository: either a worktree
-// (path/.git exists) or a bare repository (see isBareLayout). It uses
-// plain filesystem probes so template parsing stays light; resolve-time
-// code must use git.IsBare/git.ResolveLocal on the opened repository
-// instead of re-probing here.
 func isGitDir(path string) bool {
-	if info, err := os.Stat(filepath.Join(path, ".git")); err == nil && (info.IsDir() || !info.IsDir()) {
+	if info, err := os.Stat(filepath.Join(path, ".git")); err == nil && (info.IsDir() || !info.IsDir()) { // #nosec G703 -- joins fixed ".git" segment onto the CLI-supplied repo path; read-only existence probe
 		return true
 	}
 	return isBareLayout(path)
 }
 
-// isBareLayout reports whether path has bare-repository layout: HEAD,
-// objects and refs entries all present. It is the parse-time half of the
-// bare check unified here; git.IsBare is the resolve-time half on the
-// opened repo.
 func isBareLayout(path string) bool {
 	for _, entry := range []string{"HEAD", "objects", "refs"} {
-		if _, err := os.Stat(filepath.Join(path, entry)); err != nil {
+		if _, err := os.Stat(filepath.Join(path, entry)); err != nil { // #nosec G703 -- entry is one of HEAD/objects/refs constants; read-only bare-repo layout probe
 			return false
 		}
 	}

@@ -7,3 +7,4 @@ vault = "dev"
 
 [secrets]
 "KEENABLE_API_KEY" = { provider = "protonpass", value = "turutan/keenable-api-key" }
+"FNOX_GITHUB_TOKEN" = { provider = "protonpass", value = "turutan/github-pat" }

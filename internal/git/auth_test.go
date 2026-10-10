@@ -16,7 +16,6 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// clearAuthEnv isolates each test from the developer's environment.
 func clearAuthEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv(EnvSSHKey, "")
@@ -31,7 +30,6 @@ func clearAuthEnv(t *testing.T) {
 	os.Unsetenv(EnvKnownHosts)
 }
 
-// testKeyPEM generates an ed25519 PEM for EnvSSHKey tests.
 func testKeyPEM(t *testing.T) string {
 	t.Helper()
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -60,6 +58,15 @@ func TestInsecureSkipVerify(t *testing.T) {
 		{name: "one opts out", value: new("1"), want: true},
 		{name: "true opts out", value: new("true"), want: true},
 		{name: "yes opts out", value: new("yes"), want: true},
+		{name: "on opts out", value: new("on"), want: true},
+		{name: "ON opts out case-insensitive", value: new("ON"), want: true},
+		{name: "True opts out case-insensitive", value: new("True"), want: true},
+		{name: "YES opts out case-insensitive", value: new("YES"), want: true},
+		{name: "padded true opts out", value: new("  true  "), want: true},
+		{name: "arbitrary string stays strict", value: new("banana"), want: false},
+		{name: "two stays strict", value: new("2"), want: false},
+		{name: "enabled stays strict", value: new("enabled"), want: false},
+		{name: "y stays strict", value: new("y"), want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -130,13 +137,13 @@ func TestClientOptionsMatrix(t *testing.T) {
 		{
 			name:     "ssh with password authenticates",
 			url:      "git@github.com:org/web.git",
-			env:      map[string]string{EnvSSHPassword: "s3cr3t"}, // gitleaks:allow (test fixture, not a credential)
+			env:      map[string]string{EnvSSHPassword: "s3cr3t"}, // betterleaks:allow (test fixture, not a credential)
 			wantOpts: true,
 		},
 		{
 			name:     "key wins over password",
 			url:      "git@github.com:org/web.git",
-			env:      map[string]string{EnvSSHKey: pemContent, EnvSSHPassword: "s3cr3t"}, // gitleaks:allow (test fixture, not a credential)
+			env:      map[string]string{EnvSSHKey: pemContent, EnvSSHPassword: "s3cr3t"}, // betterleaks:allow (test fixture, not a credential)
 			wantOpts: true,
 		},
 		{
@@ -155,7 +162,7 @@ func TestClientOptionsMatrix(t *testing.T) {
 		{
 			name:      "insecure flag reported for ssh with password",
 			url:       "git@github.com:org/web.git",
-			env:       map[string]string{EnvSSHPassword: "s3cr3t", EnvInsecureSkipVerify: "true"}, // gitleaks:allow (test fixture, not a credential)
+			env:       map[string]string{EnvSSHPassword: "s3cr3t", EnvInsecureSkipVerify: "true"}, // betterleaks:allow (test fixture, not a credential)
 			wantOpts:  true,
 			wantInsec: true,
 		},
@@ -171,7 +178,7 @@ func TestClientOptionsMatrix(t *testing.T) {
 				if err == nil {
 					t.Fatal("ClientOptions succeeded, want error")
 				}
-				for _, secret := range []string{"s3cr3t", "not-a-key-at-all", "example-token-value"} { // gitleaks:allow (test fixture, not a credential)
+				for _, secret := range []string{"s3cr3t", "not-a-key-at-all", "example-token-value"} { // betterleaks:allow (test fixture, not a credential)
 					if strings.Contains(err.Error(), secret) {
 						t.Errorf("error leaks a credential: %q", err.Error())
 					}
@@ -179,8 +186,6 @@ func TestClientOptionsMatrix(t *testing.T) {
 				return
 			}
 			if err != nil {
-				// ssh-agent absence is environment-dependent: only the
-				// key/password/token paths must succeed deterministically.
 				if len(tt.env) == 0 || tt.env[EnvInsecureSkipVerify] != "" && len(tt.env) == 1 {
 					t.Logf("no auth configured, agent unavailable: %v", err)
 					return
@@ -257,8 +262,6 @@ func TestKnownHosts(t *testing.T) {
 	})
 }
 
-// testKnownHostsFile writes a known_hosts file holding one generated key
-// for host and returns its path.
 func testKnownHostsFile(t *testing.T, host string) string {
 	t.Helper()
 	pub, _, err := ed25519.GenerateKey(rand.Reader)
@@ -279,8 +282,6 @@ func testKnownHostsFile(t *testing.T, host string) string {
 
 func TestAuthRedaction(t *testing.T) {
 	t.Run("token URL redacted", func(t *testing.T) {
-		// Credentials-bearing URLs are built by concatenation so the
-		// fixture itself never holds a secret-shaped literal.
 		user, pass, host := "x-access-token", "example-token-value", "github.com/org/web.git"
 		raw := "https://" + user + ":" + pass + "@" + host
 		got := redacted(raw)
@@ -292,7 +293,7 @@ func TestAuthRedaction(t *testing.T) {
 		}
 	})
 	t.Run("password URL redacted", func(t *testing.T) {
-		user, pass, host := "user", "s3cr3t", "example.com/org/web.git" // gitleaks:allow (test fixture, not a credential)
+		user, pass, host := "user", "s3cr3t", "example.com/org/web.git" // #nosec G101 -- test fixture (betterleaks:allow)
 		got := redacted("https://" + user + ":" + pass + "@" + host)
 		if strings.Contains(got, pass) {
 			t.Errorf("redacted URL leaks the password: %q", got)

@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,42 +17,27 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
-// shortSHALen abbreviates hex identities for human summary lines.
 const shortSHALen = 12
 
-// CheckUpdateOptions carries per-run knobs for the check-update flow.
 type CheckUpdateOptions struct {
-	// Ref overrides the stored requestedRef for this run only; the stored
-	// state is never modified.
-	Ref string
-	// Verbose enables per-run diagnostics on Stderr.
+	Ref     string
+	Engine  string
 	Verbose bool
-	// Stdout receives the one human result line; it defaults to the OS
-	// stdout when nil so diagnostics stay capturable in tests.
-	Stdout io.Writer
-	// Stderr receives verbose diagnostics; it defaults to the OS
-	// stderr when nil.
-	Stderr io.Writer
+	Stdout  io.Writer
+	Stderr  io.Writer
 }
 
-// CheckUpdateResult reports the re-resolve outcome: Available is true when
-// the template moved since bootstrap. Old is the stored identity, New the
-// freshly resolved one (equal to Old when nothing changed).
 type CheckUpdateResult struct {
 	Available bool
 	Old       string
 	New       string
 }
 
-// CheckUpdate re-resolves the stored template ref and compares it against
-// the stored identity without mutating any state: remote-git re-resolves
-// via ls-remote, local-git resolves offline, and filesystem sources
-// re-render the template with the stored answers and compare manifest
-// hashes (there is no ref to track). Default-template projects are
-// ordinary remote-git entries: their floating stable ref re-resolves like
-// any other. It prints one human line to Stdout; callers map Available to
-// exit code 2 per spec §5.2.
-func CheckUpdate(projectDir string, opts CheckUpdateOptions) (*CheckUpdateResult, error) {
+func CheckUpdate(
+	ctx context.Context,
+	projectDir string,
+	opts CheckUpdateOptions,
+) (*CheckUpdateResult, error) {
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = os.Stdout
@@ -65,7 +51,8 @@ func CheckUpdate(projectDir string, opts CheckUpdateOptions) (*CheckUpdateResult
 		ref = opts.Ref
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
-	fresh, changed, err := reresolve(state, ref, projectDir)
+	fresh, changed, err := reresolve(
+		ctx, state, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -79,17 +66,20 @@ func CheckUpdate(projectDir string, opts CheckUpdateOptions) (*CheckUpdateResult
 	return result, nil
 }
 
-// reresolve returns the fresh identity for state plus whether it differs
-// from the stored one: the resolved commit SHA for git kinds, the
-// re-rendered manifest digest for filesystem sources.
-func reresolve(state *config.State, ref, projectDir string) (string, bool, error) {
+func reresolve(
+	ctx context.Context,
+	state *config.State,
+	ref, projectDir, engine string,
+	stderr io.Writer,
+	verbose bool,
+) (string, bool, error) {
 	switch template.SourceKind(state.SourceKind) {
 	case template.KindRemoteGit:
 		src, err := template.ParseSource(state.Template)
 		if err != nil {
 			return "", false, fmt.Errorf("check-update: %w", err)
 		}
-		sha, err := git.ResolveRemoteRef(src.Repo, ref)
+		sha, err := git.ResolveRemoteRef(ctx, src.Repo, ref)
 		if err != nil {
 			return "", false, fmt.Errorf("check-update: %w", err)
 		}
@@ -105,49 +95,81 @@ func reresolve(state *config.State, ref, projectDir string) (string, bool, error
 		}
 		return sha, sha != state.ResolvedCommit, nil
 	case template.KindFilesystem:
-		return reresolveFilesystem(state, ref, projectDir)
+		return reresolveFilesystem(ctx, state, ref, projectDir, engine, stderr, verbose)
 	default:
 		return "", false, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
 	}
 }
 
-// reresolveFilesystem re-renders the current filesystem template with the
-// stored answers and compares manifest hashes. Files owned by the user
-// (manifest preserve globs, state skip entries) are excluded from both
-// sides: they carry local content in the lock, so including them would
-// report template movement on every local edit. A template change confined
-// to preserved paths is therefore not reported here; diff shows it.
-func reresolveFilesystem(state *config.State, ref, projectDir string) (string, bool, error) {
+func reresolveFilesystem(
+	ctx context.Context,
+	state *config.State,
+	ref, projectDir, engine string,
+	stderr io.Writer,
+	verbose bool,
+) (string, bool, error) {
 	if ref != "" {
-		return "", false, fmt.Errorf("check-update: ref %q is not supported for filesystem sources", ref)
+		return "", false, fmt.Errorf(
+			"check-update: ref %q is not supported "+
+				"for filesystem sources",
+			ref)
 	}
+	lock, _, manifest, stage, err := prepareFilesystemReresolve(
+		ctx, state, projectDir, engine, stderr, verbose)
+	if err != nil {
+		return "", false, err
+	}
+	defer os.RemoveAll(stage)
+	return compareFilesystemHashes(stage, manifest, state, lock)
+}
+
+func prepareFilesystemReresolve(
+	ctx context.Context,
+	state *config.State,
+	projectDir, engine string,
+	stderr io.Writer,
+	verbose bool,
+) (*config.Lock, *template.Source, *config.Manifest, string, error) {
 	lock, err := config.LoadLock(os.DirFS(projectDir))
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
 	src, err := template.ParseSource(state.Template)
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
-	fetched, err := template.Fetch(src)
+	fetched, err := template.Fetch(ctx, src)
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
 	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+	}
+	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
+		return nil, nil, nil, "", err
 	}
 	stage, err := os.MkdirTemp("", "turutan-check-update-*")
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: creating staging dir: %w", err)
+		return nil, nil, nil, "", fmt.Errorf(
+			"check-update: creating staging dir: %w", err)
 	}
-	defer os.RemoveAll(stage)
 	if err := template.RenderDir(fetched.Dir, stage, state.Answers); err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		_ = os.RemoveAll(stage)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
+	return lock, src, manifest, stage, nil
+}
+
+func compareFilesystemHashes(
+	stage string,
+	manifest *config.Manifest,
+	state *config.State,
+	lock *config.Lock,
+) (string, bool, error) {
 	rendered, err := renderedEntries(stage, manifest, state, false)
 	if err != nil {
 		return "", false, fmt.Errorf("check-update: %w", err)
@@ -160,61 +182,29 @@ func reresolveFilesystem(state *config.State, ref, projectDir string) (string, b
 	if err != nil {
 		return "", false, fmt.Errorf("check-update: %w", err)
 	}
-	changed := config.ComputeManifestHash(rendered) != config.ComputeManifestHash(locked)
+	changed := config.ComputeManifestHash(rendered) !=
+		config.ComputeManifestHash(locked)
 	if !changed {
 		return state.ResolvedCommit, false, nil
 	}
-	fresh := strings.TrimPrefix(config.ComputeManifestHash(display), "sha256:")
+	fresh := strings.TrimPrefix(
+		config.ComputeManifestHash(display), "sha256:")
 	return fresh, true, nil
 }
 
-// renderedEntries lists the staged render as lock entries, always skipping
-// manifest-ignored paths (they never reach the lock). With includeUserOwned
-// false it also skips user-owned paths (preserve globs, skip entries) so
-// the hash compares template content only; with true it keeps them for the
-// display identity.
-func renderedEntries(stage string, manifest *config.Manifest, state *config.State, includeUserOwned bool) ([]config.LockFile, error) {
+func renderedEntries(
+	stage string,
+	manifest *config.Manifest,
+	state *config.State,
+	includeUserOwned bool,
+) ([]config.LockFile, error) {
 	var files []config.LockFile
+	collector := &renderCollector{
+		stage: stage, manifest: manifest, state: state,
+		includeUserOwned: includeUserOwned,
+	}
 	err := filepath.WalkDir(stage, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(stage, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		slash := filter.ToSlash(rel)
-		if d.IsDir() {
-			return nil
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		ignored, err := filter.MatchAny(manifest.Ignore, slash)
-		if err != nil {
-			return fmt.Errorf("matching ignore globs: %w", err)
-		}
-		if ignored {
-			return nil
-		}
-		if !includeUserOwned {
-			owned, err := userOwned(slash, manifest, state)
-			if err != nil {
-				return err
-			}
-			if owned {
-				return nil
-			}
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		files = append(files, config.FileEntry(slash, data))
-		return nil
+		return collector.collect(path, d, err, &files)
 	})
 	if err != nil {
 		return nil, err
@@ -222,9 +212,81 @@ func renderedEntries(stage string, manifest *config.Manifest, state *config.Stat
 	return files, nil
 }
 
-// filterLockEntries drops lock entries for user-owned paths so the stored
-// side compares template content only, mirroring renderedEntries.
-func filterLockEntries(files []config.LockFile, manifest *config.Manifest, state *config.State) ([]config.LockFile, error) {
+type renderCollector struct {
+	stage            string
+	manifest         *config.Manifest
+	state            *config.State
+	includeUserOwned bool
+}
+
+func (c *renderCollector) collect(
+	path string,
+	d fs.DirEntry,
+	walkErr error,
+	files *[]config.LockFile,
+) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	rel, err := filepath.Rel(c.stage, path)
+	if err != nil {
+		return err
+	}
+	if rel == "." || d.IsDir() {
+		return nil
+	}
+	if skip, err := skipStagedEntry(d); err != nil || skip {
+		return err
+	}
+	slash := filter.ToSlash(rel)
+	if skip, err := c.skipListed(slash); err != nil || skip {
+		return err
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- reads file found by WalkDir of this run's staging dir, not caller-controlled inclusion
+	if err != nil {
+		return err
+	}
+	*files = append(*files, config.FileEntry(slash, data))
+	return nil
+}
+
+func skipStagedEntry(d fs.DirEntry) (bool, error) {
+	if d.Type()&fs.ModeSymlink != 0 {
+		return true, nil
+	}
+	info, err := d.Info()
+	if err != nil {
+		return false, err
+	}
+	if filter.IsSpecialFile(info) || !info.Mode().IsRegular() {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (c *renderCollector) skipListed(slash string) (bool, error) {
+	ignored, err := filter.MatchAny(c.manifest.Ignore, slash)
+	if err != nil {
+		return false, fmt.Errorf("matching ignore globs: %w", err)
+	}
+	if ignored {
+		return true, nil
+	}
+	if c.includeUserOwned {
+		return false, nil
+	}
+	owned, err := userOwned(slash, c.manifest, c.state)
+	if err != nil {
+		return false, err
+	}
+	return owned, nil
+}
+
+func filterLockEntries(
+	files []config.LockFile,
+	manifest *config.Manifest,
+	state *config.State,
+) ([]config.LockFile, error) {
 	var kept []config.LockFile
 	for _, file := range files {
 		owned, err := userOwned(file.Path, manifest, state)
@@ -238,8 +300,6 @@ func filterLockEntries(files []config.LockFile, manifest *config.Manifest, state
 	return kept, nil
 }
 
-// userOwned reports whether a template-relative path carries local content:
-// manifest preserve globs or state skip entries always prefer local files.
 func userOwned(slash string, manifest *config.Manifest, state *config.State) (bool, error) {
 	preserved, err := filter.MatchAny(manifest.Preserve, slash)
 	if err != nil {

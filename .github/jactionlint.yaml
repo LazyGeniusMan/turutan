@@ -1,0 +1,9 @@
+---
+profile: pedantic
+online: true
+rules:
+self-hosted-runner:
+  labels: []
+config-variables: null
+config-secrets: null
+paths:

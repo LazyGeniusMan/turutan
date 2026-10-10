@@ -1,16 +1,11 @@
 [tools]
-go = "1"
-
-[tasks.build]
-description = "Build the turutan static binary per spec §9 (CGO_ENABLED=0, -trimpath, version ldflags)"
-run = "CGO_ENABLED=0 go build -trimpath -ldflags \"-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev) -X main.commit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o turutan ./cmd/turutan"
-
-[tasks.vulncheck]
-description = "Run govulncheck over the module (M5 gate); skips with an install hint when the tool is missing"
-run = "if ! command -v govulncheck >/dev/null 2>&1; then echo 'turutan: govulncheck not installed; install with: go install golang.org/x/vuln/cmd/govulncheck@latest'; exit 0; fi; govulncheck ./..."
+go = "1.26"
+golangci-lint = "2"
+goreleaser = "2"
+"aqua:securego/gosec" = "2"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1"
 
 [bootstrap.packages]
-# dev
 "apk:musl-dev" = "latest"
 "apk:linux-headers" = "latest"
 "apt:libc6-dev" = "latest"
@@ -22,10 +17,8 @@ run = "if ! command -v govulncheck >/dev/null 2>&1; then echo 'turutan: govulnch
 "winget:Microsoft.WindowsSDK.10.0.26100" = "latest"
 "zypper:glibc-devel" = "latest"
 "zypper:linux-glibc-devel" = "latest"
-# rt
 "apk:musl" = "latest"
 "apt:libc6" = "latest"
 "dnf:glibc" = "latest"
-# "pacman:glibc" = "latest"
 "winget:Microsoft.VCRedist.2015+.x64" = "latest"
 "zypper:glibc" = "latest"

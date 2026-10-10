@@ -3,6 +3,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,11 +12,10 @@ import (
 
 	git "github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/config"
+	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 )
 
-// advertisedFixture returns a synthetic ls-remote advertisement so
-// ResolveRef tests run offline.
 func advertisedFixture() []Ref {
 	return []Ref{
 		{Name: "HEAD", Target: "refs/heads/main"},
@@ -94,7 +94,6 @@ func TestResolveRefAmbiguousShortSHA(t *testing.T) {
 	})
 }
 
-// commitFile writes path into repo's worktree and commits it.
 func commitFile(t *testing.T, repoPath, name, content, message string) string {
 	t.Helper()
 	repo, err := git.PlainOpen(repoPath)
@@ -120,9 +119,6 @@ func commitFile(t *testing.T, repoPath, name, content, message string) string {
 	return hash.String()
 }
 
-// initRepo creates a non-bare repo with one commit on the default branch.
-// It disables commit signing explicitly so the suite passes on machines
-// with commit.gpgSign enabled globally.
 func initRepo(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -135,8 +131,6 @@ func initRepo(t *testing.T) (string, string) {
 	return dir, sha
 }
 
-// disableGPGSign clears commit.gpgSign in repo config; without it commits
-// fail on hosts that enable signing globally.
 func disableGPGSign(t *testing.T, repo *git.Repository) {
 	t.Helper()
 	cfg, err := repo.Config()
@@ -177,7 +171,7 @@ func TestCloneFromLocalPath(t *testing.T) {
 	t.Run("clone checks out HEAD by default", func(t *testing.T) {
 		src, want := initRepo(t)
 		dst := filepath.Join(t.TempDir(), "clone")
-		got, err := Clone(src, "", dst, ShallowDepth)
+		got, err := Clone(context.Background(), src, "", dst, ShallowDepth)
 		if err != nil {
 			t.Fatalf("Clone error: %v", err)
 		}
@@ -196,10 +190,10 @@ func TestCloneFromLocalPath(t *testing.T) {
 		src, _ := initRepo(t)
 		second := commitFile(t, src, "second.txt", "two\n", "second")
 		dst := filepath.Join(t.TempDir(), "clone")
-		got, err := Clone(src, "master", dst, ShallowDepth)
+		got, err := Clone(context.Background(), src, "master", dst, ShallowDepth)
 		if err != nil {
 			if strings.Contains(err.Error(), "resolving ref") {
-				got, err = Clone(src, "main", dst, ShallowDepth)
+				got, err = Clone(context.Background(), src, "main", dst, ShallowDepth)
 			}
 			if err != nil {
 				t.Fatalf("Clone with branch ref error: %v", err)
@@ -211,7 +205,7 @@ func TestCloneFromLocalPath(t *testing.T) {
 	})
 	t.Run("unknown ref fails clearly", func(t *testing.T) {
 		src, _ := initRepo(t)
-		if _, err := Clone(src, "does-not-exist", filepath.Join(t.TempDir(), "clone"), ShallowDepth); err == nil {
+		if _, err := Clone(context.Background(), src, "does-not-exist", filepath.Join(t.TempDir(), "clone"), ShallowDepth); err == nil {
 			t.Error("Clone with unknown ref succeeded, want error")
 		}
 	})
@@ -251,6 +245,114 @@ func TestResolveLocal(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("ResolveLocal on bare repo = %q, want %q", got, want)
+		}
+	})
+}
+
+func tagHEAD(t *testing.T, repoPath, name string) string {
+	t.Helper()
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		t.Fatalf("opening repo %q: %v", repoPath, err)
+	}
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatalf("reading HEAD: %v", err)
+	}
+	if _, err := repo.CreateTag(name, head.Hash(), nil); err != nil {
+		t.Fatalf("creating tag %q: %v", name, err)
+	}
+	return head.Hash().String()
+}
+
+func semverFixture(t *testing.T) (string, map[string]string) {
+	t.Helper()
+	dir, _ := initRepo(t)
+	sha1 := tagHEAD(t, dir, "v1.2.0")
+	hash2 := commitFile(t, dir, "v1.txt", "v1.5\n", "second")
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.CreateTag("v1.5.0", plumbing.NewHash(hash2), nil); err != nil {
+		t.Fatalf("creating tag v1.5.0: %v", err)
+	}
+	hash3 := commitFile(t, dir, "v2.txt", "v2.1\n", "third")
+	if _, err := repo.CreateTag("v2.1.0", plumbing.NewHash(hash3), nil); err != nil {
+		t.Fatalf("creating tag v2.1.0: %v", err)
+	}
+	return dir, map[string]string{"v1.2.0": sha1, "v1.5.0": hash2, "v2.1.0": hash3}
+}
+
+func TestResolveLocalSemver(t *testing.T) {
+	tests := []struct {
+		name    string
+		expr    string
+		wantTag string
+		wantErr bool
+	}{
+		{name: "exact tag resolves", expr: "v1.2.0", wantTag: "v1.2.0"},
+		{name: "caret range picks highest satisfying in major 1", expr: "^1.0", wantTag: "v1.5.0"},
+		{name: "caret major picks v2", expr: "^2.0", wantTag: "v2.1.0"},
+		{name: "tilde range picks patch within minor", expr: "~1.2.0", wantTag: "v1.2.0"},
+		{name: "no satisfying tag errors", expr: "^3.0", wantErr: true},
+		{name: "invalid constraint fails fast", expr: "does-not-exist", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, wantByTag := semverFixture(t)
+			got, err := ResolveLocal(dir, tt.expr)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ResolveLocal(%q) succeeded, want error", tt.expr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResolveLocal(%q) error: %v", tt.expr, err)
+			}
+			want := wantByTag[tt.wantTag]
+			if got != want {
+				t.Errorf("ResolveLocal(%q) = %q, want %q (tag %s)", tt.expr, got, want, tt.wantTag)
+			}
+		})
+	}
+	t.Run("HEAD fallback unaffected by tags", func(t *testing.T) {
+		dir, _ := semverFixture(t)
+		repo, err := git.PlainOpen(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		head, err := repo.Head()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := head.Hash().String()
+		got, err := ResolveLocal(dir, "")
+		if err != nil {
+			t.Fatalf("ResolveLocal(HEAD) error: %v", err)
+		}
+		if got != want {
+			t.Errorf("ResolveLocal(HEAD) = %q, want %q", got, want)
+		}
+	})
+	t.Run("branch still resolves with tags present", func(t *testing.T) {
+		dir, _ := semverFixture(t)
+		repo, err := git.PlainOpen(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		head, err := repo.Head()
+		if err != nil {
+			t.Fatal(err)
+		}
+		branch := head.Name().Short()
+		got, err := ResolveLocal(dir, branch)
+		if err != nil {
+			t.Fatalf("ResolveLocal(%q) error: %v", branch, err)
+		}
+		if got != head.Hash().String() {
+			t.Errorf("ResolveLocal(%q) = %q, want %q", branch, got, head.Hash().String())
 		}
 	})
 }
@@ -320,7 +422,7 @@ func TestListRefsNetwork(t *testing.T) {
 		t.Skip("network test skipped in -short mode")
 	}
 	t.Run("lists default template refs", func(t *testing.T) {
-		refs, err := ListRefs("https://github.com/LazyGeniusMan/turutan.git")
+		refs, err := ListRefs(context.Background(), "https://github.com/LazyGeniusMan/turutan.git")
 		if err != nil {
 			t.Skipf("network unavailable: %v", err)
 		}

@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -13,8 +14,6 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-// exitCodeOf maps a command error to its process exit code: nil is 0,
-// scriptable outcomes keep their code, every other failure is 1.
 func exitCodeOf(err error) int {
 	if err == nil {
 		return 0
@@ -25,8 +24,6 @@ func exitCodeOf(err error) int {
 	return 1
 }
 
-// bootstrapTestProject scaffolds a filesystem project from files and
-// returns the template source dir and the project dir.
 func bootstrapTestProject(t *testing.T, files map[string]string) (string, string) {
 	t.Helper()
 	src := writeTemplate(t, files)
@@ -40,13 +37,12 @@ func bootstrapTestProject(t *testing.T, files map[string]string) (string, string
 		Stderr:         &bytes.Buffer{},
 		Stdin:          bytes.NewReader(nil),
 	}
-	if err := scaffold.Bootstrap(src, dst, opts); err != nil {
+	if err := scaffold.Bootstrap(context.Background(), src, dst, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
 	return src, dst
 }
 
-// runInProject chdirs into dir for the test, restoring afterward.
 func runInProject(t *testing.T, dir string) {
 	t.Helper()
 	t.Chdir(dir)
@@ -113,6 +109,7 @@ func TestCheckUpdateCmdExitCodes(t *testing.T) {
 }
 
 func TestExitCodeMapping(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  error
@@ -124,9 +121,7 @@ func TestExitCodeMapping(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := exitCode(tt.err); got != tt.want {
-				t.Errorf("exitCode(%v) = %d, want %d", tt.err, got, tt.want)
-			}
+			t.Parallel()
 			if got := exitCodeOf(tt.err); got != tt.want {
 				t.Errorf("exitCodeOf(%v) = %d, want %d", tt.err, got, tt.want)
 			}

@@ -6,6 +6,7 @@ package scaffold
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,16 +23,6 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
-// TestDefaultSelfHostE2E is the M4 dogfood gate (spec §§8, 8.2): the repo
-// self-hosts through the default template. It bootstraps from the local
-// ./templates/default fixture (offline), asserts a clean checkout shows
-// no drift through the real binary (`turutan diff` exits 0), checks
-// byte-identical parity against the remote-default render at the floating
-// stable ref (network step, skipped in -short mode and while the template
-// release tag is unpublished), and runs the full cycle in t.TempDir():
-// check-update clean → local edit → diff drift → template commit →
-// update --ref → diff clean with the lock identity advanced. The
-// min-engine gate is enforced throughout.
 func TestDefaultSelfHostE2E(t *testing.T) {
 	root := e2eModuleRoot(t)
 	fixture := filepath.Join(root, "templates", "default")
@@ -41,9 +32,10 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 	bin := e2eBuildTurutan(t, root)
 
 	t.Run("clean checkout has no drift", func(t *testing.T) {
+		t.Parallel()
 		proj := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(fixture, proj, testOptions(&stdout)); err != nil {
+		if err := Bootstrap(context.Background(), fixture, proj, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(proj))
@@ -56,7 +48,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if state.Engine != "turutan/0.1.0" {
 			t.Errorf("Engine = %q, want turutan/0.1.0", state.Engine)
 		}
-		diffs, err := ComputeDiff(proj, DiffOptions{})
+		diffs, err := ComputeDiff(context.Background(), proj, DiffOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,11 +65,12 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 	})
 
 	t.Run("remote parity", func(t *testing.T) {
+		t.Parallel()
 		if testing.Short() {
 			t.Skip("network parity skipped in -short mode")
 		}
 		repo := "https://github.com/LazyGeniusMan/turutan.git"
-		if _, err := git.ResolveRemoteRef(repo, template.DefaultRef); err != nil {
+		if _, err := git.ResolveRemoteRef(context.Background(), repo, template.DefaultRef); err != nil {
 			t.Skipf("default template ref %q unresolvable (unpublished or offline): %v", template.DefaultRef, err)
 		}
 		answersFile := filepath.Join(t.TempDir(), "answers.yml")
@@ -91,19 +84,20 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		}
 		local := filepath.Join(t.TempDir(), "local")
 		var localOut strings.Builder
-		if err := Bootstrap(fixture, local, opts(&localOut)); err != nil {
+		if err := Bootstrap(context.Background(), fixture, local, opts(&localOut)); err != nil {
 			t.Fatalf("local bootstrap error: %v", err)
 		}
 		remoteSrc := "git::" + repo + "//templates/default?ref=" + template.DefaultRef
 		remote := filepath.Join(t.TempDir(), "remote")
 		var remoteOut strings.Builder
-		if err := Bootstrap(remoteSrc, remote, opts(&remoteOut)); err != nil {
+		if err := Bootstrap(context.Background(), remoteSrc, remote, opts(&remoteOut)); err != nil {
 			t.Fatalf("remote bootstrap error: %v", err)
 		}
 		e2eCompareTrees(t, local, remote)
 	})
 
 	t.Run("full update cycle", func(t *testing.T) {
+		t.Parallel()
 		tmpl := filepath.Join(t.TempDir(), "tpl")
 		if err := e2eCopyDir(fixture, tmpl); err != nil {
 			t.Fatal(err)
@@ -113,7 +107,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 
 		proj := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(tmpl, proj, testOptions(&stdout)); err != nil {
+		if err := Bootstrap(context.Background(), tmpl, proj, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(proj))
@@ -128,7 +122,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		}
 
 		var updateOut strings.Builder
-		result, err := CheckUpdate(proj, checkUpdateOptions(&updateOut))
+		result, err := CheckUpdate(context.Background(), proj, checkUpdateOptions(&updateOut))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,7 +141,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if err := os.WriteFile(gomodPath, append(append([]byte{}, original...), []byte("\n// local edit\n")...), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		diffs, err := ComputeDiff(proj, DiffOptions{})
+		diffs, err := ComputeDiff(context.Background(), proj, DiffOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +160,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if sha2 == sha1 {
 			t.Fatal("second template commit matches first, want advance")
 		}
-		result, err = CheckUpdate(proj, checkUpdateOptions(&updateOut))
+		result, err = CheckUpdate(context.Background(), proj, checkUpdateOptions(&updateOut))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +174,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		var updateStdout, updateStderr strings.Builder
 		updateOpts := updateTestOptions(&updateStdout, &updateStderr)
 		updateOpts.Ref = sha2
-		updated, err := Update(proj, updateOpts)
+		updated, err := Update(context.Background(), proj, updateOpts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -211,7 +205,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if state.ResolvedCommit != sha2 {
 			t.Errorf("state ResolvedCommit = %q, want advanced %q", state.ResolvedCommit, sha2)
 		}
-		diffs, err = ComputeDiff(proj, DiffOptions{})
+		diffs, err = ComputeDiff(context.Background(), proj, DiffOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,10 +218,11 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 	})
 
 	t.Run("min-engine gate enforced", func(t *testing.T) {
+		t.Parallel()
 		var stdout strings.Builder
 		old := testOptions(&stdout)
 		old.Engine = "0.0.1"
-		if err := Bootstrap(fixture, filepath.Join(t.TempDir(), "proj"), old); err == nil {
+		if err := Bootstrap(context.Background(), fixture, filepath.Join(t.TempDir(), "proj"), old); err == nil {
 			t.Error("bootstrap below min-engine succeeded, want error")
 		} else if !strings.Contains(err.Error(), "requires engine") {
 			t.Errorf("bootstrap error = %v, want min-engine complaint", err)
@@ -236,7 +231,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		var updateStdout, updateStderr strings.Builder
 		updateOpts := updateTestOptions(&updateStdout, &updateStderr)
 		updateOpts.Engine = "0.0.1"
-		if _, err := Update(proj, updateOpts); err == nil {
+		if _, err := Update(context.Background(), proj, updateOpts); err == nil {
 			t.Error("update below min-engine succeeded, want error")
 		} else if !strings.Contains(err.Error(), "requires engine") {
 			t.Errorf("update error = %v, want min-engine complaint", err)
@@ -244,7 +239,6 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 	})
 }
 
-// e2eModuleRoot returns the repo root derived from this file's path.
 func e2eModuleRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
@@ -261,8 +255,6 @@ func e2eModuleRoot(t *testing.T) string {
 	return root
 }
 
-// e2eBuildTurutan compiles the CLI once for binary-level exit-code
-// assertions (diff 0 clean / 2 drift).
 func e2eBuildTurutan(t *testing.T, root string) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "turutan")
@@ -274,8 +266,6 @@ func e2eBuildTurutan(t *testing.T, root string) string {
 	return bin
 }
 
-// e2eRun executes the built binary in dir and returns stdout plus the
-// process exit code.
 func e2eRun(t *testing.T, bin, dir string, args ...string) (string, int) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
@@ -292,8 +282,6 @@ func e2eRun(t *testing.T, bin, dir string, args ...string) (string, int) {
 	return stdout.String(), 0
 }
 
-// e2eInitRepo turns dir into an unsigned-commit git repo for local-git
-// template sources.
 func e2eInitRepo(t *testing.T, dir string) {
 	t.Helper()
 	repo, err := gitpkg.PlainInit(dir, false)
@@ -310,8 +298,6 @@ func e2eInitRepo(t *testing.T, dir string) {
 	}
 }
 
-// e2eCopyDir replicates the src tree at dst (dirs plus regular files with
-// modes); the default-template fixture holds no symlinks or specials.
 func e2eCopyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -346,8 +332,6 @@ func e2eCopyDir(src, dst string) error {
 	})
 }
 
-// e2eCompareTrees fails when the local-fixture and remote renders differ
-// in any file other than the source-specific state and lock records.
 func e2eCompareTrees(t *testing.T, local, remote string) {
 	t.Helper()
 	skipped := map[string]bool{

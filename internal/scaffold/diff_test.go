@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,11 +11,11 @@ import (
 
 	gitpkg "github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-// diffOptions returns options for ComputeDiff tests.
 func diffOptions() DiffOptions {
 	return DiffOptions{}
 }
@@ -23,7 +24,7 @@ func TestComputeDiff(t *testing.T) {
 	t.Run("no drift on clean bootstrap", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
 		projectDir := bootstrapProject(t, src)
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -37,7 +38,7 @@ func TestComputeDiff(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("aaa\nBBB\nccc\nddd\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -51,8 +52,6 @@ func TestComputeDiff(t *testing.T) {
 		if diff.Added != 1 || diff.Removed != 1 {
 			t.Errorf("Added/Removed = %d/%d, want 1/1", diff.Added, diff.Removed)
 		}
-		// Direction is project (a/) to freshly rendered template (b/):
-		// the local BBB edit is removed in favor of the template bbb.
 		for _, want := range []string{"@@", "a/hello.txt", "b/hello.txt", "-BBB", "+bbb"} {
 			if !strings.Contains(diff.Unified, want) {
 				t.Errorf("Unified missing %q:\n%s", want, diff.Unified)
@@ -63,7 +62,7 @@ func TestComputeDiff(t *testing.T) {
 		repoDir, _ := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
 		projectDir := bootstrapProject(t, repoDir)
 		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -80,9 +79,6 @@ func TestComputeDiff(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// Tag the bootstrapped commit so --ref names a tip the shallow
-		// clone can reach; raw historical SHAs sit outside the depth-1
-		// boundary (fetch with ?depth= to reach further back).
 		if _, err := repo.CreateTag("v1", plumbing.NewHash(old), nil); err != nil {
 			t.Fatal(err)
 		}
@@ -90,7 +86,7 @@ func TestComputeDiff(t *testing.T) {
 		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 		opts := diffOptions()
 		opts.Ref = "v1"
-		diffs, err := ComputeDiff(projectDir, opts)
+		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -104,7 +100,7 @@ func TestComputeDiff(t *testing.T) {
 		if err := os.Remove(filepath.Join(projectDir, "hello.txt")); err != nil {
 			t.Fatal(err)
 		}
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -125,7 +121,7 @@ func TestComputeDiff(t *testing.T) {
 			t.Fatal(err)
 		}
 		commitAll(t, repoDir, "drop gone.txt")
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -146,18 +142,16 @@ func TestComputeDiff(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
-		// gen/out.txt was never published (ignored at bootstrap), so only
-		// hello.txt can drift.
 		if len(diffs) != 1 || diffs[0].Path != "hello.txt" {
 			t.Errorf("diffs = %+v, want only hello.txt", diffs)
 		}
 	})
 	t.Run("missing state errors", func(t *testing.T) {
-		if _, err := ComputeDiff(t.TempDir(), diffOptions()); err == nil {
+		if _, err := ComputeDiff(context.Background(), t.TempDir(), diffOptions()); err == nil {
 			t.Error("ComputeDiff without state succeeded, want error")
 		}
 	})
@@ -167,7 +161,7 @@ func TestComputeDiff(t *testing.T) {
 		if err := os.Remove(filepath.Join(projectDir, config.LockFileName)); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ComputeDiff(projectDir, diffOptions()); err == nil {
+		if _, err := ComputeDiff(context.Background(), projectDir, diffOptions()); err == nil {
 			t.Error("ComputeDiff without lock succeeded, want error")
 		}
 	})
@@ -185,7 +179,7 @@ func TestComputeDiff(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ComputeDiff(projectDir, diffOptions()); err != nil {
+		if _, err := ComputeDiff(context.Background(), projectDir, diffOptions()); err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
 		afterState, err := os.ReadFile(filepath.Join(projectDir, config.StateFileName))
@@ -211,7 +205,7 @@ func TestComputeDiff(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		diffs, err := ComputeDiff(projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -221,22 +215,66 @@ func TestComputeDiff(t *testing.T) {
 	})
 }
 
+func TestComputeDiffMinEngine(t *testing.T) {
+	setup := func(t *testing.T) (string, string) {
+		t.Helper()
+		src := makeTemplate(t, "min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
+		projectDir := bootstrapProject(t, src)
+		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("min-engine: \">=99.0.0\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return src, projectDir
+	}
+	tests := []struct {
+		name    string
+		engine  string
+		wantErr bool
+		errPart string
+	}{
+		{name: "unsatisfiable floor fails fast", engine: "0.1.0", wantErr: true, errPart: "requires engine"},
+		{name: "dev version skips gate", engine: "dev", wantErr: false},
+		{name: "empty engine skips gate", engine: "", wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := assert.New(t)
+			_, projectDir := setup(t)
+			opts := diffOptions()
+			opts.Engine = tt.engine
+			_, err := ComputeDiff(context.Background(), projectDir, opts)
+			if tt.wantErr {
+				if !is.Error(err) {
+					return
+				}
+				is.Contains(err.Error(), tt.errPart)
+				return
+			}
+			is.NoError(err)
+		})
+	}
+}
+
 func TestWriteDiffGolden(t *testing.T) {
 	t.Run("plain rendering is byte-stable", func(t *testing.T) {
-		changed, ok := newFileDiff(
+		changed, ok, err := newFileDiff(
 			"hello.txt",
 			[]byte("aaa\nbbb\nccc\nddd\neee\nfff\nggg\n"),
 			[]byte("aaa\nBBB\nccc\nddd\neee\nfff\nggg\n"),
 			false, false,
 		)
+		if err != nil {
+			t.Fatalf("newFileDiff error: %v", err)
+		}
 		if !ok {
 			t.Fatal("newFileDiff reported no change, want drift")
 		}
-		added, ok := newFileDiff("new.txt", nil, []byte("hello\n"), true, false)
+		added, ok, err := newFileDiff("new.txt", nil, []byte("hello\n"), true, false)
+		if err != nil {
+			t.Fatalf("newFileDiff error: %v", err)
+		}
 		if !ok {
 			t.Fatal("newFileDiff reported no change for a new file")
 		}
-		// Deliberately unsorted: golden pins the sorted plain output.
 		var out strings.Builder
 		if err := WriteDiff(&out, []FileDiff{added, changed}, WriteOptions{NoColor: true}); err != nil {
 			t.Fatalf("WriteDiff error: %v", err)
@@ -261,4 +299,48 @@ func TestWriteDiffGolden(t *testing.T) {
 			t.Errorf("WriteDiff(nil) = %q, want empty", out.String())
 		}
 	})
+}
+
+func TestNewFileDiff(t *testing.T) {
+	tests := []struct {
+		name             string
+		local, fresh     string
+		isNew, isDeleted bool
+		wantChanged      bool
+		wantAdded        int
+		wantRemoved      int
+	}{
+		{name: "identical content", local: "a\nb\n", fresh: "a\nb\n"},
+		{name: "one line changed", local: "a\nb\n", fresh: "a\nB\n", wantChanged: true, wantAdded: 1, wantRemoved: 1},
+		{name: "new file", fresh: "hello\n", isNew: true, wantChanged: true, wantAdded: 1},
+		{name: "deleted file", local: "bye\n", isDeleted: true, wantChanged: true, wantRemoved: 1},
+		{name: "appended line", local: "a\n", fresh: "a\nb\n", wantChanged: true, wantAdded: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var local, fresh []byte
+			if tt.local != "" {
+				local = []byte(tt.local)
+			}
+			if tt.fresh != "" {
+				fresh = []byte(tt.fresh)
+			}
+			diff, changed, err := newFileDiff("f.txt", local, fresh, tt.isNew, tt.isDeleted)
+			if err != nil {
+				t.Fatalf("newFileDiff error: %v", err)
+			}
+			if changed != tt.wantChanged {
+				t.Fatalf("changed = %v, want %v", changed, tt.wantChanged)
+			}
+			if !changed {
+				return
+			}
+			if diff.Added != tt.wantAdded || diff.Removed != tt.wantRemoved {
+				t.Errorf("added/removed = %d/%d, want %d/%d", diff.Added, diff.Removed, tt.wantAdded, tt.wantRemoved)
+			}
+			if !strings.Contains(diff.Unified, "@@") {
+				t.Errorf("Unified missing hunk header:\n%s", diff.Unified)
+			}
+		})
+	}
 }

@@ -2,6 +2,3 @@
 "github:xberg-io/alef" = "0"
 
 [bootstrap.packages]
-# dev
-
-# rt

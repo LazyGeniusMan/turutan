@@ -1,4 +1,4 @@
-# turutan template manifest for the default template (spec §4.3).
+---
 source: "git::https://github.com/LazyGeniusMan/turutan.git//templates/default"
 min-engine: ">=0.1.0"
 conflict: inline

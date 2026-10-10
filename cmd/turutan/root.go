@@ -14,37 +14,24 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-// Build metadata injected via -ldflags "-X main.version=... -X main.commit=... -X main.date=...".
 var (
 	version = "dev"
 	commit  = "none"
 	date    = "unknown"
 )
 
-// Global flag storage.
-var (
+type appConfig struct {
 	cfgFile        string
 	nonInteractive bool
 	verbose        bool
 	noColor        bool
-)
-
-var rootCmd = &cobra.Command{
-	Use:   "turutan",
-	Short: "Manage project-template lifecycle",
-	Long: `turutan scaffolds new projects from versioned templates and merges
-template updates back into them (bootstrap, check-update, diff, update).`,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-		return initConfig()
-	},
+	showVersion    bool
 }
 
-// Execute runs the root command. Scriptable outcomes (exitError) are
-// already reported on the command streams and pass through untouched so
-// main can exit with their code; any other error prints here and exits 1.
+var appCfg appConfig
+
 func Execute() error {
+	rootCmd := newRootCmd(viper.GetViper())
 	if err := rootCmd.Execute(); err != nil {
 		if _, ok := errors.AsType[*exitError](err); ok {
 			return err
@@ -55,35 +42,89 @@ func Execute() error {
 	return nil
 }
 
-func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path")
-	rootCmd.PersistentFlags().BoolVar(&nonInteractive, "non-interactive", false, "disable interactive prompts")
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "verbose diagnostics on stderr")
-	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output")
-	rootCmd.AddCommand(
+func newRootCmd(v *viper.Viper) *cobra.Command {
+	cmd := newRootCommand(v)
+	addRootFlags(cmd)
+	cmd.AddCommand(
 		newBootstrapCmd(),
 		newCheckUpdateCmd(),
 		newDiffCmd(),
 		newUpdateCmd(),
 		newVersionCmd(),
 	)
+	bindViperFlags(cmd, v)
+	return cmd
 }
 
-// initConfig wires env layering and loads the resolved config file.
-// A missing file is not fatal: flags and env remain valid.
-func initConfig() error {
-	viper.SetEnvPrefix(config.EnvPrefix)
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-	path := config.ResolveConfigPath(cfgFile)
-	if verbose {
+func newRootCommand(v *viper.Viper) *cobra.Command {
+	return &cobra.Command{
+		Use:   "turutan",
+		Short: "Manage project-template lifecycle",
+		Long: `turutan scaffolds new projects from versioned templates and merges
+template updates back into them (bootstrap, check-update, diff, update).`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			_ = v.BindPFlags(cmd.Flags())
+			_ = v.BindPFlags(cmd.PersistentFlags())
+			_ = v.BindPFlags(cmd.InheritedFlags())
+			return initConfigWithViper(v, appCfg.cfgFile)
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if appCfg.showVersion {
+				printVersion(cmd.OutOrStdout())
+				return nil
+			}
+			return cmd.Help()
+		},
+	}
+}
+
+func addRootFlags(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(
+		&appCfg.cfgFile, "config", "", "config file path")
+	cmd.PersistentFlags().BoolVar(
+		&appCfg.nonInteractive, "non-interactive", false,
+		"disable interactive prompts")
+	cmd.PersistentFlags().BoolVar(
+		&appCfg.verbose, "verbose", false,
+		"verbose diagnostics on stderr")
+	cmd.PersistentFlags().BoolVar(
+		&appCfg.noColor, "no-color", false, "disable colored output")
+	cmd.PersistentFlags().BoolVar(
+		&appCfg.showVersion, "version", false,
+		"print version information")
+}
+
+func bindViperFlags(cmd *cobra.Command, v *viper.Viper) {
+	_ = v.BindPFlags(cmd.PersistentFlags())
+	for _, sub := range cmd.Commands() {
+		_ = v.BindPFlags(sub.Flags())
+		_ = v.BindPFlags(sub.PersistentFlags())
+	}
+}
+
+func newViper() *viper.Viper {
+	v := viper.New()
+	v.SetEnvPrefix(config.EnvPrefix)
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	return v
+}
+
+func initConfigWithViper(v *viper.Viper, cfgPath string) error {
+	v.SetEnvPrefix(config.EnvPrefix)
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	path := config.ResolveConfigPath(cfgPath)
+	if appCfg.verbose {
 		fmt.Fprintln(os.Stderr, "turutan: using config", path)
 	}
 	if path == "" {
 		return nil
 	}
-	viper.SetConfigFile(path)
-	if err := viper.ReadInConfig(); err != nil {
+	v.SetConfigFile(path)
+	if err := v.ReadInConfig(); err != nil {
 		if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); ok {
 			return nil
 		}
@@ -93,4 +134,8 @@ func initConfig() error {
 		return fmt.Errorf("reading config %q: %w", path, err)
 	}
 	return nil
+}
+
+func initConfig() error {
+	return initConfigWithViper(viper.GetViper(), appCfg.cfgFile)
 }

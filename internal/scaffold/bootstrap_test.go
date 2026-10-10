@@ -3,19 +3,19 @@
 package scaffold
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	turutanconfig "github.com/LazyGeniusMan/turutan/internal/config"
 	git "github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing/object"
-	"time"
 )
 
-// makeTemplate writes a template tree: manifest plus name→content files.
 func makeTemplate(t *testing.T, manifest string, files map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -39,12 +39,11 @@ func makeTemplate(t *testing.T, manifest string, files map[string]string) string
 const basicManifest = "source: \"test\"\nmin-engine: \">=0.1.0\"\nconflict: inline\nignore:\n  - \"ignored/**\"\npreserve:\n  - \"keep.txt\"\n"
 
 var basicFiles = map[string]string{
-	"go.mod.tmpl":      "module {{.project_name}}\n\ngo 1.27\n",
+	"go.mod.tmpl":      "module {{.project_name}}\n\ngo 1.26\n",
 	"keep.txt":         "template keep\n",
 	"ignored/skip.txt": "must not copy\n",
 }
 
-// testOptions returns non-interactive options capturing output.
 func testOptions(stdout *strings.Builder) Options {
 	return Options{
 		NonInteractive: true,
@@ -61,14 +60,14 @@ func TestBootstrapFilesystem(t *testing.T) {
 		src := makeTemplate(t, basicManifest, basicFiles)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(src, target, testOptions(&stdout)); err != nil {
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, "go.mod"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != "module proj\n\ngo 1.27\n" {
+		if string(got) != "module proj\n\ngo 1.26\n" {
 			t.Errorf("go.mod = %q, want defaulted project name", got)
 		}
 		if _, err := os.Stat(filepath.Join(target, "ignored", "skip.txt")); err == nil {
@@ -113,11 +112,11 @@ func TestBootstrapFilesystem(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		opts := testOptions(&strings.Builder{})
 		opts.AnswersFile = answersFile
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "go.mod"))
-		if string(got) != "module fromfile\n\ngo 1.27\n" {
+		if string(got) != "module fromfile\n\ngo 1.26\n" {
 			t.Errorf("go.mod = %q, want answers-file value", got)
 		}
 	})
@@ -126,7 +125,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		if err := Bootstrap(root+"//sub", target, opts); err != nil {
+		if err := Bootstrap(context.Background(), root+"//sub", target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, "go.mod")); err != nil {
@@ -137,14 +136,14 @@ func TestBootstrapFilesystem(t *testing.T) {
 		src := makeTemplate(t, basicManifest, basicFiles)
 		opts := testOptions(&strings.Builder{})
 		opts.Defaults = false
-		if err := Bootstrap(src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
+		if err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
 			t.Error("non-interactive bootstrap without answers succeeded, want error")
 		}
 	})
 	t.Run("missing key names the key", func(t *testing.T) {
 		src := makeTemplate(t, basicManifest, map[string]string{"f.txt.tmpl": "{{.other}}\n"})
 		opts := testOptions(&strings.Builder{})
-		err := Bootstrap(src, filepath.Join(t.TempDir(), "p"), opts)
+		err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts)
 		if err == nil || !strings.Contains(err.Error(), `"other"`) {
 			t.Errorf("error = %v, want it to name the missing key", err)
 		}
@@ -155,13 +154,13 @@ func TestBootstrapFilesystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(target, "existing.txt"), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := Bootstrap(src, target, testOptions(&strings.Builder{})); err == nil {
+		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err == nil {
 			t.Error("bootstrap into non-empty dir succeeded, want error")
 		}
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Force = true
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Errorf("bootstrap with --force error: %v", err)
 		}
 	})
@@ -174,7 +173,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Force = true
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "keep.txt"))
@@ -185,14 +184,14 @@ func TestBootstrapFilesystem(t *testing.T) {
 	t.Run("min-engine floor enforced", func(t *testing.T) {
 		src := makeTemplate(t, "min-engine: \">=99.0.0\"\n", basicFiles)
 		opts := testOptions(&strings.Builder{})
-		if err := Bootstrap(src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
+		if err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
 			t.Error("bootstrap below min-engine succeeded, want error")
 		}
 	})
 	t.Run("hooks refused without consent", func(t *testing.T) {
 		src := makeTemplate(t, "hooks:\n  post: [\"./hooks/post.sh\"]\n", basicFiles)
 		opts := testOptions(&strings.Builder{})
-		if err := Bootstrap(src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
+		if err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
 			t.Error("hook-bearing template in non-interactive mode succeeded, want refusal")
 		}
 	})
@@ -205,7 +204,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.AllowHooks = true
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap with --allow-hooks error: %v", err)
 		}
 		if !strings.Contains(stdout.String(), "ran 1 template hook") {
@@ -222,7 +221,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		opts := testOptions(&stdout)
 		opts.NonInteractive = false
 		opts.Stdin = strings.NewReader("n\n")
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap with declined hooks error: %v", err)
 		}
 		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
@@ -239,7 +238,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		opts := testOptions(&stdout)
 		opts.NonInteractive = false
 		opts.Stdin = strings.NewReader("y\n")
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap with accepted hooks error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err != nil {
@@ -251,7 +250,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("typed\n")}
-		if err := Bootstrap(src, target, opts); err != nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "f.txt"))
@@ -306,7 +305,7 @@ func TestBootstrapLocalGit(t *testing.T) {
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(repoDir, target, testOptions(&stdout)); err != nil {
+		if err := Bootstrap(context.Background(), repoDir, target, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))
@@ -330,15 +329,85 @@ func TestBootstrapDefaultTemplateOffline(t *testing.T) {
 		}
 		target := filepath.Join(t.TempDir(), "myapp")
 		var stdout strings.Builder
-		if err := Bootstrap(src, target, testOptions(&stdout)); err != nil {
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, "go.mod"))
 		if err != nil {
 			t.Fatalf("reading rendered go.mod: %v", err)
 		}
-		if string(got) != "module myapp\n\ngo 1.27\n" {
+		if string(got) != "module myapp\n\ngo 1.26\n" {
 			t.Errorf("go.mod = %q, want defaulted module", got)
+		}
+	})
+}
+
+func TestBootstrapConflictPersisted(t *testing.T) {
+	t.Run("conflict flag stored in state", func(t *testing.T) {
+		src := makeTemplate(t, basicManifest, basicFiles)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.Conflict = ConflictRej
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		state, err := turutanconfig.LoadState(os.DirFS(target))
+		if err != nil {
+			t.Fatalf("LoadState error: %v", err)
+		}
+		if state.Conflict != string(ConflictRej) {
+			t.Errorf("Conflict = %q, want %q", state.Conflict, ConflictRej)
+		}
+	})
+	t.Run("omitted conflict stores empty", func(t *testing.T) {
+		src := makeTemplate(t, basicManifest, basicFiles)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		state, err := turutanconfig.LoadState(os.DirFS(target))
+		if err != nil {
+			t.Fatalf("LoadState error: %v", err)
+		}
+		if state.Conflict != "" {
+			t.Errorf("Conflict = %q, want empty", state.Conflict)
+		}
+	})
+}
+
+func TestBootstrapManifestSourceMismatch(t *testing.T) {
+	newOpts := func(stdout, stderr *strings.Builder) Options {
+		return Options{
+			NonInteractive: true,
+			Defaults:       true,
+			Engine:         "0.1.0",
+			Stdout:         stdout,
+			Stderr:         stderr,
+			Stdin:          strings.NewReader(""),
+		}
+	}
+	t.Run("mismatched source warns but succeeds", func(t *testing.T) {
+		src := makeTemplate(t, "source: \"git::https://example.com/other.git\"\n", basicFiles)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout, stderr strings.Builder
+		if err := Bootstrap(context.Background(), src, target, newOpts(&stdout, &stderr)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		if !strings.Contains(stderr.String(), "differs from requested") {
+			t.Errorf("stderr = %q, want a source-mismatch warning", stderr.String())
+		}
+	})
+	t.Run("absent manifest stays silent", func(t *testing.T) {
+		src := makeTemplate(t, "", basicFiles)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout, stderr strings.Builder
+		if err := Bootstrap(context.Background(), src, target, newOpts(&stdout, &stderr)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		if strings.Contains(stderr.String(), "differs from requested") {
+			t.Errorf("stderr = %q, want no source warning without a manifest", stderr.String())
 		}
 	})
 }

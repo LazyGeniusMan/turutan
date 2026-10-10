@@ -2,7 +2,6 @@
 clang = "23"
 
 [bootstrap.packages]
-# dev
 "apk:musl-dev" = "latest"
 "apk:libstdc++-dev" = "latest"
 "apk:linux-headers" = "latest"
@@ -19,7 +18,6 @@ clang = "23"
 "zypper:glibc-devel" = "latest"
 "zypper:libstdc++-devel" = "latest"
 "zypper:linux-glibc-devel" = "latest"
-# rt
 "apk:musl" = "latest"
 "apk:libstdc++" = "latest"
 "apk:libgcc" = "latest"
@@ -29,8 +27,6 @@ clang = "23"
 "dnf:glibc" = "latest"
 "dnf:libstdc++" = "latest"
 "dnf:libgcc" = "latest"
-# "pacman:glibc" = "latest"
-# "pacman:gcc-libs" = "latest"
 "winget:Microsoft.VCRedist.2015+.x64" = "latest"
 "zypper:glibc" = "latest"
 "zypper:libstdc++6" = "latest"

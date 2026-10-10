@@ -9,10 +9,6 @@ import (
 	"path/filepath"
 )
 
-// wrapRootErr annotates root I/O failures except not-exist ones, which
-// are returned raw: os.IsNotExist only unwraps one level of OS error
-// types, so a fmt wrap would hide missing files from callers that probe
-// existence (dirty guard, merge presence checks).
 func wrapRootErr(op, name string, err error) error {
 	if os.IsNotExist(err) {
 		return err
@@ -20,16 +16,10 @@ func wrapRootErr(op, name string, err error) error {
 	return fmt.Errorf("%s %q: %w", op, name, err)
 }
 
-// rootName normalizes a root-relative path for os.Root access: forward
-// slashes become OS separators so Windows and Unix callers share one form
-// (the ToSlash discipline in reverse).
 func rootName(name string) string {
 	return filepath.FromSlash(ToSlash(name))
 }
 
-// ReadFileWithinRoot reads the root-relative file name through os.Root:
-// lexical escapes and symlinks resolving outside rootDir are refused by
-// the kernel-checked root instead of by string prefix checks.
 func ReadFileWithinRoot(rootDir, name string) ([]byte, error) {
 	root, err := os.OpenRoot(rootDir)
 	if err != nil {
@@ -43,9 +33,6 @@ func ReadFileWithinRoot(rootDir, name string) ([]byte, error) {
 	return data, nil
 }
 
-// WriteFileWithinRoot writes data to the root-relative file name through
-// os.Root, creating parent directories first. Escaping names and symlinks
-// resolving outside rootDir are refused.
 func WriteFileWithinRoot(rootDir, name string, data []byte, perm fs.FileMode) error {
 	root, err := os.OpenRoot(rootDir)
 	if err != nil {
@@ -64,8 +51,6 @@ func WriteFileWithinRoot(rootDir, name string, data []byte, perm fs.FileMode) er
 	return nil
 }
 
-// RemoveWithinRoot removes the root-relative name through os.Root, which
-// refuses escapes and escaping symlinks.
 func RemoveWithinRoot(rootDir, name string) error {
 	root, err := os.OpenRoot(rootDir)
 	if err != nil {
@@ -78,8 +63,6 @@ func RemoveWithinRoot(rootDir, name string) error {
 	return nil
 }
 
-// StatWithinRoot stats the root-relative name through os.Root without
-// following a final escaping symlink.
 func StatWithinRoot(rootDir, name string) (fs.FileInfo, error) {
 	root, err := os.OpenRoot(rootDir)
 	if err != nil {

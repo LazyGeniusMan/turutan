@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// testFiles returns a fixed two-file drift for model tests.
 func testFiles() []FileDiff {
 	return []FileDiff{
 		{Path: "a.txt", Unified: "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n", Added: 1, Removed: 1},
@@ -17,7 +16,6 @@ func testFiles() []FileDiff {
 	}
 }
 
-// press builds a printable-key press message.
 func press(key string) tea.KeyPressMsg {
 	var code rune
 	if len(key) == 1 {
@@ -26,7 +24,6 @@ func press(key string) tea.KeyPressMsg {
 	return tea.KeyPressMsg(tea.Key{Text: key, Code: code})
 }
 
-// viewString renders the model view to a plain string.
 func viewString(t *testing.T, m diffModel) string {
 	t.Helper()
 	return m.View().Content
@@ -109,7 +106,6 @@ func TestDiffModelNavigation(t *testing.T) {
 		if m.hunkOffset != 0 {
 			t.Errorf("hunkOffset = %d, want 0 after scrolling up", m.hunkOffset)
 		}
-		// Rendering a clamped offset must not panic or drop the file list.
 		if got := viewString(t, m); !strings.Contains(got, "a.txt") {
 			t.Errorf("view lost file list after scroll:\n%s", got)
 		}

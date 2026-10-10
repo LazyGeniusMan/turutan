@@ -44,7 +44,6 @@ func TestReadFileWithinRoot(t *testing.T) {
 		if err := os.Symlink(outside, link); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		// The link itself stats (Lstat); following it must fail.
 		if _, err := StatWithinRoot(dir, "link.txt"); err != nil {
 			t.Fatalf("StatWithinRoot(link) error: %v", err)
 		}

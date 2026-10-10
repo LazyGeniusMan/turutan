@@ -5,7 +5,6 @@ php = "8"
 prebuilt_static = true
 
 [bootstrap.packages]
-# dev
 "apk:musl-dev" = "latest"
 "apk:libffi-dev" = "latest"
 "apk:pcre2-dev" = "latest"
@@ -47,7 +46,6 @@ prebuilt_static = true
 "zypper:libxml2-devel" = "latest"
 "zypper:libopenssl-devel" = "latest"
 "zypper:linux-glibc-devel" = "latest"
-# rt
 "apk:musl" = "latest"
 "apk:libffi" = "latest"
 "apk:pcre2" = "latest"
@@ -61,22 +59,12 @@ prebuilt_static = true
 "apt:zlib1g" = "latest"
 "apt:libxml2-16" = "latest"
 "apt:libssl3" = "latest"
-# "brew:openssl@3" = "latest"
-# "brew:libffi" = "latest"
-# "brew:pcre2" = "latest"
-# "brew:libxml2" = "latest"
 "dnf:glibc" = "latest"
 "dnf:libffi" = "latest"
 "dnf:pcre2" = "latest"
 "dnf:zlib" = "latest"
 "dnf:libxml2" = "latest"
 "dnf:openssl-libs" = "latest"
-# "pacman:glibc" = "latest"
-# "pacman:libffi" = "latest"
-# "pacman:pcre2" = "latest"
-# "pacman:zlib" = "latest"
-# "pacman:libxml2" = "latest"
-# "pacman:openssl" = "latest"
 "winget:Microsoft.VCRedist.2015+.x64" = "latest"
 "winget:ShiningLight.OpenSSL" = "latest"
 "zypper:glibc" = "latest"

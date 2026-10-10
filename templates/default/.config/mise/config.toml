@@ -1,12 +1,13 @@
+min_version = "2026.10.4"
+
 [settings]
 lockfile = true
 experimental = true
-minimum_release_age_excludes = ["pitchfork"]
 
 [env]
 PROXY_URI = "{{ env?.VSCODE_PROXY_URI or 'http://localhost:{{port}}' }}"
 HK_MISE = 1
-HK_PROFILE = "{{ mise_env | join(sep=',') }}"
+HK_PROFILE = "{{ mise_env | default(value=[]) | join(sep=',') }}"
 PITCHFORK_WEB_PORT = 3120
 
 [tools]
@@ -17,12 +18,25 @@ hk = "2"
 pitchfork = "2"
 pkl = "0"
 tombi = "1"
+updatecli = "0"
 
 [daemons.fnox]
 run = "exec fnox daemon start"
 
+[tasks.check]
+run = "hk check --all"
+
+[tasks.fix]
+run = "hk fix --all"
+
 [tasks.pre-commit]
-run = "hk run pre-commit"
+run = "hk run pre-commit --all"
+
+[tasks.pre-push]
+run = "hk run pre-push --all"
+
+[tasks.release]
+run = "goreleaser release --clean"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"
@@ -30,3 +44,5 @@ run = "hk install --mise"
 [tasks."dev-setup:fnox"]
 daemons = "fnox"
 run = "fnox daemon start"
+
+[secrets.fnox]

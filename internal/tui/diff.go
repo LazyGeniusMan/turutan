@@ -9,13 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// defaultHeight is the assumed terminal height before the first
-// WindowSizeMsg arrives.
 const defaultHeight = 24
 
-// FileDiff is one drifted file for interactive display. Path is the
-// slash-relative project path, Unified the Context-3 unified diff, and
-// Added/Removed the changed-line counts.
 type FileDiff struct {
 	Path      string
 	Unified   string
@@ -25,10 +20,6 @@ type FileDiff struct {
 	IsDeleted bool
 }
 
-// RunDiff starts the file-list + hunk review UI over files. It returns nil
-// once the user quits (q, Esc or Ctrl+C); quitting is not an error because
-// the drift itself is reported through the command exit code. opts.NoColor
-// guarantees no ANSI escapes in the review view (it is plain text).
 func RunDiff(files []FileDiff, opts Options) error {
 	if len(files) == 0 {
 		return nil
@@ -37,9 +28,6 @@ func RunDiff(files []FileDiff, opts Options) error {
 	return err
 }
 
-// diffModel is the Bubbletea model for drift review: a file list with a
-// hunk view of the selected file. noColor disables all styling so the
-// view stays free of ANSI escapes (see Options.NoColor).
 type diffModel struct {
 	files      []FileDiff
 	cursor     int
@@ -49,9 +37,6 @@ type diffModel struct {
 	noColor    bool
 }
 
-// keyName normalizes a key press to its matchable name. Keystroke covers
-// named combos such as ctrl+c, while raw control characters arrive with
-// String "\x03"; either form quits the review UI.
 func keyName(msg tea.KeyPressMsg) string {
 	if name := msg.Keystroke(); name != "" {
 		return name
@@ -59,17 +44,12 @@ func keyName(msg tea.KeyPressMsg) string {
 	return msg.String()
 }
 
-// newDiffModel returns the review model over files. noColor selects
-// unstyled rendering (see Options.NoColor).
 func newDiffModel(files []FileDiff, noColor bool) diffModel {
 	return diffModel{files: files, height: defaultHeight, noColor: noColor}
 }
 
-// Init implements tea.Model.
 func (m diffModel) Init() tea.Cmd { return nil }
 
-// Update implements tea.Model: j/k or arrows move the selection, PgUp/PgDn
-// (or u/d) scroll the hunk view, q/Esc/Ctrl+C quits.
 func (m diffModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -101,7 +81,6 @@ func (m diffModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View implements tea.Model.
 func (m diffModel) View() tea.View {
 	var out strings.Builder
 	fmt.Fprintf(&out, "turutan diff — %d file(s) (q to quit)\n\n", len(m.files))
@@ -127,8 +106,6 @@ func (m diffModel) View() tea.View {
 	return tea.NewView(out.String())
 }
 
-// layout splits the available height between the file list and the hunk
-// view, reserving lines for the header, separator and footer.
 func (m diffModel) layout() (listSize, hunkSize int) {
 	const chromeLines = 4
 	avail := max(m.height-chromeLines, 2)
@@ -137,20 +114,16 @@ func (m diffModel) layout() (listSize, hunkSize int) {
 	return listSize, hunkSize
 }
 
-// listWindow returns the first visible file index, keeping the cursor in
-// view.
 func (m diffModel) listWindow(listSize int) int {
 	start := m.cursor - listSize + 1
 	return max(0, start)
 }
 
-// hunkPage is the scroll step for the hunk view.
 func (m diffModel) hunkPage() int {
 	_, hunkSize := m.layout()
 	return max(1, hunkSize)
 }
 
-// maxHunkOffset clamps scrolling to the selected file's hunk length.
 func (m diffModel) maxHunkOffset() int {
 	_, hunkSize := m.layout()
 	lines := len(strings.Split(m.files[m.cursor].Unified, "\n"))

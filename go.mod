@@ -1,6 +1,6 @@
 module github.com/LazyGeniusMan/turutan
 
-go 1.27.2
+go 1.26.9
 
 require (
 	charm.land/bubbletea/v2 v2.1.0
@@ -12,6 +12,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.57.0
 	gopkg.in/yaml.v3 v3.0.1
 )

@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,8 +115,6 @@ func TestBootstrapStoresBase(t *testing.T) {
 	})
 }
 
-// threeWayFixture bootstraps a filesystem template holding both.txt, then
-// applies a local edit and a template-side edit.
 func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) string {
 	t.Helper()
 	src := makeTemplate(t, "", map[string]string{"both.txt": base})
@@ -136,7 +135,7 @@ func TestUpdateThreeWay(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -156,7 +155,7 @@ func TestUpdateThreeWay(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -178,7 +177,7 @@ func TestUpdateThreeWay(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		if _, err := Update(projectDir, opts); err != nil {
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(projectDir, "both.txt"))
@@ -197,14 +196,13 @@ func TestUpdateOverlayFallback(t *testing.T) {
 			"line1\nline2\n",
 			"line1\nLOCAL2\n",
 			"line1\nTEMPLATE2\n")
-		// Pre-M5 projects have no base store: drop it entirely.
 		if err := os.RemoveAll(filepath.Join(projectDir, ".turutan", "templates")); err != nil {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -218,7 +216,6 @@ func TestUpdateOverlayFallback(t *testing.T) {
 		if !strings.Contains(string(got), "<<<<<<< local") {
 			t.Errorf("fallback file lacks inline markers:\n%s", got)
 		}
-		// The fallback run stores the new base, upgrading the next update.
 		state, err := config.LoadState(os.DirFS(projectDir))
 		if err != nil {
 			t.Fatal(err)
@@ -246,7 +243,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -271,7 +268,7 @@ func TestBootstrapSymlinkAndSpecial(t *testing.T) {
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(src, target, testOptions(&stdout)); err == nil {
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err == nil {
 			t.Error("Bootstrap with escaping symlink succeeded, want error")
 		} else if !strings.Contains(err.Error(), "escapes") && !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("error = %q, want a symlink-escape refusal", err)
@@ -310,7 +307,7 @@ func TestBootstrapSymlinkAndSpecial(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Skip = []string{"/abs/path"}
-		if err := Bootstrap(src, target, opts); err == nil {
+		if err := Bootstrap(context.Background(), src, target, opts); err == nil {
 			t.Error("Bootstrap with absolute --skip succeeded, want error")
 		}
 	})

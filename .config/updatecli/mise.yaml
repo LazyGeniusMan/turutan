@@ -1,0 +1,183 @@
+---
+name: mise active toolchain pins for core ai github go profiles
+labels:
+  profiles: core,ai,github,go
+  manager: updatecli
+sources:
+  core-updatecli:
+    name: track updatecli 0.x for core profile
+    kind: githubrelease
+    spec:
+      owner: updatecli
+      repository: updatecli
+      versionfilter:
+        kind: semver
+        pattern: 0.x
+  core-hk:
+    name: track hk 2.x for core profile
+    kind: githubrelease
+    spec:
+      owner: jdx
+      repository: hk
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  core-pkl:
+    name: track pkl 0.x for core profile
+    kind: githubrelease
+    spec:
+      owner: apple
+      repository: pkl
+      versionfilter:
+        kind: semver
+        pattern: 0.x
+  core-tombi:
+    name: track tombi 1.x for core profile
+    kind: githubrelease
+    spec:
+      owner: tombi-toml
+      repository: tombi
+      versionfilter:
+        kind: semver
+        pattern: 1.x
+  core-betterleaks:
+    name: track betterleaks 1.x for core profile
+    kind: githubrelease
+    spec:
+      owner: betterleaks
+      repository: betterleaks
+      versionfilter:
+        kind: semver
+        pattern: 1.x
+  core-fnox:
+    name: track fnox 1.x for core profile
+    kind: githubrelease
+    spec:
+      owner: jdx
+      repository: fnox
+      versionfilter:
+        kind: semver
+        pattern: 1.x
+  ai-airulez:
+    name: track ai-rulez 4.x for ai profile
+    kind: githubrelease
+    spec:
+      owner: Goldziher
+      repository: ai-rulez
+      versionfilter:
+        kind: semver
+        pattern: 4.x
+  ai-basemind:
+    name: track basemind 0.x for ai profile
+    kind: githubrelease
+    spec:
+      owner: Goldziher
+      repository: basemind
+      versionfilter:
+        kind: semver
+        pattern: 0.x
+  ai-bun:
+    name: track bun 1.x for ai profile
+    kind: shell
+    spec:
+      command: mise latest bun 1
+  ai-node:
+    name: track node 24.x for ai profile
+    kind: shell
+    spec:
+      command: mise latest node 24
+  ai-opencode:
+    name: track opencode cli 2.x for ai profile
+    kind: npm
+    spec:
+      name: "@opencode/cli"
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  ai-uncomment:
+    name: track uncomment 3.x for ai profile
+    kind: githubrelease
+    spec:
+      owner: Goldziher
+      repository: uncomment
+      versionfilter:
+        kind: semver
+        pattern: 3.x
+  github-gh:
+    name: track gh 2.x for github profile
+    kind: githubrelease
+    spec:
+      owner: cli
+      repository: cli
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  github-jactionlint:
+    name: track jactionlint 2.x for github profile
+    kind: githubrelease
+    spec:
+      owner: jdx
+      repository: jactionlint
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  github-ryl:
+    name: track ryl 0.x for github profile
+    kind: githubrelease
+    spec:
+      owner: owenlamont
+      repository: ryl
+      versionfilter:
+        kind: semver
+        pattern: 0.x
+  go-toolchain:
+    name: track go 1.26.x for go profile
+    kind: golang
+    spec:
+      versionfilter:
+        kind: semver
+        pattern: 1.26.x
+  go-golangci-lint:
+    name: track golangci-lint 2.x for go profile
+    kind: githubrelease
+    spec:
+      owner: golangci
+      repository: golangci-lint
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  go-goreleaser:
+    name: track goreleaser 2.x for go profile
+    kind: githubrelease
+    spec:
+      owner: goreleaser
+      repository: goreleaser
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  go-gosec:
+    name: track gosec 2.x for go profile
+    kind: githubrelease
+    spec:
+      owner: securego
+      repository: gosec
+      versionfilter:
+        kind: semver
+        pattern: 2.x
+  go-govulncheck:
+    name: track govulncheck 1.x for go profile
+    kind: golang/module
+    spec:
+      module: golang.org/x/vuln
+      versionfilter:
+        kind: semver
+        pattern: 1.x
+targets:
+  mise-lock:
+    name: regenerate mise lockfiles for active profiles
+    kind: shell
+    disablesourceinput: true
+    spec:
+      command: '[ "${DRY_RUN}" = "true" ] || mise lock'
+      environments:
+        - name: MISE_ENV

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package config resolves turutan configuration file locations and
-// provides minimal settings types. Full load/save/validate arrives in M1+.
 package config
 
 import (
@@ -10,33 +8,34 @@ import (
 	"runtime"
 )
 
-// Well-known names; no magic strings at call sites.
 const (
-	// EnvPrefix namespaces environment variables (TURUTAN_*).
-	EnvPrefix = "TURUTAN"
-	// EnvConfigOverride points at an explicit config file or dir (highest precedence).
-	EnvConfigOverride = "TURUTAN_CONFIG"
-	// EnvXDGConfigHome is the XDG base directory override.
-	EnvXDGConfigHome = "XDG_CONFIG_HOME"
-	// ConfigFileName is the user/project config file name.
-	ConfigFileName = "turutan.yml"
-	// ToolName is the lowercase tool directory name.
-	ToolName = "turutan"
+	EnvPrefix           = "TURUTAN"
+	EnvConfigOverride   = "TURUTAN_CONFIG"
+	EnvTemplateOverride = "TURUTAN_TEMPLATE"
+	TemplateConfigKey   = "template"
+	EnvXDGConfigHome    = "XDG_CONFIG_HOME"
+	ConfigFileName      = "turutan.yml"
+	ConfigFileNameJSON  = "turutan.json"
+	ToolName            = "turutan"
 )
 
-// ResolveConfigPath returns the user config file path following the
-// precedence in spec §8.3: explicit --config > TURUTAN_CONFIG > XDG >
-// OS default > project .config/turutan.yml. It returns "" when no
-// candidate exists; callers treat that as no-user-config, not fatal.
 func ResolveConfigPath(explicit string) string {
-	if explicit != "" {
-		return explicit
-	}
 	if v, ok := os.LookupEnv(EnvConfigOverride); ok && v != "" {
 		if isDir(v) {
-			return filepath.Join(v, ConfigFileName)
+			yml := filepath.Join(v, ConfigFileName)
+			if fileExists(yml) {
+				return yml
+			}
+			jsonPath := filepath.Join(v, ConfigFileNameJSON)
+			if fileExists(jsonPath) {
+				return jsonPath
+			}
+			return yml
 		}
 		return v
+	}
+	if explicit != "" {
+		return explicit
 	}
 	for _, p := range candidates() {
 		if p != "" && fileExists(p) {
@@ -46,8 +45,6 @@ func ResolveConfigPath(explicit string) string {
 	return ""
 }
 
-// ResolveCacheDir returns the OS-appropriate cache root for fetched
-// templates (SHA-keyed subdirs); empty when the home dir is unknown.
 func ResolveCacheDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -69,34 +66,37 @@ func ResolveCacheDir() string {
 	}
 }
 
-// candidates lists XDG, OS-default and project config paths in order.
 func candidates() []string {
 	home, _ := os.UserHomeDir()
-	paths := make([]string, 0, 4)
+	paths := make([]string, 0, 8)
+	appendDir := func(dir string) {
+		paths = append(paths,
+			filepath.Join(dir, ConfigFileName),
+			filepath.Join(dir, ConfigFileNameJSON),
+		)
+	}
 	if v, ok := os.LookupEnv(EnvXDGConfigHome); ok && filepath.IsAbs(v) {
-		paths = append(paths, filepath.Join(v, ToolName, ConfigFileName))
+		appendDir(filepath.Join(v, ToolName))
 	}
 	switch runtime.GOOS {
 	case "darwin":
 		if home != "" {
-			paths = append(paths,
-				filepath.Join(home, "Library", "Application Support", ToolName, ConfigFileName),
-				filepath.Join(home, ".config", ToolName, ConfigFileName),
-			)
+			appendDir(filepath.Join(home, "Library", "Application Support", ToolName))
+			appendDir(filepath.Join(home, ".config", ToolName))
 		}
 	case "windows":
 		if v, ok := os.LookupEnv("APPDATA"); ok && v != "" {
-			paths = append(paths, filepath.Join(v, ToolName, ConfigFileName))
+			appendDir(filepath.Join(v, ToolName))
 		} else if home != "" {
-			paths = append(paths, filepath.Join(home, "AppData", "Roaming", ToolName, ConfigFileName))
+			appendDir(filepath.Join(home, "AppData", "Roaming", ToolName))
 		}
 	default:
 		if home != "" {
-			paths = append(paths, filepath.Join(home, ".config", ToolName, ConfigFileName))
+			appendDir(filepath.Join(home, ".config", ToolName))
 		}
 	}
 	if cwd, err := os.Getwd(); err == nil {
-		paths = append(paths, filepath.Join(cwd, ".config", ConfigFileName))
+		appendDir(filepath.Join(cwd, ".config"))
 	}
 	return paths
 }

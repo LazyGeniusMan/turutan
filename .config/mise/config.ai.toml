@@ -20,6 +20,7 @@ node = "24"
 "npm:@opencode/cli" = { version = "2", bun_args = "--trust" }
 "npm:@earendil-works/pi-coding-agent" = "1.1.0"
 "npm:t3" = { prefix = "0.0.46-nightly", prerelease = 1 }
+"github:Goldziher/uncomment" = "3"
 
 [daemons.opencode]
 run = "exec opencode serve --port $PORT"
@@ -34,7 +35,8 @@ run = "exec basemind comms daemon"
 
 [tasks."dev-setup:ai-rulez"]
 depends = "dev-setup:fnox"
-run = "fnox exec -- ai-rulez generate -p {{ mise_env | join(sep=',') }}"
+secrets = ["KEENABLE_API_KEY"]
+run = "ai-rulez generate -p {{ mise_env | default(value=[]) | join(sep=',') }}"
 
 [tasks."dev-setup:basemind"]
 run = "basemind scan"

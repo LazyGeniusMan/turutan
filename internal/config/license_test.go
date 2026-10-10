@@ -9,24 +9,12 @@ import (
 	"testing"
 )
 
-// License gates (spec §8.4): the CLI tree is Apache-2.0, the default
-// template is MIT-0, and generated output records MIT-0. The dependency
-// license audit (go-licenses, deny GPL/AGPL) is a manual release step,
-// not a unit test: it needs the module graph, not source text:
-//
-//	go run github.com/google/go-licenses@latest check ./...
-//
-// Repo layout assumed: this package lives at internal/config, so the
-// module root is two dirs up.
-
-// goDirsWithHeaders lists engine source trees requiring SPDX headers.
 var goDirsWithHeaders = []string{"cmd", "internal"}
 
-// TestLicenseHeaders collects every Go file under cmd/ and internal/
-// missing the Apache-2.0 SPDX header and fails once with the full list.
-// Files led by a //go:build line carry the header right below it.
 func TestLicenseHeaders(t *testing.T) {
+	t.Parallel()
 	t.Run("SPDX present on engine sources", func(t *testing.T) {
+		t.Parallel()
 		root := moduleRoot(t)
 		var missing []string
 		for _, dir := range goDirsWithHeaders {
@@ -57,10 +45,10 @@ func TestLicenseHeaders(t *testing.T) {
 	})
 }
 
-// TestTemplateLicense enforces the MIT-0 side of the split: the default
-// template carries its own license file and no Apache-licensed snippets.
 func TestTemplateLicense(t *testing.T) {
+	t.Parallel()
 	t.Run("license file present", func(t *testing.T) {
+		t.Parallel()
 		dir := filepath.Join(moduleRoot(t), "templates", "default")
 		for _, name := range []string{"TEMPLATE_LICENSE", "LICENSE"} {
 			if info, err := os.Stat(filepath.Join(dir, name)); err == nil && !info.IsDir() {
@@ -70,6 +58,7 @@ func TestTemplateLicense(t *testing.T) {
 		t.Error("templates/default holds neither TEMPLATE_LICENSE nor LICENSE")
 	})
 	t.Run("MIT-0 text", func(t *testing.T) {
+		t.Parallel()
 		path := templateLicensePath(t)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -82,6 +71,7 @@ func TestTemplateLicense(t *testing.T) {
 		}
 	})
 	t.Run("no Apache snippets in template", func(t *testing.T) {
+		t.Parallel()
 		dir := filepath.Join(moduleRoot(t), "templates", "default")
 		var offenders []string
 		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
@@ -111,9 +101,8 @@ func TestTemplateLicense(t *testing.T) {
 	})
 }
 
-// TestRootLicenseApache pins the CLI side of the split: the root LICENSE
-// is the Apache-2.0 full text.
 func TestRootLicenseApache(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join(moduleRoot(t), "LICENSE"))
 	if err != nil {
 		t.Fatal(err)
@@ -125,10 +114,8 @@ func TestRootLicenseApache(t *testing.T) {
 	}
 }
 
-// moduleRoot returns the repo root: two dirs above this package dir.
 func moduleRoot(t *testing.T) string {
 	t.Helper()
-	// Tests run with the package dir as working directory.
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -139,8 +126,6 @@ func moduleRoot(t *testing.T) string {
 	return root
 }
 
-// templateLicensePath returns the template license file, preferring
-// TEMPLATE_LICENSE (it avoids confusion with the root Apache LICENSE).
 func templateLicensePath(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(moduleRoot(t), "templates", "default")
@@ -154,8 +139,6 @@ func templateLicensePath(t *testing.T) string {
 	return ""
 }
 
-// hasSPDXHeader reports whether src carries the Apache-2.0 SPDX marker
-// in its leading comment block (below an optional //go:build line).
 func hasSPDXHeader(src string) bool {
 	lines := strings.SplitN(src, "\n", 6)
 	for _, line := range lines {

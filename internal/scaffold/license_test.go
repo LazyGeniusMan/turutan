@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ const (
 )
 
 func TestResolveTemplateLicense(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		fsys fstest.MapFS
@@ -64,6 +66,7 @@ func TestResolveTemplateLicense(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := resolveTemplateLicense(tt.fsys); got != tt.want {
 				t.Errorf("resolveTemplateLicense() = %q, want %q", got, tt.want)
 			}
@@ -72,14 +75,16 @@ func TestResolveTemplateLicense(t *testing.T) {
 }
 
 func TestBootstrapStampsSourceLicense(t *testing.T) {
+	t.Parallel()
 	t.Run("custom LICENSE stamps its SPDX", func(t *testing.T) {
+		t.Parallel()
 		files := map[string]string{
 			"go.mod.tmpl": "module {{.project_name}}\n",
 			"LICENSE":     licenseApache,
 		}
 		src := makeTemplate(t, "", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Bootstrap(src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))
@@ -91,9 +96,10 @@ func TestBootstrapStampsSourceLicense(t *testing.T) {
 		}
 	})
 	t.Run("missing license defaults MIT-0", func(t *testing.T) {
+		t.Parallel()
 		src := makeTemplate(t, "", map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Bootstrap(src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))

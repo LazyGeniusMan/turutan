@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// makeLocalFixture creates dir under parent, optionally with a .git dir so
-// it parses as local-git instead of filesystem.
 func makeLocalFixture(t *testing.T, parent, name string, withGit bool) string {
 	t.Helper()
 	dir := filepath.Join(parent, name)
@@ -27,7 +27,6 @@ func makeLocalFixture(t *testing.T, parent, name string, withGit bool) string {
 func TestParseSourceSpecExamples(t *testing.T) {
 	workdir := t.TempDir()
 	makeLocalFixture(t, workdir, "local", false)
-	// "../tpl" resolves sibling to workdir, so create it next to workdir.
 	if err := os.MkdirAll(filepath.Join(filepath.Dir(workdir), "tpl"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -161,6 +160,47 @@ func TestParseSourceFailures(t *testing.T) {
 	}
 }
 
+func TestParseSourceAtRef(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		wantErr  string
+		wantRepo string
+	}{
+		{name: "git prefix at ref", raw: "git::https://github.com/org/web.git@main", wantErr: "?ref="},
+		{name: "bare https at ref", raw: "https://github.com/org/web.git@main", wantErr: "?ref="},
+		{name: "at ref with subpath", raw: "git::https://github.com/org/web.git@v1.2.0//react", wantErr: "?ref="},
+		{name: "ssh scheme at ref", raw: "ssh://git@github.com/org/web.git@main", wantErr: "?ref="},
+		{name: "scp-like at ref", raw: "git@github.com:org/web.git@main", wantErr: "?ref="},
+		{name: "forced git scp-like at ref", raw: "git::git@github.com:org/web.git@main", wantErr: "?ref="},
+		{name: "scp-like at ref with subpath", raw: "git@github.com:org/web.git@v1.2.0//react", wantErr: "?ref="},
+		{
+			name:     "userinfo remote still parses",
+			raw:      "https://" + "user" + ":" + "redacted" + "@github.com/org/web.git//sub?ref=main",
+			wantRepo: "https://user:redacted@github.com/org/web.git",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := assert.New(t)
+			got, err := ParseSource(tt.raw)
+			if tt.wantErr != "" {
+				if !is.Error(err) {
+					return
+				}
+				is.Contains(err.Error(), tt.wantErr)
+				return
+			}
+			if !is.NoError(err) {
+				return
+			}
+			is.Equal(tt.wantRepo, got.Repo)
+			is.Equal("sub", got.Subpath)
+			is.Equal("main", got.RequestedRef)
+		})
+	}
+}
+
 func TestParseSourceDefaultAlias(t *testing.T) {
 	t.Run("default alias resolves to built-in remote", func(t *testing.T) {
 		got, err := ParseSource("default")
@@ -203,6 +243,24 @@ func TestResolveAlias(t *testing.T) {
 		}
 		if !IsDefaultSource(got) {
 			t.Errorf("ResolveAlias(\"\") = %+v, want default source", got)
+		}
+	})
+	t.Run("default alias resolves to default", func(t *testing.T) {
+		got, err := ResolveAlias(DefaultAlias)
+		if err != nil {
+			t.Fatalf("ResolveAlias(default) error: %v", err)
+		}
+		if !IsDefaultSource(got) {
+			t.Errorf("ResolveAlias(default) = %+v, want default source", got)
+		}
+	})
+	t.Run("other input parses normally", func(t *testing.T) {
+		got, err := ResolveAlias("git::https://github.com/org/web.git//react?ref=v1.2.0")
+		if err != nil {
+			t.Fatalf("ResolveAlias(other) error: %v", err)
+		}
+		if IsDefaultSource(got) {
+			t.Errorf("ResolveAlias(other) = %+v, want non-default source", got)
 		}
 	})
 }

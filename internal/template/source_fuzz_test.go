@@ -7,11 +7,12 @@ import (
 	"testing"
 )
 
-// seedCorpus mirrors spec §3.2: every documented URI shape seeds the
-// fuzzer so regressions on known-good inputs fail fast.
 var fuzzSeedCorpus = []string{
 	"git::https://github.com/org/web.git//react?ref=v1.2.0",
+	"git::https://github.com/org/web.git@main",
 	"git@github.com:org/web.git//web/react?ref=main",
+	"git@github.com:org/web.git@main",
+	"git::git@github.com:org/web.git@main",
 	"https://github.com/org/mono.git//services/api?ref=^2.1",
 	"./local",
 	"../tpl",
@@ -30,8 +31,6 @@ var fuzzSeedCorpus = []string{
 	"ssh://git@github.com/org/web.git//sub?ref=main",
 	"git://github.com/org/web.git",
 	"ftp://example.com/org/web.git",
-	// Userinfo-bearing remotes are concatenated so the seed never holds a
-	// credential-shaped literal.
 	"https://" + "user" + ":" + "redacted" + "@github.com/org/web.git//sub?ref=main",
 	"user@host.xz:path/to/repo.git",
 	"./x?ref=v1&depth=2",
@@ -46,7 +45,6 @@ func FuzzParseSource(f *testing.F) {
 		if err != nil {
 			return
 		}
-		// Structural invariants hold for every accepted source.
 		if src.Depth <= 0 {
 			t.Errorf("ParseSource(%q): Depth = %d, want positive", raw, src.Depth)
 		}
@@ -72,9 +70,6 @@ func FuzzParseSource(f *testing.F) {
 		} else if src.Raw != raw {
 			t.Errorf("ParseSource(%q): Raw = %q, want the input back", raw, src.Raw)
 		}
-		// Remote-git URIs round-trip: re-parsing the canonical form
-		// must succeed with the same identity. Local paths are
-		// existence-dependent, so only their String form is checked.
 		canonical := src.String()
 		if canonical == "" {
 			t.Errorf("ParseSource(%q): empty canonical form", raw)

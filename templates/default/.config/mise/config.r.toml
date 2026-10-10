@@ -1,7 +1,6 @@
 [tools]
 
 [bootstrap.packages]
-# toolchain-dev
 "apk:R-dev" = "latest"
 "apk:build-base" = "latest"
 "apk:gfortran" = "latest"
@@ -24,15 +23,10 @@
 "zypper:patterns-devel-base-devel_basis" = "latest"
 "zypper:gcc-c++" = "latest"
 "zypper:gcc-fortran" = "latest"
-# toolchain-rt
 "apk:R" = "latest"
 "apt:r-base-core" = "latest"
-# "brew:r" = "latest"
 "dnf:R-core" = "latest"
-# "pacman:r" = "latest"
-# "winget:RProject.R" = "latest"
 "zypper:R-base" = "latest"
-# dev
 "apk:musl-dev" = "latest"
 "apk:openblas-dev" = "latest"
 "apk:lapack-dev" = "latest"
@@ -99,7 +93,6 @@
 "zypper:readline-devel" = "latest"
 "zypper:libstdc++-devel" = "latest"
 "zypper:linux-glibc-devel" = "latest"
-# rt
 "apk:musl" = "latest"
 "apk:openblas" = "latest"
 "apk:lapack" = "latest"
@@ -128,11 +121,6 @@
 "apt:libgfortran5" = "latest"
 "apt:libstdc++6" = "latest"
 "apt:libgcc-s1" = "latest"
-# "brew:openblas" = "latest"
-# "brew:pcre2" = "latest"
-# "brew:readline" = "latest"
-# "brew:xz" = "latest"
-# "brew:libomp" = "latest"
 "dnf:glibc" = "latest"
 "dnf:openblas" = "latest"
 "dnf:lapack" = "latest"
@@ -147,17 +135,6 @@
 "dnf:libgfortran" = "latest"
 "dnf:libstdc++" = "latest"
 "dnf:libgcc" = "latest"
-# "pacman:glibc" = "latest"
-# "pacman:openblas" = "latest"
-# "pacman:lapack" = "latest"
-# "pacman:pcre2" = "latest"
-# "pacman:zlib" = "latest"
-# "pacman:bzip2" = "latest"
-# "pacman:xz" = "latest"
-# "pacman:curl" = "latest"
-# "pacman:icu" = "latest"
-# "pacman:readline" = "latest"
-# "pacman:gcc-libs" = "latest"
 "winget:Microsoft.VCRedist.2015+.x64" = "latest"
 "zypper:glibc" = "latest"
 "zypper:libopenblas_pthreads0" = "latest"

@@ -1,6 +1,6 @@
 # tombi: lint.rules.enum.disabled = true
 version = "4.0"
-name = "template"
+name = "turutan"
 gitignore = true
 compact = true
 
@@ -45,10 +45,11 @@ csharp = ["builtin:csharp"]
 cloudflare = []
 docker = []
 elixir = ["builtin:elixir"]
-github = []
+github = ["github"]
 gitlab = []
 go = [
   "builtin:go",
+  "go",
 ]
 java = ["builtin:java"]
 kubernetes = []
@@ -99,7 +100,7 @@ INSTRUCTIONS FOR AI AGENTS
 1. NEVER edit this file - it is auto-generated
 2. ALWAYS edit files in .config/ai-rulez/ instead:
 3. PREFER using the MCP Server, it provides safe CRUD tools for reading and modifying .config/ai-rulez/ content
-4. After making changes: mise dev-setup:ai-rulez
+4. After making changes: mise run dev-setup:ai-rulez
 
 Documentation: https://github.com/Goldziher/ai-rulez
 """

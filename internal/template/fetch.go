@@ -3,26 +3,22 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 	"github.com/LazyGeniusMan/turutan/internal/git"
 )
 
-// fullSHA matches a 40-hex full commit SHA.
 var fullSHA = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
-// Fetched is a materialized template tree ready to render. Dir is the
-// subpath-scoped content root: a temp clone for git kinds (removed by
-// Cleanup) or the source subdir itself for filesystem sources (Cleanup
-// nil). ResolvedCommit is the git commit SHA for git kinds and "" for
-// filesystem sources, where the caller derives identity from content.
 type Fetched struct {
 	Dir            string
 	Cleanup        func()
@@ -30,18 +26,12 @@ type Fetched struct {
 	ResolvedCommit string
 }
 
-// Fetch materializes src: remote-git clones depth=1 and checks out the
-// resolved ref; local-git resolves offline then clones from disk;
-// filesystem validates OpenRoot containment plus safeJoin and returns the
-// subdir directly. The default template additionally consults the
-// SHA-keyed cache (~/.cache/turutan/default/<sha>/): a full-SHA request
-// with a warm cache works offline with no network.
-func Fetch(src *Source) (*Fetched, error) {
+func Fetch(ctx context.Context, src *Source) (*Fetched, error) {
 	switch src.Kind {
 	case KindRemoteGit:
-		return fetchRemote(src)
+		return fetchRemote(ctx, src)
 	case KindLocalGit:
-		return fetchLocalGit(src)
+		return fetchLocalGit(ctx, src)
 	case KindFilesystem:
 		return fetchFilesystem(src)
 	default:
@@ -49,37 +39,70 @@ func Fetch(src *Source) (*Fetched, error) {
 	}
 }
 
-// fetchRemote resolves the requested ref over the network, reuses the
-// default-template cache on hit, and otherwise shallow-clones.
-func fetchRemote(src *Source) (*Fetched, error) {
-	if IsDefaultSource(src) && fullSHA.MatchString(src.RequestedRef) {
-		if dir, ok := defaultCacheDir(src.RequestedRef); ok {
-			return &Fetched{Dir: dir, Source: src, ResolvedCommit: src.RequestedRef}, nil
-		}
+func fetchRemote(ctx context.Context, src *Source) (*Fetched, error) {
+	if dir, ok := cachedDefault(src); ok {
+		return dir, nil
 	}
-	sha, err := git.ResolveRemoteRef(src.Repo, src.RequestedRef)
+	sha, err := git.ResolveRemoteRef(ctx, src.Repo, src.RequestedRef)
 	if err != nil {
-		if IsDefaultSource(src) {
-			return nil, fmt.Errorf("fetching default template: %w (default template unavailable offline: no cached %q; connect once with network)",
-				err, src.RequestedRef)
-		}
-		return nil, fmt.Errorf("fetching source %q: %w", src.Raw, err)
+		return remoteResolveFallback(src, err)
 	}
 	if IsDefaultSource(src) {
 		if dir, ok := defaultCacheDir(sha); ok {
-			return &Fetched{Dir: dir, Source: src, ResolvedCommit: sha}, nil
+			return &Fetched{
+				Dir: dir, Source: src, ResolvedCommit: sha,
+			}, nil
 		}
 	}
+	return cloneRemote(ctx, src, sha)
+}
+
+func remoteResolveFallback(src *Source, err error) (*Fetched, error) {
+	if !IsDefaultSource(src) {
+		return nil, fmt.Errorf("fetching source %q: %w", src.Raw, err)
+	}
+	if dir, cached, ok := latestDefaultCacheDir(); ok {
+		return &Fetched{Dir: dir, Source: src, ResolvedCommit: cached}, nil
+	}
+	return nil, offlineDefaultError(err, src)
+}
+
+func cachedDefault(src *Source) (*Fetched, bool) {
+	if !IsDefaultSource(src) || !fullSHA.MatchString(src.RequestedRef) {
+		return nil, false
+	}
+	dir, ok := defaultCacheDir(src.RequestedRef)
+	if !ok {
+		return nil, false
+	}
+	return &Fetched{
+		Dir: dir, Source: src, ResolvedCommit: src.RequestedRef,
+	}, true
+}
+
+func offlineDefaultError(err error, src *Source) error {
+	return fmt.Errorf(
+		"fetching default template: %w "+
+			"(default template unavailable offline: no cached %q; "+
+			"connect once with network)",
+		err, src.RequestedRef)
+}
+
+func cloneRemote(
+	ctx context.Context,
+	src *Source,
+	sha string,
+) (*Fetched, error) {
 	tmp, err := os.MkdirTemp("", "turutan-fetch-*")
 	if err != nil {
-		return nil, fmt.Errorf("fetching source %q: creating temp dir: %w", src.Raw, err)
+		return nil, fmt.Errorf(
+			"fetching source %q: creating temp dir: %w", src.Raw, err)
 	}
-	cleanup := func() { os.RemoveAll(tmp) }
-	if _, err := git.Clone(src.Repo, "", tmp, src.Depth); err != nil {
+	cleanup := func() { _ = os.RemoveAll(tmp) }
+	if _, err := git.Clone(ctx, src.Repo, "", tmp, src.Depth); err != nil {
 		cleanup()
 		if IsDefaultSource(src) {
-			return nil, fmt.Errorf("fetching default template: %w (default template unavailable offline: no cached %q; connect once with network)",
-				err, src.RequestedRef)
+			return nil, offlineDefaultError(err, src)
 		}
 		return nil, fmt.Errorf("fetching source %q: %w", src.Raw, err)
 	}
@@ -98,10 +121,7 @@ func fetchRemote(src *Source) (*Fetched, error) {
 	return &Fetched{Dir: dir, Cleanup: cleanup, Source: src, ResolvedCommit: sha}, nil
 }
 
-// fetchLocalGit resolves the ref offline inside the source repository,
-// then clones from disk into a temp dir so rendering never mutates the
-// source and ref checkouts stay hermetic.
-func fetchLocalGit(src *Source) (*Fetched, error) {
+func fetchLocalGit(ctx context.Context, src *Source) (*Fetched, error) {
 	sha, err := git.ResolveLocal(src.Repo, src.RequestedRef)
 	if err != nil {
 		return nil, fmt.Errorf("fetching source %q: %w", src.Raw, err)
@@ -110,8 +130,8 @@ func fetchLocalGit(src *Source) (*Fetched, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching source %q: creating temp dir: %w", src.Raw, err)
 	}
-	cleanup := func() { os.RemoveAll(tmp) }
-	if _, err := git.Clone(src.Repo, "", tmp, src.Depth); err != nil {
+	cleanup := func() { _ = os.RemoveAll(tmp) }
+	if _, err := git.Clone(ctx, src.Repo, "", tmp, src.Depth); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("fetching source %q: %w", src.Raw, err)
 	}
@@ -127,12 +147,11 @@ func fetchLocalGit(src *Source) (*Fetched, error) {
 	return &Fetched{Dir: dir, Cleanup: cleanup, Source: src, ResolvedCommit: sha}, nil
 }
 
-// fetchFilesystem validates containment (os.OpenRoot plus safeJoin) and
-// returns the subdir directly; symlinks resolving outside the source root
-// are refused. ?ref= is meaningless without commits and is rejected.
 func fetchFilesystem(src *Source) (*Fetched, error) {
 	if src.RequestedRef != "" {
-		return nil, fmt.Errorf("fetching source %q: ref %q is not supported for filesystem sources", src.Raw, src.RequestedRef)
+		return nil, fmt.Errorf(
+			"fetching source %q: ref %q is not supported "+"for filesystem sources",
+			src.Raw, src.RequestedRef)
 	}
 	abs, err := filepath.Abs(src.Repo)
 	if err != nil {
@@ -168,7 +187,6 @@ func fetchFilesystem(src *Source) (*Fetched, error) {
 	return &Fetched{Dir: dir, Source: src}, nil
 }
 
-// subdir scopes a fetched tree to the source subpath.
 func subdir(root string, src *Source) (string, error) {
 	if src.Subpath == "" {
 		return root, nil
@@ -184,10 +202,16 @@ func subdir(root string, src *Source) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("fetching source %q: subpath %q is not a directory", src.Raw, src.Subpath)
 	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", fmt.Errorf("fetching source %q: resolving subpath: %w", src.Raw, err)
+	}
+	if err := filter.EnsureWithinRoot(root, resolved); err != nil {
+		return "", fmt.Errorf("fetching source %q: %w", src.Raw, err)
+	}
 	return dir, nil
 }
 
-// defaultCacheDir returns the cached default-template tree for sha.
 func defaultCacheDir(sha string) (string, bool) {
 	cache := config.ResolveCacheDir()
 	if cache == "" {
@@ -201,9 +225,38 @@ func defaultCacheDir(sha string) (string, bool) {
 	return dir, true
 }
 
-// populateDefaultCache copies a freshly fetched default tree (minus .git)
-// into the SHA-keyed cache on a best-effort basis: cache failures must
-// never fail a successful fetch.
+func latestDefaultCacheDir() (string, string, bool) {
+	cache := config.ResolveCacheDir()
+	if cache == "" {
+		return "", "", false
+	}
+	base := filepath.Join(cache, "default")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return "", "", false
+	}
+	var bestDir, bestSHA string
+	var bestMod time.Time
+	for _, entry := range entries {
+		sha := strings.ToLower(entry.Name())
+		if !fullSHA.MatchString(sha) {
+			continue
+		}
+		dir := filepath.Join(base, entry.Name())
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		if bestDir == "" || info.ModTime().After(bestMod) {
+			bestDir, bestSHA, bestMod = dir, sha, info.ModTime()
+		}
+	}
+	if bestDir == "" {
+		return "", "", false
+	}
+	return bestDir, bestSHA, true
+}
+
 func populateDefaultCache(srcDir, sha string) {
 	cache := config.ResolveCacheDir()
 	if cache == "" {
@@ -216,7 +269,6 @@ func populateDefaultCache(srcDir, sha string) {
 	_ = copyDir(srcDir, dst)
 }
 
-// copyDir copies the file tree at src to dst, skipping .git metadata.
 func copyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -237,12 +289,12 @@ func copyDir(src, dst string) error {
 			return err
 		}
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return os.MkdirAll(target, 0o750) // #nosec G122 -- SafeJoin-pinned copy into this run's fresh staging dir; no attacker-controlled path components on the dst side
 		}
 		if d.Type()&fs.ModeSymlink != 0 || !d.Type().IsRegular() {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304, G122 -- copies WalkDir-found file with symlinks skipped into SafeJoin-pinned fresh staging dir; no cross-user TOCTOU boundary
 		if err != nil {
 			return err
 		}
@@ -250,6 +302,6 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		return os.WriteFile(target, data, info.Mode().Perm()) // #nosec G703, G122 -- target is SafeJoin-pinned with symlinks skipped; no cross-user TOCTOU boundary
 	})
 }

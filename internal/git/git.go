@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package git wraps pure-Go git transport (ls-remote, clone, open).
-// It is the only package that may import go-git; callers use the plain
-// Ref/CloneOptions surface below so no go-git types leak out.
 package git
 
 import (
+	"context"
 	"fmt"
 	"net/url"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -18,13 +16,13 @@ import (
 	"github.com/go-git/go-git/v6/storage/memory"
 )
 
-// ShallowDepth is the default shallow fetch depth (spec §3: depth defaults to 1).
 const ShallowDepth = 1
 
-// maxShortHashLen bounds short-SHA prefix matching so absurd inputs fail fast.
-const maxShortHashLen = 64
+const (
+	minShortHashLen = 7
+	maxShortHashLen = 64
+)
 
-// CloneOptions describes a fetch; transport arrives in M1.
 type CloneOptions struct {
 	URL   string
 	Ref   string
@@ -32,18 +30,12 @@ type CloneOptions struct {
 	Dir   string
 }
 
-// Ref is one advertised remote reference: Name is the full ref name
-// (for example "refs/heads/main" or "HEAD"), Hash its object hash, and
-// Target the symref target for symbolic references such as HEAD.
 type Ref struct {
 	Name   string
 	Hash   string
 	Target string
 }
 
-// redacted strips credentials from a URL for error messages and logs:
-// tokens and passwords must never be echoed (secrets-handling rule).
-// scp-like user@host:path keeps its username (an identity, not a secret).
 func redacted(raw string) string {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.User == nil {
@@ -53,11 +45,7 @@ func redacted(raw string) string {
 	return parsed.String()
 }
 
-// ListRefs runs the ls-remote equivalent against url and returns every
-// advertised reference. It performs no checkout and writes nothing to disk.
-// Transport authentication comes from the environment (see ClientOptions);
-// https tokens and SSH keys are never logged (see redacted).
-func ListRefs(url string) ([]Ref, error) {
+func ListRefs(ctx context.Context, url string) ([]Ref, error) {
 	clientOpts, insecure, err := ClientOptions(url)
 	if err != nil {
 		return nil, err
@@ -69,7 +57,8 @@ func ListRefs(url string) ([]Ref, error) {
 		Name: "origin",
 		URLs: []string{url},
 	})
-	refs, err := remote.List(&git.ListOptions{ClientOptions: clientOpts})
+	refs, err := remote.ListContext(
+		ctx, &git.ListOptions{ClientOptions: clientOpts})
 	if err != nil {
 		return nil, fmt.Errorf("listing refs of %q: %w", redacted(url), err)
 	}
@@ -84,16 +73,12 @@ func ListRefs(url string) ([]Ref, error) {
 	return out, nil
 }
 
-// ResolveRef maps a user ref expression to a commit hash using a prior
-// ls-remote advertisement: empty expression selects the default branch
-// (HEAD symref, else main, else master); full or short SHAs match by
-// prefix; branches and tags match exactly; anything else is tried as a
-// Masterminds/semver constraint over the tag list, highest version wins.
-func ResolveRef(url, expr string, advertised []Ref) (string, error) {
-	branches := map[string]string{}
-	tags := map[string]string{}
-	hashes := map[string]string{}
-	headTarget := ""
+func indexRefs(
+	advertised []Ref,
+) (branches, tags, hashes map[string]string, headTarget string) {
+	branches = map[string]string{}
+	tags = map[string]string{}
+	hashes = map[string]string{}
 	for _, ref := range advertised {
 		hashes[strings.ToLower(ref.Hash)] = ref.Hash
 		switch {
@@ -104,24 +89,41 @@ func ResolveRef(url, expr string, advertised []Ref) (string, error) {
 		case strings.HasPrefix(ref.Name, "refs/tags/"):
 			name := strings.TrimPrefix(ref.Name, "refs/tags/")
 			name = strings.TrimSuffix(name, "^{}")
-			if prev, ok := tags[name]; !ok || strings.HasSuffix(ref.Name, "^{}") || prev == "" {
+			if prev, ok := tags[name]; !ok ||
+				strings.HasSuffix(ref.Name, "^{}") || prev == "" {
 				tags[name] = ref.Hash
 			}
 		}
 	}
+	return branches, tags, hashes, headTarget
+}
+
+func defaultBranch(
+	url string,
+	branches map[string]string,
+	headTarget string,
+) (string, error) {
+	if headTarget != "" {
+		if h, ok := branches[strings.TrimPrefix(
+			headTarget, "refs/heads/")]; ok {
+			return h, nil
+		}
+	}
+	if h, ok := branches["main"]; ok {
+		return h, nil
+	}
+	if h, ok := branches["master"]; ok {
+		return h, nil
+	}
+	return "", fmt.Errorf(
+		"resolving default branch of %q: no HEAD, main or master ref",
+		redacted(url))
+}
+
+func ResolveRef(url, expr string, advertised []Ref) (string, error) {
+	branches, tags, hashes, headTarget := indexRefs(advertised)
 	if expr == "" {
-		if headTarget != "" {
-			if h, ok := branches[strings.TrimPrefix(headTarget, "refs/heads/")]; ok {
-				return h, nil
-			}
-		}
-		if h, ok := branches["main"]; ok {
-			return h, nil
-		}
-		if h, ok := branches["master"]; ok {
-			return h, nil
-		}
-		return "", fmt.Errorf("resolving default branch of %q: no HEAD, main or master ref", redacted(url))
+		return defaultBranch(url, branches, headTarget)
 	}
 	if hash, ok := matchHashPrefix(hashes, expr); ok {
 		return hash, nil
@@ -139,21 +141,22 @@ func ResolveRef(url, expr string, advertised []Ref) (string, error) {
 	return hash, nil
 }
 
-// ResolveRemoteRef lists url then resolves expr in one step.
-func ResolveRemoteRef(url, expr string) (string, error) {
-	advertised, err := ListRefs(url)
+func ResolveRemoteRef(
+	ctx context.Context,
+	url, expr string,
+) (string, error) {
+	advertised, err := ListRefs(ctx, url)
 	if err != nil {
 		return "", err
 	}
 	return ResolveRef(url, expr, advertised)
 }
 
-// Clone shallow-clones url into dir (creating it) and checks out ref when
-// non-empty, returning the checked-out commit hash. A non-positive depth
-// selects ShallowDepth. The clone fetches all branch tips, so branches and
-// tags resolve locally; a SHA outside the shallow boundary fails with a
-// clear error instead of silently checking out the default branch.
-func Clone(url, ref, dir string, depth int) (string, error) {
+func Clone(
+	ctx context.Context,
+	url, ref, dir string,
+	depth int,
+) (string, error) {
 	if depth <= 0 {
 		depth = ShallowDepth
 	}
@@ -164,7 +167,10 @@ func Clone(url, ref, dir string, depth int) (string, error) {
 	if insecure {
 		warnInsecure()
 	}
-	repo, err := git.PlainClone(dir, &git.CloneOptions{URL: url, Depth: depth, ClientOptions: clientOpts})
+	repo, err := git.PlainCloneContext(ctx,
+		dir, &git.CloneOptions{
+			URL: url, Depth: depth, ClientOptions: clientOpts,
+		})
 	if err != nil {
 		return "", fmt.Errorf("cloning %q: %w", redacted(url), err)
 	}
@@ -185,16 +191,13 @@ func Clone(url, ref, dir string, depth int) (string, error) {
 	return hash.String(), nil
 }
 
-// CloneWithOptions clones per opts, defaulting empty Depth to ShallowDepth.
-func CloneWithOptions(opts CloneOptions) (string, error) {
-	return Clone(opts.URL, opts.Ref, opts.Dir, opts.Depth)
+func CloneWithOptions(
+	ctx context.Context,
+	opts CloneOptions,
+) (string, error) {
+	return Clone(ctx, opts.URL, opts.Ref, opts.Dir, opts.Depth)
 }
 
-// IsBare reports whether path is a bare git repository (no worktree).
-// It opens the repository with PlainOpen, so worktrees, bare repos and
-// non-repos are distinguished without touching the network: a bare repo
-// has no worktree, so Repository.Worktree fails for it and succeeds for
-// a worktree checkout.
 func IsBare(path string) (bool, error) {
 	repo, err := git.PlainOpen(path)
 	if err != nil {
@@ -203,24 +206,16 @@ func IsBare(path string) (bool, error) {
 	return isBareRepo(repo), nil
 }
 
-// isBareRepo reports whether the opened repo lacks a worktree.
 func isBareRepo(repo *git.Repository) bool {
 	_, err := repo.Worktree()
 	return err != nil
 }
 
-// IsGitRepo reports whether path is a git repository (bare-aware) by
-// probing it with PlainOpen. It never mutates path.
 func IsGitRepo(path string) bool {
 	_, err := git.PlainOpen(path)
 	return err == nil
 }
 
-// ResolveLocal resolves expr inside the repository at path without
-// mutating it: empty expression reads HEAD (falling back to main, then
-// master for bare repositories with an unborn HEAD, detected via IsBare
-// semantics); otherwise it uses ResolveRevision, so branches, tags and
-// SHAs all work offline.
 func ResolveLocal(path, expr string) (string, error) {
 	repo, err := git.PlainOpen(path)
 	if err != nil {
@@ -240,16 +235,46 @@ func ResolveLocal(path, expr string) (string, error) {
 		}
 		return "", fmt.Errorf("resolving HEAD of %q: no HEAD, main or master ref", path)
 	}
-	hash, err := repo.ResolveRevision(plumbing.Revision(expr))
+	if hash, err := repo.ResolveRevision(plumbing.Revision(expr)); err == nil {
+		return hash.String(), nil
+	}
+	tags, err := listLocalTags(repo)
+	if err != nil {
+		return "", fmt.Errorf("resolving ref %q in %q: listing tags: %w", expr, path, err)
+	}
+	hash, err := resolveSemver(tags, expr)
 	if err != nil {
 		return "", fmt.Errorf("resolving ref %q in %q: %w", expr, path, err)
 	}
-	return hash.String(), nil
+	return hash, nil
 }
 
-// Checkout moves the repository at dir to sha in detached HEAD mode.
-// dir must hold a previous clone; sha typically comes from ResolveRef or
-// ResolveLocal so semver expressions are resolved before calling.
+func listLocalTags(repo *git.Repository) (map[string]string, error) {
+	iter, err := repo.Tags()
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	tags := map[string]string{}
+	if err := iter.ForEach(func(ref *plumbing.Reference) error {
+		name := strings.TrimPrefix(ref.Name().String(), "refs/tags/")
+		if name == "" {
+			return nil
+		}
+		hash := ref.Hash().String()
+		if peeled, err := repo.ResolveRevision(plumbing.Revision(ref.Name().String() + "^{commit}")); err == nil {
+			hash = peeled.String()
+		} else if tagObj, err := repo.TagObject(ref.Hash()); err == nil {
+			hash = tagObj.Target.String()
+		}
+		tags[name] = hash
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
 func Checkout(dir, sha string) error {
 	repo, err := git.PlainOpen(dir)
 	if err != nil {
@@ -269,7 +294,6 @@ func Checkout(dir, sha string) error {
 	return nil
 }
 
-// headHash returns the current HEAD commit hash of repo.
 func headHash(repo *git.Repository) (string, error) {
 	head, err := repo.Head()
 	if err != nil {
@@ -278,14 +302,13 @@ func headHash(repo *git.Repository) (string, error) {
 	return head.Hash().String(), nil
 }
 
-// matchHashPrefix matches expr as a full or abbreviated commit hash
-// against advertised hashes; ambiguous short prefixes fail explicitly.
 func matchHashPrefix(hashes map[string]string, expr string) (string, bool) {
 	lowered := strings.ToLower(expr)
-	if len(lowered) < 7 || len(lowered) > maxShortHashLen {
+	if len(lowered) < minShortHashLen ||
+		len(lowered) > maxShortHashLen {
 		return "", false
 	}
-	for i := 0; i < len(lowered); i++ {
+	for i := range len(lowered) {
 		if !strings.ContainsRune("0123456789abcdef", rune(lowered[i])) {
 			return "", false
 		}
@@ -307,7 +330,6 @@ func matchHashPrefix(hashes map[string]string, expr string) (string, bool) {
 	return match, true
 }
 
-// resolveSemver picks the highest tag satisfying constraint expr.
 func resolveSemver(tags map[string]string, expr string) (string, error) {
 	constraint, err := semver.NewConstraint(expr)
 	if err != nil {
@@ -330,8 +352,8 @@ func resolveSemver(tags map[string]string, expr string) (string, error) {
 	if len(candidates) == 0 {
 		return "", fmt.Errorf("invalid ref %q: no tag satisfies the constraint", expr)
 	}
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].version.LessThan(candidates[j].version)
+	slices.SortFunc(candidates, func(a, b candidate) int {
+		return a.version.Compare(b.version)
 	})
 	return candidates[len(candidates)-1].hash, nil
 }

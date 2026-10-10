@@ -1,6 +1,8 @@
 .env*
 **.local.*
 .tmp/
+dist/
+/turutan
 
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
 .agents/agents/

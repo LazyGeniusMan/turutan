@@ -29,10 +29,6 @@ transport = "stdio"
 [documents]
 enabled = true
 embed = true
-# fast        — smallest / fastest, lowest quality
-# balanced    — default; 768-dim, good quality/cost tradeoff
-# quality     — larger model, best English quality, slower
-# multilingual— multilingual model for non-English corpora
 embedding_preset = "balanced"
 include = []
 exclude = []

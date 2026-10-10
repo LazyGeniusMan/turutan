@@ -1,2 +1,12 @@
+[settings]
+minimum_release_age_excludes = ["jactionlint"]
+
 [tools]
 gh = "2"
+jactionlint = "2"
+"github:owenlamont/ryl" = "0"
+
+[tasks."dev-setup:github"]
+depends = "dev-setup:fnox"
+secrets = ["FNOX_GITHUB_TOKEN"]
+run = "printf '%s' $FNOX_GITHUB_TOKEN | gh auth login --with-token"

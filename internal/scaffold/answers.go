@@ -5,6 +5,7 @@ package scaffold
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -13,15 +14,22 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
-// maxPromptAttempts bounds interactive answer prompting so a template
-// referencing endless keys cannot loop forever.
 const maxPromptAttempts = 10
 
-// missingKey extracts the template key from a missingkey=error failure
-// (exec: map has no entry for key "name"). It returns "" when err is some
-// other render failure.
+func AsMissingKey(err error) (string, bool) {
+	if missing, ok := errors.AsType[*template.MissingKeyError](err); ok {
+		return missing.Key, true
+	}
+	if key := missingKey(err); key != "" {
+		return key, true
+	}
+	return "", false
+}
+
 func missingKey(err error) string {
 	const marker = `no entry for key "`
 	msg := err.Error()
@@ -29,18 +37,15 @@ func missingKey(err error) string {
 	if !ok {
 		return ""
 	}
-	rest := after
-	before0, _, ok0 := strings.Cut(rest, `"`)
-	if !ok0 {
+	key, _, ok := strings.Cut(after, `"`)
+	if !ok {
 		return ""
 	}
-	return before0
+	return key
 }
 
-// LoadAnswersFile reads answers from path: JSON for .json, YAML otherwise
-// (YAML is a superset of JSON, so .yaml/.yml cover both styles).
 func LoadAnswersFile(path string) (map[string]any, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- reads CLI-provided answers file; caller-intended file read
 	if err != nil {
 		return nil, fmt.Errorf("reading answers file %q: %w", path, err)
 	}
@@ -57,8 +62,6 @@ func LoadAnswersFile(path string) (map[string]any, error) {
 	return answers, nil
 }
 
-// seedAnswers merges --defaults seeds with the --answers-file overlay.
-// File values win over defaults.
 func seedAnswers(target string, opts Options) (map[string]any, error) {
 	answers := map[string]any{}
 	if opts.Defaults {
@@ -74,7 +77,6 @@ func seedAnswers(target string, opts Options) (map[string]any, error) {
 	return answers, nil
 }
 
-// promptValue asks for one answer on stdout, reading a line from stdin.
 func promptValue(stdout io.Writer, stdin io.Reader, key string) (string, error) {
 	if _, err := fmt.Fprintf(stdout, "Enter value for %s: ", key); err != nil {
 		return "", err
@@ -86,8 +88,6 @@ func promptValue(stdout io.Writer, stdin io.Reader, key string) (string, error) 
 	return strings.TrimSpace(line), nil
 }
 
-// promptConfirm asks a yes/no question, defaulting to no on empty input
-// or unreadable stdin.
 func promptConfirm(stdout io.Writer, stdin io.Reader, question string) bool {
 	fmt.Fprintf(stdout, "%s [y/N]: ", question)
 	line, _ := bufio.NewReader(stdin).ReadString('\n')

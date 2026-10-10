@@ -1,0 +1,13 @@
+---
+name: "go: update toolchain version"
+labels:
+  dependencies: go
+autodiscovery:
+  groupby: all
+  crawlers:
+    golang/gomod:
+      rootdir: .
+      onlygoversion: true
+      versionfilter:
+        kind: semver
+        pattern: minor

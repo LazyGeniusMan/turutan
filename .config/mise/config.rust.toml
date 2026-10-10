@@ -2,7 +2,6 @@
 rust = "1"
 
 [bootstrap.packages]
-# dev
 "apk:musl-dev" = "latest"
 "apk:linux-headers" = "latest"
 "apt:libc6-dev" = "latest"
@@ -14,15 +13,12 @@ rust = "1"
 "winget:Microsoft.WindowsSDK.10.0.26100" = "latest"
 "zypper:glibc-devel" = "latest"
 "zypper:linux-glibc-devel" = "latest"
-# rt
 "apk:musl" = "latest"
 "apk:libgcc" = "latest"
 "apt:libc6" = "latest"
 "apt:libgcc-s1" = "latest"
 "dnf:glibc" = "latest"
 "dnf:libgcc" = "latest"
-# "pacman:glibc" = "latest"
-# "pacman:gcc-libs" = "latest"
 "winget:Microsoft.VCRedist.2015+.x64" = "latest"
 "zypper:glibc" = "latest"
 "zypper:libgcc_s1" = "latest"

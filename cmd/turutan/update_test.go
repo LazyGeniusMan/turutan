@@ -33,7 +33,7 @@ func TestUpdateCmd(t *testing.T) {
 	})
 	t.Run("flags register", func(t *testing.T) {
 		cmd := newUpdateCmd()
-		for _, name := range []string{"ref", "conflict", "force", "answers-file", "defaults"} {
+		for _, name := range []string{"ref", "conflict", "force", "answers-file", "defaults", "allow-hooks"} {
 			if cmd.Flags().Lookup(name) == nil {
 				t.Errorf("flag --%s missing", name)
 			}

@@ -3,6 +3,7 @@
 package scaffold
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-// updateTestOptions returns base update options capturing output.
 func updateTestOptions(stdout, stderr *strings.Builder) UpdateOptions {
 	return UpdateOptions{
 		Force:  false,
@@ -46,7 +46,7 @@ func TestUpdateDirtyGuard(t *testing.T) {
 			var stdout, stderr strings.Builder
 			opts := updateTestOptions(&stdout, &stderr)
 			opts.Force = tt.force
-			_, err := Update(projectDir, opts)
+			_, err := Update(context.Background(), projectDir, opts)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("Update succeeded, want dirty-tree error")
@@ -66,9 +66,7 @@ func TestUpdateDirtyGuard(t *testing.T) {
 func TestUpdateMerge(t *testing.T) {
 	tests := []struct {
 		name string
-		// git=false uses a filesystem template (mutated on disk);
-		// git=true uses a local-git template (new commit).
-		git bool
+		git  bool
 	}{
 		{name: "filesystem old to new", git: false},
 		{name: "local-git old to new", git: true},
@@ -104,16 +102,12 @@ func TestUpdateMerge(t *testing.T) {
 					}
 				}
 			}
-			// Local edit to a file the template leaves alone.
 			if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			// Template moves: change take.txt, add new.txt, drop drop.txt.
 			updateRepo("take.txt", "new\n")
 			updateRepo("new.txt", "fresh\n")
 			if tt.git {
-				// Remove drop.txt via the workdir then commit (commitAll
-				// stages the deletion like the diff-suite drop test).
 				if err := os.Remove(filepath.Join(src, "drop.txt")); err != nil {
 					t.Fatal(err)
 				}
@@ -126,7 +120,7 @@ func TestUpdateMerge(t *testing.T) {
 			var stdout, stderr strings.Builder
 			opts := updateTestOptions(&stdout, &stderr)
 			opts.Force = true
-			result, err := Update(projectDir, opts)
+			result, err := Update(context.Background(), projectDir, opts)
 			if err != nil {
 				t.Fatalf("Update error: %v", err)
 			}
@@ -174,7 +168,7 @@ func TestUpdateConflicts(t *testing.T) {
 			opts := updateTestOptions(&stdout, &stderr)
 			opts.Force = true
 			opts.Conflict = tt.conflict
-			result, err := Update(projectDir, opts)
+			result, err := Update(context.Background(), projectDir, opts)
 			if err != nil {
 				t.Fatalf("Update error: %v", err)
 			}
@@ -228,7 +222,7 @@ func TestUpdateBinary(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -253,7 +247,7 @@ func TestUpdateBinary(t *testing.T) {
 		}
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -267,6 +261,52 @@ func TestUpdateBinary(t *testing.T) {
 			t.Errorf("Conflicts = %v, want none", result.Conflicts)
 		}
 	})
+}
+
+func TestUpdateMergeAddedBinary(t *testing.T) {
+	binaryFresh := "GIF89a\x00fresh"
+	binaryLocal := "GIF89a\x00local"
+	tests := []struct {
+		name     string
+		conflict ConflictMode
+	}{
+		{name: "inline mode sidecars", conflict: ConflictInline},
+		{name: "rej mode sidecars without .rej", conflict: ConflictRej},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
+			projectDir := bootstrapProject(t, src)
+			if err := os.WriteFile(filepath.Join(src, "img.bin"), []byte(binaryFresh), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(projectDir, "img.bin"), []byte(binaryLocal), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr strings.Builder
+			opts := updateTestOptions(&stdout, &stderr)
+			opts.Conflict = tt.conflict
+			result, err := Update(context.Background(), projectDir, opts)
+			if err != nil {
+				t.Fatalf("Update error: %v", err)
+			}
+			if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryLocal {
+				t.Errorf("img.bin = %q, want local binary kept", got)
+			}
+			if got, err := os.ReadFile(filepath.Join(projectDir, "img.bin.new")); err != nil || string(got) != binaryFresh {
+				t.Errorf("img.bin.new = %q, want template-new sidecar", got)
+			}
+			if _, err := os.Stat(filepath.Join(projectDir, "img.bin.rej")); !os.IsNotExist(err) {
+				t.Error("unexpected .rej sidecar for a binary new-file collision")
+			}
+			if len(result.Conflicts) != 1 || result.Conflicts[0] != "img.bin" {
+				t.Errorf("Conflicts = %v, want [img.bin]", result.Conflicts)
+			}
+			if !strings.Contains(stderr.String(), "binary") {
+				t.Errorf("stderr = %q, want a binary warning", stderr.String())
+			}
+		})
+	}
 }
 
 func TestUpdatePreserve(t *testing.T) {
@@ -291,7 +331,7 @@ func TestUpdatePreserve(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -324,7 +364,8 @@ func TestUpdateMigrations(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		result, err := Update(projectDir, opts)
+		opts.Stdin = strings.NewReader("y\n")
+		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -356,8 +397,119 @@ func TestUpdateMigrations(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		if _, err := Update(projectDir, opts); err == nil {
+		opts.Stdin = strings.NewReader("y\n")
+		if _, err := Update(context.Background(), projectDir, opts); err == nil {
 			t.Error("Update with failing migration succeeded, want error")
+		}
+	})
+}
+
+func TestUpdateMigrationsConsent(t *testing.T) {
+	setupMigrationProject := func(t *testing.T) (string, string) {
+		t.Helper()
+		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
+		projectDir := bootstrapProject(t, src)
+		manifest := "migrations:\n  - run: [\"echo hi >> marker.txt\"]\n"
+		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(src, "app.txt"), []byte("v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return src, projectDir
+	}
+	t.Run("non-interactive without allow-hooks refuses", func(t *testing.T) {
+		_, projectDir := setupMigrationProject(t)
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.Force = true
+		opts.NonInteractive = true
+		_, err := Update(context.Background(), projectDir, opts)
+		if err == nil {
+			t.Fatal("Update with migrations in non-interactive mode succeeded, want refusal")
+		}
+		if !strings.Contains(err.Error(), "--allow-hooks") {
+			t.Errorf("error = %q, want it to mention --allow-hooks", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(projectDir, "marker.txt")); !os.IsNotExist(statErr) {
+			t.Error("marker.txt exists, want the refused migration skipped")
+		}
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v1\n" {
+			t.Errorf("app.txt = %q, want old content kept after refusal", got)
+		}
+	})
+	t.Run("non-interactive with allow-hooks runs", func(t *testing.T) {
+		_, projectDir := setupMigrationProject(t)
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.Force = true
+		opts.NonInteractive = true
+		opts.AllowHooks = true
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if len(result.Migrations) != 1 {
+			t.Fatalf("Migrations = %v, want the single consented command", result.Migrations)
+		}
+		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" {
+			t.Errorf("marker.txt = %q, want the migration output", got)
+		}
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" {
+			t.Errorf("app.txt = %q, want template-new content", got)
+		}
+	})
+	t.Run("interactive consent runs migrations", func(t *testing.T) {
+		_, projectDir := setupMigrationProject(t)
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.Force = true
+		opts.Stdin = strings.NewReader("y\n")
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if len(result.Migrations) != 1 {
+			t.Errorf("Migrations = %v, want the consented command", result.Migrations)
+		}
+		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" {
+			t.Errorf("marker.txt = %q, want the migration output", got)
+		}
+	})
+	t.Run("interactive decline skips migrations", func(t *testing.T) {
+		_, projectDir := setupMigrationProject(t)
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.Force = true
+		opts.Stdin = strings.NewReader("n\n")
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if len(result.Migrations) != 0 {
+			t.Errorf("Migrations = %v, want none after declined consent", result.Migrations)
+		}
+		if _, statErr := os.Stat(filepath.Join(projectDir, "marker.txt")); !os.IsNotExist(statErr) {
+			t.Error("marker.txt exists, want the declined migration skipped")
+		}
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" {
+			t.Errorf("app.txt = %q, want template-new content despite declined migrations", got)
+		}
+		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
+			t.Errorf("stdout = %q, want the skip notice", stdout.String())
+		}
+	})
+	t.Run("non-interactive without migrations passes", func(t *testing.T) {
+		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
+		projectDir := bootstrapProject(t, src)
+		if err := os.WriteFile(filepath.Join(src, "app.txt"), []byte("v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.NonInteractive = true
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Errorf("Update error: %v", err)
 		}
 	})
 }
@@ -393,7 +545,7 @@ func TestUpdateLockAdvances(t *testing.T) {
 			}
 			var stdout, stderr strings.Builder
 			opts := updateTestOptions(&stdout, &stderr)
-			result, err := Update(projectDir, opts)
+			result, err := Update(context.Background(), projectDir, opts)
 			if err != nil {
 				t.Fatalf("Update error: %v", err)
 			}
@@ -441,7 +593,7 @@ func TestUpdateAnswersOverlay(t *testing.T) {
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		opts.AnswersFile = answersFile
-		if _, err := Update(projectDir, opts); err != nil {
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
 		got, _ = os.ReadFile(filepath.Join(projectDir, "greet.txt"))
@@ -465,11 +617,81 @@ func TestUpdateAnswersOverlay(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		_, err := Update(projectDir, opts)
+		_, err := Update(context.Background(), projectDir, opts)
 		if err == nil || !strings.Contains(err.Error(), `"brand_new_key"`) {
 			t.Errorf("error = %v, want it to name the missing key", err)
 		}
 	})
+}
+
+func TestUpdateNewTemplateKeys(t *testing.T) {
+	setup := func(t *testing.T) (string, string) {
+		t.Helper()
+		src := makeTemplate(t, "", map[string]string{"a.txt": "v1\n"})
+		projectDir := bootstrapProject(t, src)
+		if err := os.WriteFile(filepath.Join(src, "b.txt.tmpl"), []byte("{{.brand_new_key}}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return src, projectDir
+	}
+	tests := []struct {
+		name           string
+		stdin          string
+		nonInteractive bool
+		wantErr        string
+		wantFile       string
+	}{
+		{
+			name:     "interactive prompts for new key",
+			stdin:    "prompted\n",
+			wantFile: "prompted\n",
+		},
+		{
+			name:           "non-interactive fails with key hint",
+			stdin:          "",
+			nonInteractive: true,
+			wantErr:        `"brand_new_key"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, projectDir := setup(t)
+			var stdout, stderr strings.Builder
+			opts := updateTestOptions(&stdout, &stderr)
+			opts.Force = true
+			opts.Stdin = strings.NewReader(tt.stdin)
+			opts.NonInteractive = tt.nonInteractive
+			_, err := Update(context.Background(), projectDir, opts)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("Update succeeded, want missing-key error")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("error = %q, want it to name %s", err, tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), "--answers-file") {
+					t.Errorf("error = %q, want the --answers-file hint", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Update error: %v", err)
+			}
+			if got, _ := os.ReadFile(filepath.Join(projectDir, "b.txt")); string(got) != tt.wantFile {
+				t.Errorf("b.txt = %q, want prompted render %q", got, tt.wantFile)
+			}
+			if !strings.Contains(stdout.String(), "Enter value for brand_new_key") {
+				t.Errorf("stdout = %q, want the key-name prompt", stdout.String())
+			}
+			state, err := config.LoadState(os.DirFS(projectDir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Answers["brand_new_key"] != "prompted" {
+				t.Errorf("stored answers = %v, want prompted brand_new_key", state.Answers)
+			}
+		})
+	}
 }
 
 func TestUpdateFailures(t *testing.T) {
@@ -495,7 +717,7 @@ func TestUpdateFailures(t *testing.T) {
 				projectDir = bootstrapProject(t, src)
 			}
 			tt.mutate(t, projectDir, &opts)
-			_, err := Update(projectDir, opts)
+			_, err := Update(context.Background(), projectDir, opts)
 			if err == nil {
 				t.Error("Update succeeded, want error")
 				return
@@ -512,17 +734,82 @@ func TestEffectiveConflict(t *testing.T) {
 		name     string
 		flag     ConflictMode
 		manifest string
+		stored   string
 		want     ConflictMode
 	}{
 		{name: "flag wins over manifest", flag: ConflictRej, manifest: "inline", want: ConflictRej},
+		{name: "flag wins over stored state", flag: ConflictInline, manifest: "", stored: "rej", want: ConflictInline},
 		{name: "manifest default applies", flag: "", manifest: "rej", want: ConflictRej},
+		{name: "manifest wins over stored state", flag: "", manifest: "inline", stored: "rej", want: ConflictInline},
+		{name: "stored bootstrap choice applies when silent", flag: "", manifest: "", stored: "rej", want: ConflictRej},
 		{name: "empty defaults to inline", flag: "", manifest: "", want: ConflictInline},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := effectiveConflict(tt.flag, manifestWithConflict(tt.manifest))
+			state := &config.State{Conflict: tt.stored}
+			got := effectiveConflict(tt.flag, manifestWithConflict(tt.manifest), state)
 			if got != tt.want {
 				t.Errorf("effectiveConflict = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdateConflictModePersists(t *testing.T) {
+	tests := []struct {
+		name             string
+		manifestConflict string
+		flag             ConflictMode
+		wantStored       string
+		wantRejSidecar   bool
+	}{
+		{
+			name:           "explicit flag persists",
+			flag:           ConflictRej,
+			wantStored:     "rej",
+			wantRejSidecar: true,
+		},
+		{
+			name:             "manifest default resolves without persisting",
+			manifestConflict: "rej",
+			wantStored:       "",
+			wantRejSidecar:   true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ""
+			if tt.manifestConflict != "" {
+				manifest = "conflict: " + tt.manifestConflict + "\n"
+			}
+			src := makeTemplate(t, manifest, map[string]string{"conflict.txt": "a\nb\nc\n"})
+			projectDir := bootstrapProject(t, src)
+			if err := os.WriteFile(filepath.Join(projectDir, "conflict.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(src, "conflict.txt"), []byte("a\nREMOTE\nc\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr strings.Builder
+			opts := updateTestOptions(&stdout, &stderr)
+			opts.Force = true
+			opts.Conflict = tt.flag
+			if _, err := Update(context.Background(), projectDir, opts); err != nil {
+				t.Fatalf("Update error: %v", err)
+			}
+			state, err := config.LoadState(os.DirFS(projectDir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Conflict != tt.wantStored {
+				t.Errorf("stored conflict = %q, want %q", state.Conflict, tt.wantStored)
+			}
+			_, err = os.Stat(filepath.Join(projectDir, "conflict.txt.rej"))
+			if tt.wantRejSidecar && err != nil {
+				t.Errorf("missing .rej sidecar, want rej mode resolved: %v", err)
+			}
+			if !tt.wantRejSidecar && !os.IsNotExist(err) {
+				t.Errorf("unexpected .rej sidecar, want inline mode resolved")
 			}
 		})
 	}
@@ -598,7 +885,6 @@ func TestMatchesMigration(t *testing.T) {
 	}
 }
 
-// manifestWithConflict builds a manifest carrying only a conflict mode.
 func manifestWithConflict(mode string) *config.Manifest {
 	return &config.Manifest{Conflict: mode}
 }

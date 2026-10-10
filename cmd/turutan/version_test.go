@@ -8,11 +8,10 @@ import (
 	"testing"
 )
 
-// TestVersionCmd pins `turutan version`: one line with the injected build
-// metadata (version/commit/date via -ldflags -X) plus the §8.4 dual
-// license notice (CLI Apache-2.0, default template MIT-0).
 func TestVersionCmd(t *testing.T) {
+	t.Parallel()
 	t.Run("prints metadata and license notice", func(t *testing.T) {
+		t.Parallel()
 		cmd := newVersionCmd()
 		var stdout bytes.Buffer
 		cmd.SetOut(&stdout)

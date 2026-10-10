@@ -25,6 +25,7 @@ func validState() *State {
 }
 
 func TestStateRoundTrip(t *testing.T) {
+	t.Parallel()
 	t.Run("save then load preserves state", func(t *testing.T) {
 		dir := t.TempDir()
 		want := validState()
@@ -55,7 +56,43 @@ func TestStateRoundTrip(t *testing.T) {
 	})
 }
 
+func TestSaveStatePerms0600(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := SaveState(dir, validState()); err != nil {
+		t.Fatalf("SaveState error: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, StateFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("state perms = %04o, want 0600 (answers may hold secrets)", perm)
+	}
+}
+
+func TestSaveLockPerms0600(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	lock := &Lock{
+		Source:      "s",
+		ResolvedSHA: strings.Repeat("a", 40),
+		Files:       []LockFile{FileEntry("a.txt", []byte("a"))},
+	}
+	if err := SaveLock(dir, lock); err != nil {
+		t.Fatalf("SaveLock error: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, LockFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("lock perms = %04o, want 0600", perm)
+	}
+}
+
 func TestValidateStateFailures(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		mutate func(*State)
@@ -66,6 +103,7 @@ func TestValidateStateFailures(t *testing.T) {
 		{name: "short SHA rejected", mutate: func(s *State) { s.ResolvedCommit = "abc123" }},
 		{name: "empty engine rejected", mutate: func(s *State) { s.Engine = "" }},
 		{name: "empty license rejected", mutate: func(s *State) { s.TemplateLicense = "" }},
+		{name: "unknown conflict rejected", mutate: func(s *State) { s.Conflict = "merge" }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -76,6 +114,13 @@ func TestValidateStateFailures(t *testing.T) {
 			}
 		})
 	}
+	t.Run("non-MIT-0 license accepted", func(t *testing.T) {
+		state := validState()
+		state.TemplateLicense = "Apache-2.0"
+		if err := ValidateState(state); err != nil {
+			t.Errorf("ValidateState with Apache-2.0 error: %v", err)
+		}
+	})
 	t.Run("missing file errors", func(t *testing.T) {
 		if _, err := LoadState(fstest.MapFS{}); err == nil {
 			t.Error("LoadState without file succeeded, want error")
@@ -84,6 +129,7 @@ func TestValidateStateFailures(t *testing.T) {
 }
 
 func TestLockRoundTrip(t *testing.T) {
+	t.Parallel()
 	t.Run("save sorts files and stamps manifest", func(t *testing.T) {
 		dir := t.TempDir()
 		lock := &Lock{
@@ -118,9 +164,13 @@ func TestLockRoundTrip(t *testing.T) {
 	})
 	t.Run("unsorted lock rejected", func(t *testing.T) {
 		lock := &Lock{
-			Source:      "s",
-			ResolvedSHA: "x",
-			Files:       []LockFile{{Path: "b", SHA256: "y"}, {Path: "a", SHA256: "z"}},
+			Source:       "s",
+			ResolvedSHA:  strings.Repeat("a", 40),
+			ManifestHash: "sha256:" + strings.Repeat("b", 64),
+			Files: []LockFile{
+				{Path: "b", SHA256: strings.Repeat("c", 64)},
+				{Path: "a", SHA256: strings.Repeat("d", 64)},
+			},
 		}
 		if err := ValidateLock(lock); err == nil {
 			t.Error("ValidateLock with unsorted files succeeded, want error")
@@ -134,7 +184,71 @@ func TestLockRoundTrip(t *testing.T) {
 	})
 }
 
+func validLock() *Lock {
+	return &Lock{
+		Source:       "git::https://github.com/org/web.git//react",
+		ResolvedSHA:  strings.Repeat("a", 40),
+		ManifestHash: "sha256:" + strings.Repeat("b", 64),
+		Files: []LockFile{
+			{Path: "a.txt", SHA256: strings.Repeat("c", 64), Bytes: 1},
+			{Path: "b.txt", SHA256: strings.Repeat("d", 64), Bytes: 0},
+		},
+	}
+}
+
+func TestValidateLockShape(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		mutate func(*Lock)
+	}{
+		{name: "empty resolved_sha rejected", mutate: func(l *Lock) { l.ResolvedSHA = "" }},
+		{name: "short resolved_sha rejected", mutate: func(l *Lock) { l.ResolvedSHA = "abc123" }},
+		{name: "non-hex resolved_sha rejected", mutate: func(l *Lock) { l.ResolvedSHA = strings.Repeat("z", 40) }},
+		{name: "41-hex resolved_sha rejected", mutate: func(l *Lock) { l.ResolvedSHA = strings.Repeat("a", 41) }},
+		{name: "empty manifest_hash rejected", mutate: func(l *Lock) { l.ManifestHash = "" }},
+		{name: "manifest_hash without prefix rejected", mutate: func(l *Lock) { l.ManifestHash = strings.Repeat("b", 64) }},
+		{name: "short manifest_hash digest rejected", mutate: func(l *Lock) { l.ManifestHash = "sha256:abc" }},
+		{name: "empty file path rejected", mutate: func(l *Lock) { l.Files[0].Path = "" }},
+		{name: "empty file sha256 rejected", mutate: func(l *Lock) { l.Files[0].SHA256 = "" }},
+		{name: "non-hex file sha256 rejected", mutate: func(l *Lock) { l.Files[0].SHA256 = strings.Repeat("z", 64) }},
+		{name: "40-hex file sha256 rejected", mutate: func(l *Lock) { l.Files[0].SHA256 = strings.Repeat("a", 40) }},
+		{name: "negative bytes rejected", mutate: func(l *Lock) { l.Files[0].Bytes = -1 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lock := validLock()
+			tt.mutate(lock)
+			if err := ValidateLock(lock); err == nil {
+				t.Errorf("ValidateLock(%+v) succeeded, want error", lock)
+			}
+		})
+	}
+	t.Run("64-hex filesystem identity accepted", func(t *testing.T) {
+		lock := validLock()
+		lock.ResolvedSHA = strings.Repeat("e", 64)
+		if err := ValidateLock(lock); err != nil {
+			t.Errorf("ValidateLock error: %v", err)
+		}
+	})
+	t.Run("saved lock passes shape validation", func(t *testing.T) {
+		dir := t.TempDir()
+		lock := &Lock{
+			Source:      "git::https://github.com/org/web.git//react",
+			ResolvedSHA: strings.Repeat("a", 40),
+			Files:       []LockFile{FileEntry("a.txt", []byte("a"))},
+		}
+		if err := SaveLock(dir, lock); err != nil {
+			t.Fatalf("SaveLock error: %v", err)
+		}
+		if err := ValidateLock(lock); err != nil {
+			t.Errorf("ValidateLock error: %v", err)
+		}
+	})
+}
+
 func TestLoadManifest(t *testing.T) {
+	t.Parallel()
 	t.Run("absent manifest means defaults", func(t *testing.T) {
 		got, err := LoadManifest(fstest.MapFS{})
 		if err != nil {
@@ -170,6 +284,63 @@ func TestLoadManifest(t *testing.T) {
 		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("min-engine: \"not a constraint!!!\"\n")}}
 		if _, err := LoadManifest(fsys); err == nil {
 			t.Error("LoadManifest with bad min-engine succeeded, want error")
+		}
+	})
+}
+
+func TestValidateManifestFrom(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		from    string
+		wantErr bool
+	}{
+		{name: "empty from always applies", from: "", wantErr: false},
+		{name: "semver range passes", from: "<2.0.0", wantErr: false},
+		{name: "semver gte range passes", from: ">=1.0.0", wantErr: false},
+		{name: "hex prefix passes", from: "abc1234", wantErr: false},
+		{name: "full commit SHA passes", from: strings.Repeat("a", 40), wantErr: false},
+		{name: "typo fails fast", from: "not-a-range!!!", wantErr: true},
+		{name: "short hex fails", from: "abc123", wantErr: true},
+		{name: "non-hex word fails", from: "release-candidate", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := &Manifest{Migrations: []ManifestMigration{{From: tt.from, Run: []string{"echo hi"}}}}
+			err := ValidateManifest(manifest)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest(From=%q) error = %v, wantErr %v", tt.from, err, tt.wantErr)
+			}
+		})
+	}
+	t.Run("bad from fails at load", func(t *testing.T) {
+		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("migrations:\n  - from: \"not-a-range!!!\"\n    run: [\"echo hi\"]\n")}}
+		if _, err := LoadManifest(fsys); err == nil {
+			t.Error("LoadManifest with bad migration from succeeded, want error")
+		}
+	})
+	t.Run("empty and valid from load", func(t *testing.T) {
+		data := []byte("migrations:\n  - run: [\"echo hi\"]\n  - from: \"<2.0.0\"\n    run: [\"echo yo\"]\n")
+		if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err != nil {
+			t.Errorf("LoadManifest error: %v", err)
+		}
+	})
+	t.Run("empty run rejected", func(t *testing.T) {
+		manifest := &Manifest{Migrations: []ManifestMigration{{Run: []string{}}}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Error("ValidateManifest with empty run succeeded, want error")
+		}
+	})
+	t.Run("nil run rejected", func(t *testing.T) {
+		manifest := &Manifest{Migrations: []ManifestMigration{{}}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Error("ValidateManifest with missing run succeeded, want error")
+		}
+	})
+	t.Run("empty run fails at load", func(t *testing.T) {
+		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("migrations:\n  - run: []\n")}}
+		if _, err := LoadManifest(fsys); err == nil {
+			t.Error("LoadManifest with empty run succeeded, want error")
 		}
 	})
 }
