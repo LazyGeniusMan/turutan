@@ -89,13 +89,20 @@ local pre_commit = new Mapping<String, Step> {
     diagnostic_format = "gcc"
     depends = "ryl"
   }
+  ["updatecli-validate"] {
+    profiles = List("core")
+    glob = List(".config/updatecli/*.yaml", ".config/updatecli/*.yml")
+    batch = true
+    check = "updatecli manifest show --config .config/updatecli/"
+    depends = "ryl"
+  }
 }
 
 local pre_push = new Mapping<String, Step> {
   ["ai-rulez"] {
     profiles = List("ai")
-    glob = ".config/ai-rulez/config.toml"
-    check = "ai-rulez validate"
+    glob = ".config/ai-rulez/**"
+    check = "ai-rulez validate --config-only"
     depends = "tombi"
   }
   ["gomod-tidy"] = (Builtins.gomod_tidy) {
@@ -127,10 +134,16 @@ local pre_push = new Mapping<String, Step> {
 
 hooks {
   ["check"] {
-    steps = pre_commit
+    steps {
+      ...pre_commit
+      ...pre_push
+    }
   }
   ["fix"] {
-    steps = pre_commit
+    steps {
+      ...pre_commit
+      ...pre_push
+    }
   }
   ["commit-msg"] {
     steps {
@@ -151,6 +164,10 @@ hooks {
       ["install-deps"] {
         step_condition = "is_branch_checkout"
         check = "mise install"
+      }
+      ["dev-setup"] {
+        step_condition = "is_branch_checkout"
+        check = "mise run dev-setup:**"
       }
     }
   }

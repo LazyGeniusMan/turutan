@@ -3,113 +3,124 @@
 lockfile_version = 3
 
 [[tools.bun]]
-version = "1.4.2"
+version = "1.4.3"
 backend = "core:bun"
 specifiers = ["1"]
 
 [tools.bun."platforms.linux-arm64"]
-checksum = "sha256:54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64.zip"
+checksum = "sha256:efa9813da5ed72423bf847f916e8d2c47c0d776add972354026a75e10da9aa21"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-aarch64.zip"
 
 [tools.bun."platforms.linux-arm64-musl"]
-checksum = "sha256:71760b6c8ea30623b81a4907cb815d48e2ea266f2e73e751534a44a0607950df"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64-musl.zip"
+checksum = "sha256:8de8a0003cc2707bb555887e3d450e24e1edf3f605f491393e89ed61a8853420"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-aarch64-musl.zip"
 
 [tools.bun."platforms.linux-x64"]
-checksum = "sha256:36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip"
+checksum = "sha256:3e730528d89775f03f87f05c06787c4df4099d0a37f3f252e7b829cb23816e18"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64.zip"
 
 [tools.bun."platforms.linux-x64-baseline"]
-checksum = "sha256:c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-baseline.zip"
+checksum = "sha256:1fc2edac843102909e3a1be1d8d9802cc6071cf074e67e88231f4ffe0f8b397b"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64-baseline.zip"
 
 [tools.bun."platforms.linux-x64-musl"]
-checksum = "sha256:4835eca59d6da70f4674f5642f6e459dcadab773695b2ed9922d131057989742"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl.zip"
+checksum = "sha256:6e9ea98554ea0d05efda5840ae292618aaa3adefd66b0853520c5c86a37eac9c"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64-musl.zip"
 
 [tools.bun."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:76e1db84e98f22f78de0a87e309bfbbf297732847f9720db36750646c85c8c18"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-musl-baseline.zip"
+checksum = "sha256:4b5b0b5503f6ebf15161e8c56eb5a263134c05cd98a86dc11ee43ac5bda9862e"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-linux-x64-musl-baseline.zip"
 
 [tools.bun."platforms.macos-arm64"]
-checksum = "sha256:90987a3a16d7db556d886ac3d551e7b6d3edf0a1cf43acaed622e8676be1d12f"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-aarch64.zip"
+checksum = "sha256:80afd4c069b46a6fa8f3ec520bebc750a7843e4a8d5b9583d29ad436c00a3403"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-darwin-aarch64.zip"
 
 [tools.bun."platforms.macos-x64"]
-checksum = "sha256:80520d7e17526308c9185d261679ac6d27798d3803a0e9f7ff9121ab8affb012"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-x64.zip"
+checksum = "sha256:62660e6438eb872278877acca77e1152d5d031324df368d4a81b428211489d2d"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-darwin-x64.zip"
 
 [tools.bun."platforms.macos-x64-baseline"]
-checksum = "sha256:bad5bbd6cf14d0980d115f5954c9ff904df619d5e994d2da1ffccd3f316300b0"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-x64-baseline.zip"
+checksum = "sha256:0fde04e8b092156b97fe6432e899baf16d9ed6ce52cbb4218d2d9c07a2f827ef"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-darwin-x64-baseline.zip"
 
 [tools.bun."platforms.windows-x64"]
-checksum = "sha256:ce4c17497b2f29712a99d3d53f028de28cd42e3bacb8589599e7f000e49b6405"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-windows-x64.zip"
+checksum = "sha256:0bf84e808552beea67bf1202a287a35c6c825d837b287b3f8e9dd513dba35d3d"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-windows-x64.zip"
 
 [tools.bun."platforms.windows-x64-baseline"]
-checksum = "sha256:78c221c2376f79731ccf4e4af0b3bb46d81fefa3296c5abee09ad8a1b21e68c6"
-url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-windows-x64-baseline.zip"
+checksum = "sha256:d7a7d3eb216614544aab0cde2d8d9f2e4e87839bf5a30a1cd11d077f02d84e0c"
+url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.3/bun-windows-x64-baseline.zip"
 
 [[tools."github:Goldziher/ai-rulez"]]
-version = "4.24.2"
+version = "5.0.2"
 backend = "github:Goldziher/ai-rulez"
-specifiers = ["4"]
+specifiers = ["5"]
 
 [tools."github:Goldziher/ai-rulez"."platforms.linux-arm64"]
-checksum = "sha256:789f2b808d49315ea74560b9d8121489b2ae47c82500697aca33234b4dd61f91"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888438"
+checksum = "sha256:65ea1990d17449b5e72a132b3977c5377bfa5b00c3ae35a3c8ba4b1d50681d1a"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350846"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.linux-arm64-musl"]
-checksum = "sha256:789f2b808d49315ea74560b9d8121489b2ae47c82500697aca33234b4dd61f91"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888438"
+checksum = "sha256:65ea1990d17449b5e72a132b3977c5377bfa5b00c3ae35a3c8ba4b1d50681d1a"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350846"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.linux-x64"]
-checksum = "sha256:ef9aa06f3ee18889f9aa28637438aff21b6114f1654382cf93897c4cf2bb17e4"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888404"
+checksum = "sha256:92942dbe1244b04ca043a5b4b0336a2b606a1ae79dd791afafa4f7ef0e5853a8"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350850"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.linux-x64-baseline"]
-checksum = "sha256:ef9aa06f3ee18889f9aa28637438aff21b6114f1654382cf93897c4cf2bb17e4"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888404"
+checksum = "sha256:92942dbe1244b04ca043a5b4b0336a2b606a1ae79dd791afafa4f7ef0e5853a8"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350850"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.linux-x64-musl"]
-checksum = "sha256:ef9aa06f3ee18889f9aa28637438aff21b6114f1654382cf93897c4cf2bb17e4"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888404"
+checksum = "sha256:92942dbe1244b04ca043a5b4b0336a2b606a1ae79dd791afafa4f7ef0e5853a8"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350850"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:ef9aa06f3ee18889f9aa28637438aff21b6114f1654382cf93897c4cf2bb17e4"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888404"
+checksum = "sha256:92942dbe1244b04ca043a5b4b0336a2b606a1ae79dd791afafa4f7ef0e5853a8"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350850"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.macos-arm64"]
-checksum = "sha256:d5261c593f697c41694b328ebf505979afa437482619ccb32ea14bfb1d0bf753"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888374"
+checksum = "sha256:86327d2a9c126e952327ac408fd20c1947ecbde5b1cdc201c88ad769f7f08c36"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350853"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.macos-x64"]
-checksum = "sha256:0b9f158aebff995a97768ca20ac50443cd408e028fcf752419eedb8b96e6034b"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_darwin_amd64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888341"
+checksum = "sha256:15ccc140727fd97d9cf663a21f60717128bde82adf96342eb3d7bbd69109769d"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350849"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.macos-x64-baseline"]
-checksum = "sha256:0b9f158aebff995a97768ca20ac50443cd408e028fcf752419eedb8b96e6034b"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_darwin_amd64.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888341"
+checksum = "sha256:15ccc140727fd97d9cf663a21f60717128bde82adf96342eb3d7bbd69109769d"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350849"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.windows-x64"]
-checksum = "sha256:8c59a115d68cf8d08e89fb1082133993472b419c9909e9763e2660fcb770d695"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_windows_amd64.zip"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888471"
+checksum = "sha256:d0bd2a507509c46dc43afe3678f8267dba38fe200c7a18e3530a7df70fa96860"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_windows_amd64.zip"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350852"
+provenance = "github-attestations"
 
 [tools."github:Goldziher/ai-rulez"."platforms.windows-x64-baseline"]
-checksum = "sha256:8c59a115d68cf8d08e89fb1082133993472b419c9909e9763e2660fcb770d695"
-url = "https://github.com/Goldziher/ai-rulez/releases/download/v4.24.2/ai-rulez_4.24.2_windows_amd64.zip"
-url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/609888471"
+checksum = "sha256:d0bd2a507509c46dc43afe3678f8267dba38fe200c7a18e3530a7df70fa96860"
+url = "https://github.com/Goldziher/ai-rulez/releases/download/v5.0.2/ai-rulez_5.0.2_windows_amd64.zip"
+url_api = "https://api.github.com/repos/Goldziher/ai-rulez/releases/assets/631350852"
+provenance = "github-attestations"
 
 [[tools."github:Goldziher/basemind"]]
 version = "0.28.0"
@@ -172,64 +183,64 @@ url = "https://github.com/Goldziher/basemind/releases/download/v0.28.0/basemind-
 url_api = "https://api.github.com/repos/Goldziher/basemind/releases/assets/609635675"
 
 [[tools."github:Goldziher/uncomment"]]
-version = "3.10.2"
+version = "3.10.3"
 backend = "github:Goldziher/uncomment"
 specifiers = ["3"]
 
 [tools."github:Goldziher/uncomment"."platforms.linux-arm64"]
-checksum = "sha256:0509d16262bc3357cb584ced6ea3ee9d1d9fd79a97a92098f7088ec33bdeb3a3"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510610"
+checksum = "sha256:d46ef08497ef78473561c13a7988b37364ff3a33f6d47bcf0046a28ddf4c7087"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628764047"
 
 [tools."github:Goldziher/uncomment"."platforms.linux-arm64-musl"]
-checksum = "sha256:0509d16262bc3357cb584ced6ea3ee9d1d9fd79a97a92098f7088ec33bdeb3a3"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510610"
+checksum = "sha256:d46ef08497ef78473561c13a7988b37364ff3a33f6d47bcf0046a28ddf4c7087"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628764047"
 
 [tools."github:Goldziher/uncomment"."platforms.linux-x64"]
-checksum = "sha256:54e3c8b0ea6b7f3177cd5f37412e9a6293274d4f2f0ff3f6b79c9e66f703f044"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510547"
+checksum = "sha256:520390776bb3117b9a0c854ebb503a1370e2227d7b22c05f0a05bee0fe8f8614"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628765070"
 
 [tools."github:Goldziher/uncomment"."platforms.linux-x64-baseline"]
-checksum = "sha256:54e3c8b0ea6b7f3177cd5f37412e9a6293274d4f2f0ff3f6b79c9e66f703f044"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510547"
+checksum = "sha256:520390776bb3117b9a0c854ebb503a1370e2227d7b22c05f0a05bee0fe8f8614"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628765070"
 
 [tools."github:Goldziher/uncomment"."platforms.linux-x64-musl"]
-checksum = "sha256:54e3c8b0ea6b7f3177cd5f37412e9a6293274d4f2f0ff3f6b79c9e66f703f044"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510547"
+checksum = "sha256:520390776bb3117b9a0c854ebb503a1370e2227d7b22c05f0a05bee0fe8f8614"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628765070"
 
 [tools."github:Goldziher/uncomment"."platforms.linux-x64-musl-baseline"]
-checksum = "sha256:54e3c8b0ea6b7f3177cd5f37412e9a6293274d4f2f0ff3f6b79c9e66f703f044"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510547"
+checksum = "sha256:520390776bb3117b9a0c854ebb503a1370e2227d7b22c05f0a05bee0fe8f8614"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628765070"
 
 [tools."github:Goldziher/uncomment"."platforms.macos-arm64"]
-checksum = "sha256:fb598a5b0eb3de3669abd2caf5b3c475c1595894d56e9a72918c9dca2957ded8"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510457"
+checksum = "sha256:ad9957b23dda4b8119cfc0ac6ea5d71e0e5f93465c858547af95fcfb3169712f"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628761706"
 
 [tools."github:Goldziher/uncomment"."platforms.macos-x64"]
-checksum = "sha256:fde2dbe72b7266579a81383c5e31a628c8fe0c502a9aafbc2328a0b53b708af5"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595526223"
+checksum = "sha256:12d395f199f82dfae42f02a1f1bdc79effe3a1adfbf4394d496addb2b1a1fff8"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628774917"
 
 [tools."github:Goldziher/uncomment"."platforms.macos-x64-baseline"]
-checksum = "sha256:fde2dbe72b7266579a81383c5e31a628c8fe0c502a9aafbc2328a0b53b708af5"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595526223"
+checksum = "sha256:12d395f199f82dfae42f02a1f1bdc79effe3a1adfbf4394d496addb2b1a1fff8"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628774917"
 
 [tools."github:Goldziher/uncomment"."platforms.windows-x64"]
-checksum = "sha256:f8198efacb79e66de50e1d83f4d92c726805ad589f59a537d1b2dbd0be9424ac"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-pc-windows-gnu.zip"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510546"
+checksum = "sha256:e8cbebc65015120bfbe67bade2eec6a26593692bfd34c74f3efad035e6f7fb9d"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-pc-windows-gnu.zip"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628762988"
 
 [tools."github:Goldziher/uncomment"."platforms.windows-x64-baseline"]
-checksum = "sha256:f8198efacb79e66de50e1d83f4d92c726805ad589f59a537d1b2dbd0be9424ac"
-url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.2/uncomment-x86_64-pc-windows-gnu.zip"
-url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/595510546"
+checksum = "sha256:e8cbebc65015120bfbe67bade2eec6a26593692bfd34c74f3efad035e6f7fb9d"
+url = "https://github.com/Goldziher/uncomment/releases/download/v3.10.3/uncomment-x86_64-pc-windows-gnu.zip"
+url_api = "https://api.github.com/repos/Goldziher/uncomment/releases/assets/628762988"
 
 [[tools.node]]
 version = "24.21.0"
@@ -294,6 +305,6 @@ specifiers = ["2"]
 bun_args = "--trust"
 
 [[tools."npm:t3"]]
-version = "0.0.46-nightly.20261010.2908"
+version = "0.0.46-nightly.20261011.2994"
 backend = "npm:t3"
 specifiers = ["prefix:0.0.46-nightly"]

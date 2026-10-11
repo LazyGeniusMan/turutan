@@ -1,5 +1,11 @@
 ---
-priority: critical
+type: Decision
+title: Basemind Usage
+x-ai-rulez:
+  kind: rule
+  id: basemind-usage
+  metadata:
+    priority: critical
 ---
 
 [`basemind`](https://github.com/Goldziher/basemind) is this repo's indexed context layer. Prefer it BEFORE grep, before reading files to find structure, and before naked `git` — it's the default, not a preference. basemind returns paths, lines, and signatures at a fraction of the tokens of reading source.

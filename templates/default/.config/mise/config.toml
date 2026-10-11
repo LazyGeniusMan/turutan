@@ -23,25 +23,57 @@ updatecli = "0"
 [daemons.fnox]
 run = "exec fnox daemon start"
 
-[tasks.check]
+[tasks."check:all"]
 run = "hk check --all"
 
-[tasks.fix]
+[tasks."check:diff"]
+run = "hk check"
+
+[tasks."fix:all"]
 run = "hk fix --all"
 
-[tasks.pre-commit]
+[tasks."fix:diff"]
+run = "hk fix"
+
+[tasks."pre-commit:all"]
 run = "hk run pre-commit --all"
 
-[tasks.pre-push]
+[tasks."pre-commit:diff"]
+run = "hk run pre-commit"
+
+[tasks."pre-push:all"]
 run = "hk run pre-push --all"
 
+[tasks."pre-push:diff"]
+run = "hk run pre-push"
+
+[tasks."updatecli:check"]
+secrets = ["FNOX_GITHUB_TOKEN"]
+env = { "UPDATECLI_GITHUB_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
+run = "updatecli pipeline diff --config .config/updatecli/"
+
+[tasks."updatecli:apply"]
+secrets = ["FNOX_GITHUB_TOKEN"]
+env = { "UPDATECLI_GITHUB_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
+run = "updatecli pipeline apply --config .config/updatecli/"
+
 [tasks.release]
-run = "goreleaser release --clean"
+run = "echo 'release command'"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"
 
+[tasks."dev-setup:proton-pass"]
+secrets = ["PROTON_PASS_PERSONAL_ACCESS_TOKEN"]
+run = '''
+if ! pass-cli info; then
+    pass-cli logout
+    pass-cli login
+fi
+'''
+
 [tasks."dev-setup:fnox"]
+depends = "dev-setup:proton-pass"
 daemons = "fnox"
 run = "fnox daemon start"
 

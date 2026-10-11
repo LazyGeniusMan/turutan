@@ -1,0 +1,64 @@
+---
+name: "ci: update github actions"
+labels:
+  dependencies: ci
+sources:
+  checkoutRelease:
+    name: "latest actions/checkout release"
+    kind: githubrelease
+    spec:
+      owner: actions
+      repository: checkout
+      versionfilter:
+        kind: semver
+        pattern: "*"
+  checkoutDigest:
+    name: "commit sha of latest actions/checkout release"
+    kind: githubrelease
+    spec:
+      owner: actions
+      repository: checkout
+      key: taghash
+      versionfilter:
+        kind: regex
+        pattern: '{{ source "checkoutRelease" }}'
+  miseRelease:
+    name: "latest jdx/mise-action release"
+    kind: githubrelease
+    spec:
+      owner: jdx
+      repository: mise-action
+      versionfilter:
+        kind: semver
+        pattern: "*"
+  miseDigest:
+    name: "commit sha of latest jdx/mise-action release"
+    kind: githubrelease
+    spec:
+      owner: jdx
+      repository: mise-action
+      key: taghash
+      versionfilter:
+        kind: regex
+        pattern: '{{ source "miseRelease" }}'
+targets:
+  checkoutPins:
+    name: "bump actions/checkout sha pins"
+    kind: file
+    spec:
+      files:
+        - .github/workflows/ci.yml
+        - .github/workflows/release.yml
+      matchpattern: 'actions/checkout@([0-9a-f]{40})'
+      replacepattern: 'actions/checkout@{{ source "checkoutDigest" }}'
+    sourceid: checkoutDigest
+  misePins:
+    name: "bump jdx/mise-action sha pins"
+    kind: file
+    spec:
+      files:
+        - .github/workflows/ci.yml
+        - .github/workflows/release.yml
+      matchpattern: 'jdx/mise-action@([0-9a-f]{40})'
+      replacepattern: 'jdx/mise-action@{{ source "miseDigest" }}'
+    sourceid: miseDigest

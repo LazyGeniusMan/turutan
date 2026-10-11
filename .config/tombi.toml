@@ -16,4 +16,8 @@ include = [".config/ai-rulez/config.toml"]
 
 [[schemas]]
 path = "https://raw.githubusercontent.com/Goldziher/basemind/refs/heads/main/schema/basemind-config-v1.schema.json"
-include = [".config/basemind/config.toml", "basemind.toml"]
+include = [".config/basemind/config.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/Goldziher/uncomment/refs/heads/main/schema/uncomment.schema.json"
+include = [".uncomment.toml"]

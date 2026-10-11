@@ -1,6 +1,13 @@
 ---
-name: orchestrate-agent
+type: Playbook
+title: Orchestrate Agent
 description: Coordinate sub-agent implementation and apply patches (delegate-first orchestration playbook)
+x-ai-rulez:
+  kind: skill
+  id: orchestrate-agent
+  metadata:
+    name: orchestrate-agent
+    delivery: static
 ---
 
 # Orchestrate

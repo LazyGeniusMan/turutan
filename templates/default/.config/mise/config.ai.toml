@@ -2,7 +2,6 @@
 npm.package_manager = "bun"
 minimum_release_age_excludes = [
   "github:Goldziher/ai-rulez",
-  "github:Goldziher/basemind",
   "npm:@opencode/cli",
   "npm:t3",
   "npm:@earendil-works/pi-coding-agent",
@@ -11,9 +10,10 @@ minimum_release_age_excludes = [
 [env]
 BASEMIND_ALLOW_HTTP = 1
 T3CODE_SERVER_BROWSER_SANDBOX = 0
+AI_RULEZ_PROFILE = "{{ mise_env | default(value=[]) | join(sep=',') }}"
 
 [tools]
-"github:Goldziher/ai-rulez" = "4"
+"github:Goldziher/ai-rulez" = "5"
 "github:Goldziher/basemind" = "0"
 bun = "1"
 node = "24"
@@ -23,11 +23,11 @@ node = "24"
 "github:Goldziher/uncomment" = "3"
 
 [daemons.opencode]
-run = "exec opencode serve --port $PORT"
+run = "exec fnox x -- opencode serve --port $PORT"
 port = 4096
 
 [daemons.t3code]
-run = "exec t3 serve --port $PORT --dev-url {{ env.PROXY_URI | replace(from='{{port}}', to=env.PORT) }}"
+run = "exec fnox x -- t3 serve --port $PORT --dev-url {{ env.PROXY_URI | replace(from='{{port}}', to=env.PORT) }}"
 port = 3773
 
 [daemons.basemind-comms]
@@ -35,13 +35,15 @@ run = "exec basemind comms daemon"
 
 [tasks."dev-setup:ai-rulez"]
 depends = "dev-setup:fnox"
-secrets = ["KEENABLE_API_KEY"]
-run = "ai-rulez generate -p {{ mise_env | default(value=[]) | join(sep=',') }}"
+secrets = ["KEENABLE_API_KEY", "FNOX_GITHUB_TOKEN"]
+env = { "AI_RULEZ_GIT_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
+run = "ai-rulez generate"
 
 [tasks."dev-setup:basemind"]
 run = "basemind scan"
 
-[tasks."dev:basemind"]
+[tasks."dev-setup:basemind-comms"]
+depends = "dev-setup:basemind"
 daemons = "basemind-comms"
 run = "echo 'basemind comms is running '"
 

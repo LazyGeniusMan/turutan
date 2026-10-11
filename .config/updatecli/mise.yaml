@@ -59,14 +59,14 @@ sources:
         kind: semver
         pattern: 1.x
   ai-airulez:
-    name: track ai-rulez 4.x for ai profile
+    name: track ai-rulez 5.x for ai profile
     kind: githubrelease
     spec:
       owner: Goldziher
       repository: ai-rulez
       versionfilter:
         kind: semver
-        pattern: 4.x
+        pattern: 5.x
   ai-basemind:
     name: track basemind 0.x for ai profile
     kind: githubrelease

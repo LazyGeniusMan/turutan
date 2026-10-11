@@ -33,25 +33,29 @@ run = "hk check"
 run = "hk fix --all"
 
 [tasks."fix:diff"]
-run = "hk fix --all"
+run = "hk fix"
 
 [tasks."pre-commit:all"]
 run = "hk run pre-commit --all"
 
 [tasks."pre-commit:diff"]
-run = "hk run pre-commit --all"
+run = "hk run pre-commit"
 
 [tasks."pre-push:all"]
 run = "hk run pre-push --all"
 
 [tasks."pre-push:diff"]
-run = "hk run pre-push --all"
+run = "hk run pre-push"
 
 [tasks."updatecli:check"]
-run = "updatecli diff --config .config/updatecli/"
+secrets = ["FNOX_GITHUB_TOKEN"]
+env = { "UPDATECLI_GITHUB_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
+run = "updatecli pipeline diff --config .config/updatecli/"
 
 [tasks."updatecli:apply"]
-run = "updatecli apply --config .config/updatecli/"
+secrets = ["FNOX_GITHUB_TOKEN"]
+env = { "UPDATECLI_GITHUB_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
+run = "updatecli pipeline apply --config .config/updatecli/"
 
 [tasks.release]
 run = "goreleaser release --clean"

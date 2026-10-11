@@ -1,31 +1,74 @@
-# tombi: lint.rules.enum.disabled = true
-version = "4.0"
+version = "5.0"
 name = "turutan"
 gitignore = true
 compact = true
 
 presets = [
-  "claude",
-  "cursor",
-  "gemini",
-  "copilot",
-  "cline",
-  "codex",
-  "amp",
-  "junie",
+  # ~keep "claude",
+  # ~keep "cursor",
+  # ~keep "gemini",
+  # ~keep "copilot",
+  # ~keep "devin",
+  # ~keep "cline",
+  # ~keep "codex",
+  # ~keep "amp",
+  # ~keep "junie",
   "opencode",
+  # ~keep "hermes",
+  # ~keep "antigravity",
+  # ~keep "xum",
   "pi",
-  "hermes",
-  "antigravity",
-  "xum",
+  # ~keep "baz",
+  # ~keep "mcp",
+  # ~keep "aiassistant",
+  # ~keep "augment",
+  # ~keep "bob",
+  # ~keep # ~keep "codebuddy",
+  # ~keep "codebuff",
+  # ~keep "codewhale",
+  # ~keep "commandcode",
+  # ~keep "copilot-cli",
+  # ~keep "cortex",
+  # ~keep "crush",
+  # ~keep "deepagents",
+  # ~keep "dsh",
+  # ~keep "factory",
+  # ~keep "gitlab-duo",
+  # ~keep "goose",
+  # ~keep "grok",
+  # ~keep "kilo",
+  # ~keep "kimi",
+  # ~keep "kiro",
+  # ~keep "letta",
+  # ~keep "mimocode",
+  # ~keep "muse",
+  # ~keep "omp",
+  # ~keep "openclaw",
+  # ~keep "poolside",
+  # ~keep # ~keep "qoder",
+  # ~keep "qwen",
+  # ~keep "reasonix",
+  # ~keep "replit",
+  # ~keep "rovodev",
+  # ~keep "takt",
+  # ~keep "trae",
+  # ~keep "vibe",
+  # ~keep "warp",
+  # ~keep "zcode",
+  # ~keep "zed",
+  # ~keep "zoocode",
+  # ~keep "okf",
+  # ~keep "llms-txt"
 ]
 
-default = "ai"
 agents_md = true
 
+# "builtin:security",
+
 [profiles]
-core = []
+core = ["core"]
 ai = [
+  "ai",
   "builtin:agent-delegation",
   "builtin:ai-governance",
   "builtin:cicd",
@@ -39,26 +82,27 @@ ai = [
   "builtin:testing",
   "builtin:token-efficiency",
 ]
-c = []
-cpp = []
-csharp = ["builtin:csharp"]
-cloudflare = []
-docker = []
-elixir = ["builtin:elixir"]
+c = ["c"]
+cpp = ["cpp"]
+csharp = ["csharp", "builtin:csharp"]
+cloudflare = ["cloudflare"]
+docker = ["docker", "yml"]
+elixir = ["elixir", "builtin:elixir"]
 github = ["github"]
-gitlab = []
+gitlab = ["gitlab"]
 go = [
-  "builtin:go",
   "go",
+  "builtin:go",
 ]
-java = ["builtin:java"]
-kubernetes = []
-php = ["builtin:php"]
-python = ["builtin:python"]
-r = ["builtin:r"]
-ruby = ["builtin:ruby"]
-rust = ["builtin:rust", "builtin:polyglot-bindings"]
+java = ["java", "builtin:java"]
+kubernetes = ["kubernetes", "yml"]
+php = ["php", "builtin:php"]
+python = ["python", "builtin:python"]
+r = ["r", "builtin:r"]
+ruby = ["ruby", "builtin:ruby"]
+rust = ["rust", "builtin:rust", "builtin:polyglot-bindings"]
 rust-polygot = [
+  "rust-polygot",
   "builtin:cgo",
   "builtin:ext-php-rs",
   "builtin:extendr",
@@ -70,10 +114,11 @@ rust-polygot = [
   "builtin:wasm",
 ]
 typescript = [
+  "typescript",
   "builtin:typescript",
   "builtin:vite-plus",
 ]
-typst = []
+typst = ["typst"]
 
 [header]
 style = "detailed"
@@ -104,420 +149,148 @@ INSTRUCTIONS FOR AI AGENTS
 
 Documentation: https://github.com/Goldziher/ai-rulez
 """
+hashes = "content"
+timestamp = false
 
 [defaults]
 omit_agent_fields = ["model", "effort", "tools"]
 
+[lock]
+# ~keep enforce = true
+
+[lint]
+# ~keep security.allowed_hosts = ["github.com", "owasp.org", "api.cloudflare.com", "developers.cloudflare.com", "go.dev", "pkg.go.dev", "pptr.dev", "flueframework.com", "ryl-docs.pages.dev", "pitchfork.jdx.dev", "hk.jdx.dev"]
+
+[rules]
+mode = "split"
+
 [[installed_skills]]
 name = "ai-rulez"
 source = "https://github.com/Goldziher/ai-rulez"
-profiles = ["ai"]
+trust = "warn"
+include = ["ai-rulez"]
+domain = "ai"
 
 [[installed_skills]]
 name = "fnox"
 source = "https://github.com/jdx/fnox"
-profiles = ["ai"]
+trust = "warn"
+include = ["fnox"]
+domain = "core"
 
 [[installed_skills]]
-name = "hk-configure"
+name = "hk"
 source = "https://github.com/jdx/hk"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "hk-debug"
-source = "https://github.com/jdx/hk"
-profiles = ["ai"]
+trust = "warn"
+include = ["hk-*"]
+domain = "core"
 
 [[installed_skills]]
 name = "pitchfork"
 source = "https://github.com/jdx/pitchfork"
-profiles = ["ai"]
+trust = "warn"
+include = ["pitchfork"]
+domain = "core"
 
 [[installed_skills]]
 name = "basemind"
 source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-cli"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-code-search"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-comms"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-doctor"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-documents"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-git-history"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-scan"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "basemind-stats"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
-
-[[installed_skills]]
-name = "multi-agent-room"
-source = "https://github.com/Goldziher/basemind"
-profiles = ["ai"]
+trust = "warn"
+include = ["basemind*", "multi-agent-room"]
+domain = "ai"
 
 [[installed_skills]]
 name = "cloudflare"
 source = "https://github.com/cloudflare/skills"
-profiles = ["cloudflare"]
+trust = "warn"
+include = ["cloudflare", "workers-best-practices"]
+domain = "cloudflare"
 
 [[installed_skills]]
-name = "workers-best-practices"
-source = "https://github.com/cloudflare/skills"
-profiles = ["cloudflare"]
-
-[[installed_skills]]
-name = "docker-build-strategies"
+name = "docker"
 source = "https://github.com/docker/skills"
-profiles = ["docker"]
-
-[[installed_skills]]
-name = "docker-compose-patterns"
-source = "https://github.com/docker/skills"
-profiles = ["docker"]
-
-[[installed_skills]]
-name = "docker-destructive-guardrails"
-source = "https://github.com/docker/skills"
-profiles = ["docker"]
-
-[[installed_skills]]
-name = "docker-project-foundations"
-source = "https://github.com/docker/skills"
-profiles = ["docker"]
+trust = "warn"
+include = ["docker-*"]
+domain = "docker"
 
 [[installed_skills]]
 name = "ryl"
 source = "https://github.com/owenlamont/ryl"
-profiles = ["docker", "github", "kubernetes"]
+trust = "warn"
+include = ["*"]
+domain = "yml"
 
 [[installed_skills]]
-name = "github-issues"
+name = "github"
 source = "https://github.com/github/awesome-copilot"
-profiles = ["github"]
+trust = "warn"
+include = ["github-*"]
+domain = "github"
 
 [[installed_skills]]
-name = "github-release"
-source = "https://github.com/github/awesome-copilot"
-profiles = ["github"]
-
-[[installed_skills]]
-name = "github-actions-efficiency"
-source = "https://github.com/github/awesome-copilot"
-profiles = ["github"]
-
-[[installed_skills]]
-name = "github-actions-hardening"
-source = "https://github.com/github/awesome-copilot"
-profiles = ["github"]
-
-[[installed_skills]]
-name = "github-actions-runtime-upgrade-conventions"
-source = "https://github.com/github/awesome-copilot"
-profiles = ["github"]
-
-[[installed_skills]]
-name = "glab"
+name = "gitlab"
 source = "https://gitlab.com/gitlab-org/ai/skills"
-profiles = ["gitlab"]
+trust = "warn"
+include = ["glab"]
+domain = "github"
 
 [[installed_skills]]
-name = "golang-how-to"
+name = "golang"
 source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
+trust = "warn"
+include = ["golang-*"]
+domain = "go"
 
-[[installed_skills]]
-name = "golang-code-style"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-data-structures"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-database"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-design-patterns"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-documentation"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-error-handling"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-modernize"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-naming"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-refactoring"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-safety"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-testing"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-troubleshooting"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-security"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-benchmark"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-cli"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-concurrency"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-context"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-continuous-integration"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-dependency-injection"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-dependency-management"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-structs-interfaces"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-lint"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-observability"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-performance"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-gopls"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-pkg-go-dev"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-popular-libraries"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-project-layout"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-stay-updated"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-google-wire"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-graphql"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-grpc"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-spf13-cobra"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-spf13-viper"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-swagger"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-uber-dig"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-uber-fx"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-do"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-hot"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-lo"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-mo"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-oops"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-ro"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-samber-slog"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
-
-[[installed_skills]]
-name = "golang-stretchr-testify"
-source = "https://github.com/samber/cc-skills-golang"
-profiles = ["go"]
+[mcp]
+self_server = false
 
 [[mcp_servers]]
-name = "ai-rulez"
+name = "ai-rulez-crud"
 command = "ai-rulez"
 args = ["mcp"]
-profiles = ["ai"]
+domain = "ai"
+
+[[mcp_servers]]
+name = "ai-rulez-skill-registry"
+command = "ai-rulez"
+args = ["mcp", "--serve-skills"]
+env = { AI_RULEZ_PROFILE = "${AI_RULEZ_PROFILE}" }
+domain = "ai"
 
 [[mcp_servers]]
 name = "fnox"
 command = "fnox"
 args = ["mcp"]
-profiles = ["ai"]
+domain = "core"
 
 [[mcp_servers]]
 name = "mise"
 env = { MISE_EXPERIMENTAL = "1" }
 command = "mise"
 args = ["mcp", "--cd", "${PROJECT_ROOT}"]
-profiles = ["ai"]
+domain = "core"
 
 [[mcp_servers]]
 name = "hk"
 command = "hk"
 args = ["mcp", "--root", "${PROJECT_ROOT}"]
-profiles = ["ai"]
+domain = "core"
 
 [[mcp_servers]]
 name = "basemind"
 command = "basemind"
 args = ["serve"]
-profiles = ["ai"]
+domain = "ai"
 
 [[mcp_servers]]
 name = "keenable"
 transport = "http"
 url = "https://api.keenable.ai/mcp"
 headers = { "X-API-Key" = "${KEENABLE_API_KEY}" }
-profiles = ["ai"]
+domain = "ai"
 
 [[mcp_servers]]
 name = "cloudflare-docs"
 transport = "http"
 url = "https://docs.mcp.cloudflare.com/mcp"
-profiles = ["cloudflare"]
+domain = "cloudflare"

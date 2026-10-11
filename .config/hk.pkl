@@ -101,8 +101,8 @@ local pre_commit = new Mapping<String, Step> {
 local pre_push = new Mapping<String, Step> {
   ["ai-rulez"] {
     profiles = List("ai")
-    glob = ".config/ai-rulez/config.toml"
-    check = "ai-rulez validate"
+    glob = ".config/ai-rulez/**"
+    check = "ai-rulez validate --config-only"
     depends = "tombi"
   }
   ["gomod-tidy"] = (Builtins.gomod_tidy) {

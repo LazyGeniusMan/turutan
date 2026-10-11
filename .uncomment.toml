@@ -2,7 +2,7 @@
 remove_todos = false
 remove_fixme = false
 remove_docs = true
-preserve_patterns = ["HACK", "WORKAROUND", "SPDX-License-Identifier", "gitleaks", "betterleaks"]
+preserve_patterns = ["HACK", "WORKAROUND", "SPDX-License-Identifier", "betterleaks"]
 exclude = []
 use_default_ignores = true
 respect_gitignore = true
