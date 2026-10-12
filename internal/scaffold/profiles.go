@@ -13,6 +13,10 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
+// ProfileOptions carries the fetch and logging knobs for ListProfiles.
+// Profile listing resolves the same template ref as update, so it needs the
+// ref override plus engine and verbosity plumbing.
+// ~keep
 type ProfileOptions struct {
 	Ref     string
 	Engine  string
@@ -20,11 +24,18 @@ type ProfileOptions struct {
 	Stderr  io.Writer
 }
 
+// ProfileInfo reports the profiles a template offers versus what the
+// project enabled, so CLI output can show both without a second fetch.
+// ~keep
 type ProfileInfo struct {
 	Offered []string
 	Enabled []string
 }
 
+// ListProfiles fetches the template manifest and reports offered versus
+// enabled profiles. Commands use it to validate --profiles values and to
+// show what a project opted into without re-rendering anything.
+// ~keep
 func ListProfiles(
 	ctx context.Context,
 	projectDir string,

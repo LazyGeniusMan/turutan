@@ -23,10 +23,23 @@ import (
 
 const DiffContextLines = 3
 
+// DiffWhat selectors choose which side of a drift comparison to report.
+// Update review needs upstream template changes and local edits separately,
+// so diff --what scopes the same engine to either side or both.
+// ~keep
 const (
-	DiffWhatAll      = "all"
+	// DiffWhatAll compares the fresh render against the worktree, including
+	// files the new template dropped, for the default full review.
+	// ~keep
+	DiffWhatAll = "all"
+	// DiffWhatUpstream compares the fresh render against the recorded base so
+	// reviewers see template-side changes without local edits in the way.
+	// ~keep
 	DiffWhatUpstream = "upstream"
-	DiffWhatLocal    = "local"
+	// DiffWhatLocal compares the recorded base against the worktree so
+	// reviewers see local edits without upstream template churn in the way.
+	// ~keep
+	DiffWhatLocal = "local"
 )
 
 type DiffOptions struct {

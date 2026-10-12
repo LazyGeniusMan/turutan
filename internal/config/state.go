@@ -93,6 +93,10 @@ type ManifestConditional struct {
 	Skip []string `yaml:"skip"`
 }
 
+// ManifestProfile describes one installable feature slice of a template.
+// Templates use profiles to ship optional file sets behind a single opt-in
+// id so projects only render the variants they asked for via enabled_profiles.
+// ~keep
 type ManifestProfile struct {
 	Label       string   `yaml:"label"`
 	Description string   `yaml:"description"`
@@ -407,6 +411,10 @@ func validateMigrationFrom(from string) error {
 	return fmt.Errorf("bad migration from %q: must be a semver range or a 7-64 hex commit prefix", from)
 }
 
+// GetProfiles returns the deduplicated enabled_profiles from raw answers.
+// Answers arrive as strings, string slices, or decoded YAML/JSON values
+// depending on the prompt path, so callers need one normalization point.
+// ~keep
 func GetProfiles(answers map[string]any) []string {
 	if answers == nil {
 		return nil
@@ -441,6 +449,10 @@ func GetProfiles(answers map[string]any) []string {
 	return out
 }
 
+// GetProfiles reports the profiles recorded for this project.
+// Newer state carries Profiles explicitly while older checkouts only have
+// answers, so it falls back to GetProfiles to keep both readable.
+// ~keep
 func (s *State) GetProfiles() []string {
 	if s == nil {
 		return nil
@@ -453,6 +465,10 @@ func (s *State) GetProfiles() []string {
 	return GetProfiles(s.Answers)
 }
 
+// ProfilesForPath reports which of the given profiles own path.
+// Update and diff output attribute drift to profiles, so they need the
+// owning ids without reimplementing manifest glob matching each time.
+// ~keep
 func ProfilesForPath(manifest *Manifest, profiles []string, path string) []string {
 	if manifest == nil || len(manifest.Profiles) == 0 {
 		return nil
@@ -486,6 +502,10 @@ func ProfilesForPath(manifest *Manifest, profiles []string, path string) []strin
 	return matched
 }
 
+// ResolveRenames follows the manifest renames chain for an old path.
+// Templates rename files across releases, so lock and base lookups must map
+// recorded paths forward instead of reporting every rename as delete+add.
+// ~keep
 func ResolveRenames(old string, renames map[string]string) string {
 	if len(renames) == 0 || old == "" {
 		return old
@@ -506,12 +526,20 @@ func ResolveRenames(old string, renames map[string]string) string {
 	return cur
 }
 
+// ProfileDiff summarizes how the profile and prompt surface changed.
+// Update uses it to re-prompt only for genuinely new inputs instead of
+// replaying every question on each template sync.
+// ~keep
 type ProfileDiff struct {
 	Added      []string
 	Removed    []string
 	NewPrompts []string
 }
 
+// DiffProfiles compares previously answered profiles and prompts against a new manifest.
+// Sync needs the added/removed profile ids plus unseen prompt keys to decide
+// what to ask and what to warn about before re-rendering.
+// ~keep
 func DiffProfiles(oldAnswers map[string]any, newManifest *Manifest) ProfileDiff {
 	var diff ProfileDiff
 	if newManifest == nil {
