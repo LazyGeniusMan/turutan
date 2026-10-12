@@ -225,7 +225,7 @@ func ComputeManifestHash(files []LockFile) string {
 	slices.SortFunc(sorted, func(a, b LockFile) int { return cmp.Compare(a.Path, b.Path) })
 	sum := sha256.New()
 	for _, file := range sorted {
-		fmt.Fprintf(sum, "%s:%s:%d\n", file.Path, file.SHA256, file.Bytes)
+		_, _ = fmt.Fprintf(sum, "%s:%s:%d\n", file.Path, file.SHA256, file.Bytes)
 	}
 	return "sha256:" + hex.EncodeToString(sum.Sum(nil))
 }

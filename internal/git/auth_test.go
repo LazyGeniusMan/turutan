@@ -23,11 +23,11 @@ func clearAuthEnv(t *testing.T) {
 	t.Setenv(EnvGitHubToken, "")
 	t.Setenv(EnvInsecureSkipVerify, "")
 	t.Setenv(EnvKnownHosts, "")
-	os.Unsetenv(EnvSSHKey)
-	os.Unsetenv(EnvSSHPassword)
-	os.Unsetenv(EnvGitHubToken)
-	os.Unsetenv(EnvInsecureSkipVerify)
-	os.Unsetenv(EnvKnownHosts)
+	for _, key := range []string{EnvSSHKey, EnvSSHPassword, EnvGitHubToken, EnvInsecureSkipVerify, EnvKnownHosts} {
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func testKeyPEM(t *testing.T) string {

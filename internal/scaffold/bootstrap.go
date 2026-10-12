@@ -184,8 +184,10 @@ func finishBootstrap(
 	if err := gateHooks(manifest, absTarget, opts, stdout, stderr, stdin); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n",
-		absTarget, src.String(), shortSHA(resolved), len(files))
+	if _, err := fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n",
+		absTarget, src.String(), shortSHA(resolved), len(files)); err != nil {
+		return err
+	}
 	vlogf(stderr, opts.Verbose,
 		"bootstrap: wrote %d file(s) state %s lock %s",
 		len(files), config.StateFileName, config.LockFileName)
@@ -514,7 +516,7 @@ func warnManifestSourceMismatch(stderr io.Writer, manifest *config.Manifest, src
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	fmt.Fprintf(stderr,
+	_, _ = fmt.Fprintf(stderr,
 		"turutan: template manifest source %q differs from requested %q (advisory only)\n",
 		manifest.Source, src.String())
 }
@@ -574,8 +576,14 @@ func gateHooks(
 				"bootstrap: template declares hooks %q: refusing in "+"--non-interactive mode without --allow-hooks",
 				hooks)
 		}
-		if !promptConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks)) {
-			fmt.Fprintf(stdout, "turutan: template hooks %q skipped (consent declined)\n", hooks)
+		allow, err := promptConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks))
+		if err != nil {
+			return err
+		}
+		if !allow {
+			if _, err := fmt.Fprintf(stdout, "turutan: template hooks %q skipped (consent declined)\n", hooks); err != nil {
+				return err
+			}
 			return nil
 		}
 	}
@@ -584,7 +592,9 @@ func gateHooks(
 			return err
 		}
 	}
-	fmt.Fprintf(stdout, "turutan: ran %d template hook(s)\n", len(hooks))
+	if _, err := fmt.Fprintf(stdout, "turutan: ran %d template hook(s)\n", len(hooks)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -605,7 +615,9 @@ func runHookCmd(target, hook string, stderr io.Writer) error {
 	executed.Env = hookEnv()
 	output, err := executed.CombinedOutput()
 	if len(output) > 0 {
-		fmt.Fprintf(stderr, "turutan: hook %q output:\n%s", hook, output)
+		if _, err := fmt.Fprintf(stderr, "turutan: hook %q output:\n%s", hook, output); err != nil {
+			return err
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("bootstrap: hook %q failed: %w", hook, err)

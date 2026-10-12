@@ -161,7 +161,7 @@ func fetchFilesystem(src *Source) (*Fetched, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching source %q: opening root: %w", src.Raw, err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	rel := src.Subpath
 	if rel == "" {
 		rel = "."

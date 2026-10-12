@@ -42,7 +42,9 @@ func runDiff(cmd *cobra.Command, ref string, noPager bool) error {
 		return err
 	}
 	if len(diffs) == 0 {
-		fmt.Fprintln(stdout, "turutan: no drift")
+		if _, err := fmt.Fprintln(stdout, "turutan: no drift"); err != nil {
+			return err
+		}
 		return nil
 	}
 	if !noPager && !appCfg.nonInteractive && isTerminal(stdout) {

@@ -113,7 +113,7 @@ func renderDiffTemplate(
 	if err != nil {
 		return nil, nil, fmt.Errorf("diff: creating staging dir: %w", err)
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	answers := map[string]any{}
 	maps.Copy(answers, state.Answers)
 	normalizeAnswersWithManifest(answers, manifest)

@@ -25,7 +25,7 @@ func ReadFileWithinRoot(rootDir, name string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening root %q: %w", rootDir, err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	data, err := root.ReadFile(rootName(name))
 	if err != nil {
 		return nil, wrapRootErr("reading", name, err)
@@ -38,7 +38,7 @@ func WriteFileWithinRoot(rootDir, name string, data []byte, perm fs.FileMode) er
 	if err != nil {
 		return fmt.Errorf("opening root %q: %w", rootDir, err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	rel := rootName(name)
 	if dir := filepath.Dir(rel); dir != "." {
 		if err := root.MkdirAll(dir, 0o755); err != nil {
@@ -56,7 +56,7 @@ func RemoveWithinRoot(rootDir, name string) error {
 	if err != nil {
 		return fmt.Errorf("opening root %q: %w", rootDir, err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if err := root.Remove(rootName(name)); err != nil {
 		return wrapRootErr("removing", name, err)
 	}
@@ -68,7 +68,7 @@ func StatWithinRoot(rootDir, name string) (fs.FileInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening root %q: %w", rootDir, err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	info, err := root.Lstat(rootName(name))
 	if err != nil {
 		return nil, wrapRootErr("statting", name, err)

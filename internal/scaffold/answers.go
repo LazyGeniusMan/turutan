@@ -429,14 +429,16 @@ func promptValue(stdout io.Writer, stdin io.Reader, key string) (string, error) 
 	return strings.TrimSpace(line), nil
 }
 
-func promptConfirm(stdout io.Writer, stdin io.Reader, question string) bool {
-	fmt.Fprintf(stdout, "%s [y/N]: ", question)
+func promptConfirm(stdout io.Writer, stdin io.Reader, question string) (bool, error) {
+	if _, err := fmt.Fprintf(stdout, "%s [y/N]: ", question); err != nil {
+		return false, err
+	}
 	line, _ := readPromptLine(stdin)
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
-		return true
+		return true, nil
 	default:
-		return false
+		return false, nil
 	}
 }
 

@@ -75,7 +75,7 @@ func Update(
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	updated, conflicts, err := merger.merge(rendered, lock)
 	if err != nil {
 		return nil, err
@@ -118,8 +118,10 @@ func finishUpdate(
 		Old: old, New: fresh,
 		Updated: updated, Conflicts: conflicts, Migrations: migrated,
 	}
-	fmt.Fprintf(stdout, "updated %s -> %s (%d files, %d conflicts)\n",
-		shortSHA(old), shortSHA(fresh), len(updated), len(conflicts))
+	if _, err := fmt.Fprintf(stdout, "updated %s -> %s (%d files, %d conflicts)\n",
+		shortSHA(old), shortSHA(fresh), len(updated), len(conflicts)); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -536,9 +538,11 @@ func (m *merger) mergeAdded(path string, fresh, local []byte, localExists, prese
 		if err := m.write(path+".new", fresh); err != nil {
 			return false, false, err
 		}
-		fmt.Fprintf(m.stderr,
+		if _, err := fmt.Fprintf(m.stderr,
 			"turutan: binary %q is new in the template but exists "+"locally; keeping local, wrote %q\n",
-			path, path+".new")
+			path, path+".new"); err != nil {
+			return false, false, err
+		}
 		return false, true, nil
 	}
 	return m.conflictBoth(path, local, fresh)
@@ -555,7 +559,9 @@ func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte,
 		m.pruneEmptyParents(path)
 		return true, false, nil
 	}
-	fmt.Fprintf(m.stderr, "turutan: keeping locally modified %q dropped by the template\n", path)
+	if _, err := fmt.Fprintf(m.stderr, "turutan: keeping locally modified %q dropped by the template\n", path); err != nil {
+		return false, false, err
+	}
 	return false, false, nil
 }
 
@@ -616,10 +622,12 @@ func (m *merger) mergeRestored(
 	if err := m.write(path, fresh); err != nil {
 		return false, false, err
 	}
-	fmt.Fprintf(m.stderr,
+	if _, err := fmt.Fprintf(m.stderr,
 		"turutan: restoring %q changed in the template "+
 			"but deleted locally\n",
-		path)
+		path); err != nil {
+		return false, false, err
+	}
 	return true, false, nil
 }
 
@@ -649,8 +657,10 @@ func (m *merger) mergeBothChanged(
 		if handled {
 			return wrote, conflicted, nil
 		}
-		fmt.Fprintf(m.stderr,
-			"turutan: no base copy for %q; using overlay merge\n", path)
+		if _, err := fmt.Fprintf(m.stderr,
+			"turutan: no base copy for %q; using overlay merge\n", path); err != nil {
+			return false, false, err
+		}
 	}
 	return m.conflictBoth(path, local, fresh)
 }
@@ -662,10 +672,12 @@ func (m *merger) mergeBinaryBoth(
 	if err := m.write(path+".new", fresh); err != nil {
 		return false, false, err
 	}
-	fmt.Fprintf(m.stderr,
+	if _, err := fmt.Fprintf(m.stderr,
 		"turutan: binary %q changed both locally and "+
 			"in the template; keeping local, wrote %q\n",
-		path, path+".new")
+		path, path+".new"); err != nil {
+		return false, true, err
+	}
 	return false, true, nil
 }
 
@@ -721,13 +733,17 @@ func (m *merger) conflictBothAs(
 		if err := m.write(path+".rej", []byte(diff.Unified)); err != nil {
 			return false, false, handled, err
 		}
-		fmt.Fprintf(m.stderr, "turutan: conflict in %q; keeping local, wrote %q\n", path, path+".rej")
+		if _, err := fmt.Fprintf(m.stderr, "turutan: conflict in %q; keeping local, wrote %q\n", path, path+".rej"); err != nil {
+			return false, true, handled, err
+		}
 		return false, true, handled, nil
 	}
 	if err := m.write(path, inlineConflict(local, fresh, shortSHA(m.newSHA))); err != nil {
 		return false, false, handled, err
 	}
-	fmt.Fprintf(m.stderr, "turutan: conflict in %q; wrote inline markers\n", path)
+	if _, err := fmt.Fprintf(m.stderr, "turutan: conflict in %q; wrote inline markers\n", path); err != nil {
+		return true, true, handled, err
+	}
 	return true, true, handled, nil
 }
 
@@ -825,8 +841,14 @@ func gateMigrations(
 		return false, fmt.Errorf(
 			"update: template declares migrations: refusing in " + "--non-interactive mode without --allow-hooks")
 	}
-	if !promptConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending)) {
-		fmt.Fprintf(stdout, "turutan: template migrations %q skipped (consent declined)\n", pending)
+	allow, err := promptConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending))
+	if err != nil {
+		return false, err
+	}
+	if !allow {
+		if _, err := fmt.Fprintf(stdout, "turutan: template migrations %q skipped (consent declined)\n", pending); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
 	return false, nil
@@ -896,7 +918,9 @@ func runMigrationCmd(projectDir, cmd, old, fresh string, stderr io.Writer) error
 	executed.Env = hookEnv("TURUTAN_OLD="+old, "TURUTAN_NEW="+fresh)
 	output, err := executed.CombinedOutput()
 	if len(output) > 0 {
-		fmt.Fprintf(stderr, "turutan: migration %q output:\n%s", cmd, output)
+		if _, err := fmt.Fprintf(stderr, "turutan: migration %q output:\n%s", cmd, output); err != nil {
+			return err
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("update: migration %q failed: %w", cmd, err)
