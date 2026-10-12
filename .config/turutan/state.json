@@ -2,7 +2,7 @@
   "version": 1,
   "template": "templates/default",
   "sourceKind": "filesystem",
-  "resolvedCommit": "e6268a587ce3d42cf2e7b0b708f523be7e0663ed3232189f9eb67ea776b5b7f4",
+  "resolvedCommit": "1762eec1e4e8c420b289e196dfd4920808909c6e5bf3fcede4db0c8f456dbf2c",
   "answers": {
     "enabled_ai_agents": [
       "pi",
@@ -19,7 +19,6 @@
     "project_name": "turutan"
   },
   "skip": [
-    "README.md",
     ".golangci.yml"
   ],
   "engine": "turutan/dev",

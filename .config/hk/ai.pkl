@@ -1,6 +1,6 @@
 module hk.Ai
 
-import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pkl" as Config
+import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl" as Config
 
 pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["uncomment"] {

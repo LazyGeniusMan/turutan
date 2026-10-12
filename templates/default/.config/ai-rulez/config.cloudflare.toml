@@ -1,0 +1,15 @@
+[profiles]
+cloudflare = ["cloudflare"]
+
+[[installed_skills]]
+name = "cloudflare"
+source = "https://github.com/cloudflare/skills"
+trust = "warn"
+include = ["cloudflare", "workers-best-practices"]
+domain = "cloudflare"
+
+[[mcp_servers]]
+name = "cloudflare-docs"
+transport = "http"
+url = "https://docs.mcp.cloudflare.com/mcp"
+domain = "cloudflare"

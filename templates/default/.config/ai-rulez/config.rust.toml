@@ -1,0 +1,2 @@
+[profiles]
+rust = ["rust", "builtin:rust", "builtin:polyglot-bindings"]

@@ -1,7 +1,7 @@
 module hk.Typescript
 
-import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Builtins.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pkl" as Config
+import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl" as Config
 
 // Fill with typescript steps as needed; empty mappings merge into every hook automatically.
 // Keep `profiles = List("typescript")` gates on steps.

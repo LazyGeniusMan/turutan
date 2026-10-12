@@ -1,0 +1,16 @@
+[profiles]
+docker = ["docker", "yml"]
+
+[[installed_skills]]
+name = "docker"
+source = "https://github.com/docker/skills"
+trust = "warn"
+include = ["docker-*"]
+domain = "docker"
+
+[[installed_skills]]
+name = "ryl"
+source = "https://github.com/owenlamont/ryl"
+trust = "warn"
+include = ["*"]
+domain = "yml"

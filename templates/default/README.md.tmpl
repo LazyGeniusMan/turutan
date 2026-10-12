@@ -82,6 +82,10 @@ Configure active profiles in [`.config/miserc.toml`](.config/miserc.toml). Avail
 
     [`Vite+`](https://viteplus.dev) as unified toolchains.
 
+* `typst`{{ if contains .enabled_profiles "typst" }} (enabled){{ end }}
+
+    Typst standard toolchains.
+
 ### Platforms
 
 * `cloudflare`{{ if contains .enabled_profiles "cloudflare" }} (enabled){{ end }}

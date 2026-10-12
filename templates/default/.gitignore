@@ -6,16 +6,3 @@ dist/
 .config/turutan/templates/
 ai-rulez.bak*
 
-# BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)
-.agents/skills/
-.config/ai-rulez/.generated-manifest.json
-.config/ai-rulez/local/
-.mcp.json
-.opencode/agents/
-.opencode/commands/
-.pi/agents/
-.pi/mcp.json
-.pi/prompts/
-AGENTS.md
-opencode.json
-# END ai-rulez
