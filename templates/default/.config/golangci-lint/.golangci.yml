@@ -1,0 +1,21 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+version: "2"
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - gosec
+    - revive
+    - gocritic
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: false
+issues:
+  new-from-merge-base: main
