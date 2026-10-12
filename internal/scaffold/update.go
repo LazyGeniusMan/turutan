@@ -934,9 +934,6 @@ func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte,
 	return false, false, nil
 }
 
-// pruneEmptyParents removes directories left empty by a dropped file,
-// walking up toward the project root. os.Remove only succeeds on empty
-// directories, so paths holding user content stop the walk. ~keep
 func (m *merger) pruneEmptyParents(path string) {
 	dir := filepath.Dir(filepath.FromSlash(path))
 	for dir != "." && dir != "" {

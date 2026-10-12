@@ -23,7 +23,6 @@ import (
 
 const DiffContextLines = 3
 
-// DiffWhat scopes select which sides ComputeDiff compares. ~keep
 const (
 	DiffWhatAll      = "all"
 	DiffWhatUpstream = "upstream"

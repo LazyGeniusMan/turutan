@@ -80,7 +80,6 @@ type ManifestMigration struct {
 	Run  []string `yaml:"run"`
 }
 
-// ManifestPrompt declares a user-visible template variable and its input rules. ~keep
 type ManifestPrompt struct {
 	Prompt  string   `yaml:"prompt"`
 	Default any      `yaml:"default"`
@@ -89,13 +88,11 @@ type ManifestPrompt struct {
 	Help    string   `yaml:"help"`
 }
 
-// ManifestConditional skips template paths when its If expression renders truthy. ~keep
 type ManifestConditional struct {
 	If   string   `yaml:"if"`
 	Skip []string `yaml:"skip"`
 }
 
-// ManifestProfile owns a set of template paths under one profile ID. ~keep
 type ManifestProfile struct {
 	Label       string   `yaml:"label"`
 	Description string   `yaml:"description"`
@@ -265,8 +262,6 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// normalizeManifest synthesizes Conditionals from Profiles so Profiles
-// remains the single source of truth for profile-owned paths. ~keep
 func normalizeManifest(manifest *Manifest) {
 	if manifest == nil || len(manifest.Profiles) == 0 {
 		return
@@ -412,7 +407,6 @@ func validateMigrationFrom(from string) error {
 	return fmt.Errorf("bad migration from %q: must be a semver range or a 7-64 hex commit prefix", from)
 }
 
-// GetProfiles derives enabled profile IDs from answers["enabled_profiles"]. ~keep
 func GetProfiles(answers map[string]any) []string {
 	if answers == nil {
 		return nil
@@ -447,7 +441,6 @@ func GetProfiles(answers map[string]any) []string {
 	return out
 }
 
-// GetProfiles returns stored profiles, falling back to answers. ~keep
 func (s *State) GetProfiles() []string {
 	if s == nil {
 		return nil
@@ -460,7 +453,6 @@ func (s *State) GetProfiles() []string {
 	return GetProfiles(s.Answers)
 }
 
-// ProfilesForPath lists enabled profiles owning path via files globs. ~keep
 func ProfilesForPath(manifest *Manifest, profiles []string, path string) []string {
 	if manifest == nil || len(manifest.Profiles) == 0 {
 		return nil
@@ -494,7 +486,6 @@ func ProfilesForPath(manifest *Manifest, profiles []string, path string) []strin
 	return matched
 }
 
-// ResolveRenames follows old through renames chains to its current path. ~keep
 func ResolveRenames(old string, renames map[string]string) string {
 	if len(renames) == 0 || old == "" {
 		return old
@@ -515,14 +506,12 @@ func ResolveRenames(old string, renames map[string]string) string {
 	return cur
 }
 
-// ProfileDiff reports template-side profile and prompt additions. ~keep
 type ProfileDiff struct {
 	Added      []string
 	Removed    []string
 	NewPrompts []string
 }
 
-// DiffProfiles compares stored answers against a new manifest. ~keep
 func DiffProfiles(oldAnswers map[string]any, newManifest *Manifest) ProfileDiff {
 	var diff ProfileDiff
 	if newManifest == nil {

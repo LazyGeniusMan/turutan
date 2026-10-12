@@ -13,7 +13,6 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
-// ProfileOptions tunes ListProfiles source resolution. ~keep
 type ProfileOptions struct {
 	Ref     string
 	Engine  string
@@ -21,13 +20,11 @@ type ProfileOptions struct {
 	Stderr  io.Writer
 }
 
-// ProfileInfo reports offered versus enabled profile IDs. ~keep
 type ProfileInfo struct {
 	Offered []string
 	Enabled []string
 }
 
-// ListProfiles resolves the template manifest and reports offered versus enabled profiles. ~keep
 func ListProfiles(
 	ctx context.Context,
 	projectDir string,

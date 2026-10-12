@@ -1,7 +1,5 @@
 ---
 name: Scheduled
-# Weekly full-tree safety net, report 3.1/4/P1 ~keep: owns DB refresh, drift.
-# Too slow for PR/main gates. Binary pass/fail (P5); check-only, no rewrite.
 "on":
   schedule:
     - cron: 0 3 * * 1
