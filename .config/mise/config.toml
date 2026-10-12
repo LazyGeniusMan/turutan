@@ -34,7 +34,7 @@ run = "hk check"
 
 [tasks."check:pr"]
 description = "Branch-diff check-only gate for pull request CI"
-run = "hk check --pr"
+run = "hk check --from-ref origin/main --to-ref HEAD"
 
 [tasks."fix:all"]
 description = "Full-tree deterministic auto-fix locally"

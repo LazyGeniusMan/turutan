@@ -1,6 +1,6 @@
 ---
 name: CI
-# Scope rule, report 3.1/4/P1 ~keep: PR runs branch-diff gate, main runs full net.
+# Scope ~keep: PR=branch-diff, main=full (report 3.1/4/P1).
 # Both are binary pass/fail gates (P5); CI is check-only, never rewrites (P3).
 on:
   pull_request:
