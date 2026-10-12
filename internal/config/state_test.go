@@ -3,7 +3,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -407,52 +406,32 @@ func TestValidateManifestConditionals(t *testing.T) {
 	}
 }
 
-func TestStateVersionCompat(t *testing.T) {
+func TestStateVersionSingle(t *testing.T) {
 	t.Parallel()
-	t.Run("v1 still loads", func(t *testing.T) {
+	t.Run("current version accepted", func(t *testing.T) {
 		t.Parallel()
-		state := validState()
-		state.Version = StateVersionV1
-		if err := ValidateState(state); err != nil {
-			t.Errorf("ValidateState v1 error: %v", err)
+		if err := ValidateState(validState()); err != nil {
+			t.Errorf("ValidateState current error: %v", err)
 		}
 	})
-	t.Run("v1 fixture loads", func(t *testing.T) {
-		t.Parallel()
-		data := fmt.Sprintf(
-			`{"version":1,"template":"tpl","sourceKind":"filesystem",`+
-				`"resolvedCommit":%q,"engine":"0.1.0","templateLicense":"MIT-0"}`,
-			strings.Repeat("b", 64))
-		got, err := LoadState(fstest.MapFS{StateFileName: {Data: []byte(data)}})
-		if err != nil {
-			t.Fatalf("LoadState v1 error: %v", err)
-		}
-		if got.Version != StateVersionV1 {
-			t.Errorf("Version = %d, want %d", got.Version, StateVersionV1)
-		}
-	})
-	t.Run("save writes v2 and migrates v1", func(t *testing.T) {
+	t.Run("save stamps current version", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		state := validState()
-		state.Version = StateVersionV1
+		state.Version = 0
 		if err := SaveState(dir, state); err != nil {
 			t.Fatalf("SaveState error: %v", err)
 		}
 		if state.Version != StateVersion {
 			t.Errorf("Version = %d, want %d after save", state.Version, StateVersion)
 		}
-		got, err := LoadState(os.DirFS(dir))
-		if err != nil {
-			t.Fatalf("LoadState error: %v", err)
-		}
-		if got.Version != StateVersion {
-			t.Errorf("loaded Version = %d, want %d", got.Version, StateVersion)
-		}
 	})
-	t.Run("v0 and future rejected", func(t *testing.T) {
+	t.Run("v0 v2 and future rejected", func(t *testing.T) {
 		t.Parallel()
-		for _, version := range []int{0, StateVersion + 1} {
+		for _, version := range []int{0, 2, StateVersion + 1} {
+			if version == StateVersion {
+				continue
+			}
 			state := validState()
 			state.Version = version
 			if err := ValidateState(state); err == nil {
@@ -728,38 +707,38 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest error: %v", err)
 	}
-	t.Run("profiles mirror conditionals", func(t *testing.T) {
+	t.Run("profiles are sole source with synthesized conditionals", func(t *testing.T) {
 		t.Parallel()
+		if strings.Contains(string(data), "\nconditionals:") {
+			t.Error("default manifest declares conditionals, want profiles-only source")
+		}
+		if len(manifest.Conditionals) != len(manifest.Profiles) {
+			t.Errorf("synthesized conditionals = %d, want %d profiles", len(manifest.Conditionals), len(manifest.Profiles))
+		}
 		seen := map[string]bool{}
 		for _, cond := range manifest.Conditionals {
 			matched := ""
 			for id := range manifest.Profiles {
-				if strings.Contains(cond.If, `"`+id+`"`) {
-					if matched != "" {
-						t.Errorf("conditional %q matches profiles %q and %q, want one", cond.If, matched, id)
-					}
+				wantIf := `{{ not (contains .enabled_profiles "` + id + `") }}`
+				if cond.If == wantIf {
 					matched = id
+					break
 				}
 			}
 			if matched == "" {
-				t.Errorf("conditional %q matches no profile, want one", cond.If)
+				t.Errorf("conditional %q is not profile-synthesized, want one", cond.If)
 				continue
 			}
 			if seen[matched] {
 				t.Errorf("profile %q has duplicate conditionals", matched)
 			}
 			seen[matched] = true
-			want := append([]string(nil), cond.Skip...)
-			got := append([]string(nil), manifest.Profiles[matched].Files...)
+			want := append([]string(nil), manifest.Profiles[matched].Files...)
+			got := append([]string(nil), cond.Skip...)
 			slices.Sort(want)
 			slices.Sort(got)
 			if !slices.Equal(want, got) {
-				t.Errorf("profile %q files = %v, want conditional skip %v", matched, got, want)
-			}
-		}
-		for id := range manifest.Profiles {
-			if !seen[id] {
-				t.Errorf("profile %q has no conditional, want one", id)
+				t.Errorf("profile %q skip = %v, want files %v", matched, got, want)
 			}
 		}
 	})

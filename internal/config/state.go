@@ -26,8 +26,7 @@ const (
 	LockFileName        = ".turutan.lock"
 	ManifestFileName    = ".turutan.yml"
 	ManifestFileNameAlt = ".turutan.yaml"
-	StateVersion        = 2
-	StateVersionV1      = 1
+	StateVersion        = 1
 	TemplateLicenseMIT0 = "MIT-0"
 )
 
@@ -141,12 +140,8 @@ func SaveState(dir string, state *State) error {
 }
 
 func ValidateState(state *State) error {
-	if state.Version != StateVersionV1 && state.Version != StateVersion {
-		return fmt.Errorf(
-			"unsupported state version %d: this engine reads v%d-v%d only",
-			state.Version,
-			StateVersionV1,
-			StateVersion)
+	if state.Version != StateVersion {
+		return fmt.Errorf("unsupported state version %d: this engine reads v%d only", state.Version, StateVersion)
 	}
 	if state.Template == "" {
 		return fmt.Errorf("invalid state: template is empty")
@@ -266,7 +261,41 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 	if err := ValidateManifest(&manifest); err != nil {
 		return nil, err
 	}
+	normalizeManifest(&manifest)
 	return &manifest, nil
+}
+
+// normalizeManifest synthesizes Conditionals from Profiles so Profiles
+// remains the single source of truth for profile-owned paths. ~keep
+func normalizeManifest(manifest *Manifest) {
+	if manifest == nil || len(manifest.Profiles) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(manifest.Profiles))
+	for id := range manifest.Profiles {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		if hasConditionalForProfile(manifest.Conditionals, id) {
+			continue
+		}
+		files := append([]string(nil), manifest.Profiles[id].Files...)
+		manifest.Conditionals = append(manifest.Conditionals, ManifestConditional{
+			If:   fmt.Sprintf(`{{ not (contains .enabled_profiles "%s") }}`, id),
+			Skip: files,
+		})
+	}
+}
+
+func hasConditionalForProfile(conds []ManifestConditional, id string) bool {
+	needle := `"` + id + `"`
+	for _, cond := range conds {
+		if strings.Contains(cond.If, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func ValidateManifest(manifest *Manifest) error {
