@@ -17,3 +17,5 @@ formatters:
   settings:
     gofumpt:
       extra-rules: false
+issues:
+  new-from-merge-base: main

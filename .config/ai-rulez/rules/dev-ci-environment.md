@@ -15,3 +15,7 @@ Parity: same tool/version/config/command locally and CI. Layers differ only in s
 Check-vs-fix: auto-fix deterministic locally, check-only never-rewrite in CI. Secrets rotate, never autofix.
 
 Budgets: pre-commit <3s, pre-push 30s-2min, PR <10min. Hooks bypassable, never substitute CI; CI re-verifies.
+
+CI-safe (`check`/`fix`) vs local-only (`pre-push` guard) distinction: `check`/`fix` hooks MUST contain only CI-safe steps and `hk check --all` on main MUST pass on main branch. Local-only guards such as `no-commit-to-branch` belong in `pre-push` hook only.
+
+Profiles: CI relies on MISE_ENV unset => full scope, never set MISE_ENV="" (empty skips all gated steps, falsely green).
