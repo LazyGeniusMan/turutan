@@ -1,5 +1,10 @@
 ---
 name: Release
+# Ship a verified artefact only (report section 3.1 ~keep): check:all gate, then
+# goreleaser builds once; the identical artefact is promoted without rebuild.
+# SBOMs are emitted by goreleaser (sboms section in .config/goreleaser.yml);
+# build provenance is attested below. Post-deploy smoke testing is a manual
+# follow-up until a staging environment exists to gate on.
 on:
   push:
     tags:
@@ -14,7 +19,7 @@ defaults:
     shell: bash
 jobs:
   check:
-    name: Check
+    name: Release check (full scope)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -27,15 +32,17 @@ jobs:
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
       - name: Install
         run: mise install
-      - name: Check
+      - name: Check (full scope)
         run: mise run check:all
   release:
-    name: Release
+    name: Release (build once)
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: write  # goreleaser publishes releases ~keep
+      id-token: write  # provenance attestation via OIDC ~keep
+      attestations: write  # provenance attestation write ~keep
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -52,3 +59,10 @@ jobs:
         run: mise run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # yamllint disable rule:line-length
+      # actions/attest-build-provenance v4.2.2, SHA-pinned ~keep.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+      # yamllint enable rule:line-length
+        with:
+          subject-path: dist/checksums.txt
