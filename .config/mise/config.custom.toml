@@ -5,6 +5,7 @@ minimum_release_age_excludes = [
   "npm:@opencode/cli",
   "npm:t3",
   "npm:@earendil-works/pi-coding-agent",
+  "hk",
 ]
 
 [env]
@@ -16,7 +17,7 @@ bun = "1"
 node = "24"
 "npm:@opencode/cli" = { version = "2", bun_args = "--trust" }
 "github:protonpass/pass-cli" = "2"
-"npm:@earendil-works/pi-coding-agent" = "1.1.0"
+"npm:@earendil-works/pi-coding-agent" = "1"
 "npm:t3" = { prefix = "0.0.46-nightly", prerelease = 1 }
 
 [daemons.opencode]

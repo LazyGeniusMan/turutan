@@ -163,7 +163,10 @@ url = "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip"
 [[tools."npm:@earendil-works/pi-coding-agent"]]
 version = "1.1.0"
 backend = "npm:@earendil-works/pi-coding-agent"
-specifiers = ["1.1.0"]
+specifiers = [
+    "1",
+    "1.1.0",
+]
 
 [[tools."npm:@opencode/cli"]]
 version = "2.0.27"
@@ -174,6 +177,6 @@ specifiers = ["2"]
 bun_args = "--trust"
 
 [[tools."npm:t3"]]
-version = "0.0.46-nightly.20261012.3010"
+version = "0.0.46-nightly.20261012.3035"
 backend = "npm:t3"
 specifiers = ["prefix:0.0.46-nightly"]
