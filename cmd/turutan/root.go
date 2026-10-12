@@ -49,6 +49,7 @@ func newRootCmd(v *viper.Viper) *cobra.Command {
 		newBootstrapCmd(),
 		newCheckUpdateCmd(),
 		newDiffCmd(),
+		newProfilesCmd(),
 		newUpdateCmd(),
 		newVersionCmd(),
 	)
