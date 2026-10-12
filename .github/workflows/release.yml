@@ -5,7 +5,7 @@ name: Release
 # SBOMs are emitted by goreleaser (sboms section in .config/goreleaser.yml);
 # build provenance is attested below. Post-deploy smoke testing is a manual
 # follow-up until a staging environment exists to gate on.
-on:
+"on":
   push:
     tags:
       - v*
@@ -20,7 +20,7 @@ defaults:
 jobs:
   check:
     name: Release check (full scope)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -37,7 +37,7 @@ jobs:
   release:
     name: Release (build once)
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write  # goreleaser publishes releases ~keep

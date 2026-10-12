@@ -2,7 +2,7 @@
 name: CI
 # Scope ~keep: PR=branch-diff, main=full (report 3.1/4/P1).
 # Both are binary pass/fail gates (P5); CI is check-only, never rewrites (P3).
-on:
+"on":
   pull_request:
   push:
     branches:
@@ -19,7 +19,7 @@ jobs:
   pr-check:
     name: PR check (diff scope)
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -36,7 +36,7 @@ jobs:
   main-check:
     name: Main check (full scope)
     if: ${{ github.event_name == 'push' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
