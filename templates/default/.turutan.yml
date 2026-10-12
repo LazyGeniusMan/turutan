@@ -1,4 +1,10 @@
 ---
+# Profile ownership: 19 profiles mirror conditionals (files == skip). ~keep
+# core implicit (always rendered, no entry). ~keep
+# Core-always, no option: config.linux.toml, config.toml, mise/scripts/**, ~keep
+# fnox.toml, hk.pkl, tombi.toml, updatecli/mise.yaml, .gitignore, .vscode/**, ~keep
+# README.md.tmpl, TEMPLATE_LICENSE, hooks/**, miserc.toml.tmpl. ~keep
+# ai-rulez placeholders w/o options (core, pkl, typst, yml) ship with ai. ~keep
 source: "git::https://github.com/LazyGeniusMan/turutan.git//templates/default"
 min-engine: ">=0.1.0"
 conflict: inline

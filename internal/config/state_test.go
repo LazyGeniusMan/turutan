@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
 func validState() *State {
@@ -714,4 +716,121 @@ func TestDefaultTemplateProfiles(t *testing.T) {
 	if got := ProfilesForPath(got, nil, "cmd/main.go"); !slices.Contains(got, "go") {
 		t.Errorf("ProfilesForPath cmd/main.go = %v, want go", got)
 	}
+}
+
+func TestDefaultTemplateOwnership(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
+	if err != nil {
+		t.Skipf("default template manifest not found: %v", err)
+	}
+	manifest, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+	if err != nil {
+		t.Fatalf("LoadManifest error: %v", err)
+	}
+	t.Run("profiles mirror conditionals", func(t *testing.T) {
+		t.Parallel()
+		seen := map[string]bool{}
+		for _, cond := range manifest.Conditionals {
+			matched := ""
+			for id := range manifest.Profiles {
+				if strings.Contains(cond.If, `"`+id+`"`) {
+					if matched != "" {
+						t.Errorf("conditional %q matches profiles %q and %q, want one", cond.If, matched, id)
+					}
+					matched = id
+				}
+			}
+			if matched == "" {
+				t.Errorf("conditional %q matches no profile, want one", cond.If)
+				continue
+			}
+			if seen[matched] {
+				t.Errorf("profile %q has duplicate conditionals", matched)
+			}
+			seen[matched] = true
+			want := append([]string(nil), cond.Skip...)
+			got := append([]string(nil), manifest.Profiles[matched].Files...)
+			slices.Sort(want)
+			slices.Sort(got)
+			if !slices.Equal(want, got) {
+				t.Errorf("profile %q files = %v, want conditional skip %v", matched, got, want)
+			}
+		}
+		for id := range manifest.Profiles {
+			if !seen[id] {
+				t.Errorf("profile %q has no conditional, want one", id)
+			}
+		}
+	})
+	t.Run("every file owned by at most one profile or core", func(t *testing.T) {
+		t.Parallel()
+		coreGlobs := []string{
+			".config/fnox.toml",
+			".config/hk.pkl",
+			".config/mise/config.linux.toml",
+			".config/mise/config.toml",
+			".config/mise/scripts/**",
+			".config/tombi.toml",
+			".config/updatecli/mise.yaml",
+			".gitignore",
+			".vscode/**",
+			"README.md.tmpl",
+			"TEMPLATE_LICENSE",
+			"hooks/**",
+			".config/miserc.toml.tmpl",
+		}
+		isCore := func(rel string) bool {
+			for _, pattern := range coreGlobs {
+				ok, err := filter.Match(pattern, rel)
+				if err != nil {
+					continue
+				}
+				if ok {
+					return true
+				}
+			}
+			return false
+		}
+		if owners := ProfilesForPath(manifest, nil, ".config/mise/config.linux.toml"); len(owners) != 0 {
+			t.Errorf("config.linux.toml owners = %v, want core (unowned)", owners)
+		}
+		if !isCore(".config/mise/config.linux.toml") {
+			t.Error("config.linux.toml not in core set, want core-always")
+		}
+		root := filepath.Join("..", "..", "templates", "default")
+		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if rel == ManifestFileName || rel == ManifestFileNameAlt {
+				return nil
+			}
+			owners := ProfilesForPath(manifest, nil, rel)
+			core := isCore(rel)
+			if core && len(owners) > 0 {
+				t.Errorf("core file %q also owned by %v, want exclusive", rel, owners)
+				return nil
+			}
+			if len(owners) == 0 && !core {
+				t.Errorf("orphan file %q unowned and not in core set", rel)
+				return nil
+			}
+			if len(owners) > 2 || (len(owners) == 2 && !slices.Contains(owners, "ai")) {
+				t.Errorf("file %q owned by %v, want at most one plus ai co-ownership", rel, owners)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking default template: %v", err)
+		}
+	})
 }
