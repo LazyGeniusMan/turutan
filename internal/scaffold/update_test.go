@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -887,4 +888,267 @@ func TestMatchesMigration(t *testing.T) {
 
 func manifestWithConflict(mode string) *config.Manifest {
 	return &config.Manifest{Conflict: mode}
+}
+
+const profileTestManifest = "prompts:\n" +
+	"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
+	"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
+	"    default: [\"core\", \"go\", \"github\"]\n" +
+	"    options: [\"core\", \"go\", \"github\"]\n" +
+	"conditionals:\n" +
+	"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
+	"    skip: [\"go.mod\", \"cmd/**\"]\n" +
+	"  - if: '{{ not (contains .enabled_profiles \"github\") }}'\n" +
+	"    skip: [\".github/**\"]\n"
+
+var profileTestFiles = map[string]string{
+	"keep.txt":         "keep v1\n",
+	"version.txt.tmpl": "{{.project_name}} v1\n",
+	"go.mod":           "module example\n",
+	"cmd/app/main.go":  "package main\n",
+	".github/ci.yml":   "ci\n",
+}
+
+func writeProfilesAnswers(t *testing.T, profiles ...string) string {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("enabled_profiles:\n")
+	for _, p := range profiles {
+		b.WriteString("  - " + p + "\n")
+	}
+	path := filepath.Join(t.TempDir(), "answers.yml")
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func bootstrapProfiles(t *testing.T, src string, profiles ...string) string {
+	t.Helper()
+	target := filepath.Join(t.TempDir(), "proj")
+	var stdout strings.Builder
+	opts := testOptions(&stdout)
+	opts.AnswersFile = writeProfilesAnswers(t, profiles...)
+	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
+		t.Fatalf("Bootstrap error: %v", err)
+	}
+	return target
+}
+
+func updateProfiles(t *testing.T, projectDir string, profiles ...string) *UpdateResult {
+	t.Helper()
+	var stdout, stderr strings.Builder
+	opts := updateTestOptions(&stdout, &stderr)
+	opts.Force = true
+	opts.NonInteractive = true
+	opts.AnswersFile = writeProfilesAnswers(t, profiles...)
+	result, err := Update(context.Background(), projectDir, opts)
+	if err != nil {
+		t.Fatalf("Update error: %v", err)
+	}
+	return result
+}
+
+func storedProfiles(t *testing.T, projectDir string) []string {
+	t.Helper()
+	state, err := config.LoadState(os.DirFS(projectDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return normalizeArrayValue(state.Answers["enabled_profiles"])
+}
+
+func lockPaths(t *testing.T, projectDir string) []string {
+	t.Helper()
+	lock, err := config.LoadLock(os.DirFS(projectDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, 0, len(lock.Files))
+	for _, entry := range lock.Files {
+		paths = append(paths, entry.Path)
+	}
+	return paths
+}
+
+func assertProfileFile(t *testing.T, projectDir, rel, want string) {
+	t.Helper()
+	got, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(rel))) // #nosec G304 -- reads a fixture path assembled by the test from a constant segment, not external input
+	if err != nil {
+		t.Fatalf("reading %s: %v", rel, err)
+	}
+	if string(got) != want {
+		t.Errorf("%s = %q, want %q", rel, got, want)
+	}
+}
+
+func assertProfileAbsent(t *testing.T, projectDir, rel string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(projectDir, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+		t.Errorf("%s exists, want it absent", rel)
+	}
+}
+
+func assertCheckUpdateQuiet(t *testing.T, projectDir string) {
+	t.Helper()
+	var stdout strings.Builder
+	result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+	if err != nil {
+		t.Fatalf("CheckUpdate error: %v", err)
+	}
+	if result.Available {
+		t.Error("CheckUpdate reports available after a profile-change update, want up to date")
+	}
+}
+
+func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
+	src := makeTemplate(t, profileTestManifest, profileTestFiles)
+	projectDir := bootstrapProfiles(t, src, "core")
+	for _, rel := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml"} {
+		assertProfileAbsent(t, projectDir, rel)
+	}
+	result := updateProfiles(t, projectDir, "core", "go")
+	assertProfileFile(t, projectDir, "go.mod", "module example\n")
+	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
+	assertProfileAbsent(t, projectDir, ".github/ci.yml")
+	assertProfileFile(t, projectDir, "version.txt", "proj v1\n")
+	paths := lockPaths(t, projectDir)
+	for _, rel := range []string{"go.mod", "cmd/app/main.go", "keep.txt", "version.txt"} {
+		if !slices.Contains(paths, rel) {
+			t.Errorf("lock is missing %q after adding the go profile", rel)
+		}
+	}
+	if slices.Contains(paths, ".github/ci.yml") {
+		t.Error("lock contains .github/ci.yml without the github profile")
+	}
+	if !slices.Contains(result.Updated, "go.mod") {
+		t.Errorf("Updated = %v, want it to list the added go.mod", result.Updated)
+	}
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+		t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+	}
+	assertCheckUpdateQuiet(t, projectDir)
+}
+
+func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
+	t.Run("unmodified dropped files are removed with empty dirs pruned", func(t *testing.T) {
+		src := makeTemplate(t, profileTestManifest, profileTestFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		assertProfileFile(t, projectDir, "go.mod", "module example\n")
+		result := updateProfiles(t, projectDir, "core")
+		assertProfileAbsent(t, projectDir, "go.mod")
+		assertProfileAbsent(t, projectDir, "cmd/app/main.go")
+		assertProfileAbsent(t, projectDir, "cmd/app")
+		assertProfileAbsent(t, projectDir, "cmd")
+		assertProfileFile(t, projectDir, "keep.txt", "keep v1\n")
+		assertProfileFile(t, projectDir, "version.txt", "proj v1\n")
+		paths := lockPaths(t, projectDir)
+		for _, rel := range []string{"go.mod", "cmd/app/main.go"} {
+			if slices.Contains(paths, rel) {
+				t.Errorf("lock still contains %q after removing the go profile", rel)
+			}
+		}
+		if !slices.Contains(result.Updated, "go.mod") {
+			t.Errorf("Updated = %v, want it to list the dropped go.mod", result.Updated)
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		}
+		assertCheckUpdateQuiet(t, projectDir)
+	})
+	t.Run("locally modified dropped file is kept on disk but untracked", func(t *testing.T) {
+		src := makeTemplate(t, profileTestManifest, profileTestFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		mainPath := filepath.Join(projectDir, "cmd", "app", "main.go")
+		if err := os.WriteFile(mainPath, []byte("package main // local\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		updateProfiles(t, projectDir, "core")
+		assertProfileAbsent(t, projectDir, "go.mod")
+		assertProfileFile(t, projectDir, "cmd/app/main.go", "package main // local\n")
+		if paths := lockPaths(t, projectDir); slices.Contains(paths, "cmd/app/main.go") {
+			t.Error("lock still contains locally modified cmd/app/main.go, want it untracked")
+		}
+		if info, err := os.Stat(filepath.Join(projectDir, "cmd", "app")); err != nil || !info.IsDir() {
+			t.Error("cmd/app was pruned while it still holds the kept local file")
+		}
+		assertCheckUpdateQuiet(t, projectDir)
+	})
+}
+
+func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
+	src := makeTemplate(t, profileTestManifest, profileTestFiles)
+	projectDir := bootstrapProfiles(t, src, "core", "go")
+	var stdout, stderr strings.Builder
+	opts := updateTestOptions(&stdout, &stderr)
+	opts.Force = true
+	if _, err := Update(context.Background(), projectDir, opts); err != nil {
+		t.Fatalf("Update error: %v", err)
+	}
+	assertProfileFile(t, projectDir, "go.mod", "module example\n")
+	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+		t.Errorf("stored enabled_profiles = %v, want unchanged [core go]", got)
+	}
+}
+
+func profileGitFixture(t *testing.T) string {
+	t.Helper()
+	files := map[string]string{".turutan.yml": profileTestManifest}
+	for name, content := range profileTestFiles {
+		files[name] = content
+	}
+	repoDir, _ := initTemplateRepo(t, files)
+	return repoDir
+}
+
+func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
+	repoDir := profileGitFixture(t)
+	projectDir := bootstrapProfiles(t, repoDir, "core")
+	assertProfileAbsent(t, projectDir, "go.mod")
+	updateTemplateFile(t, repoDir, "keep.txt", "keep v2\n")
+	result := updateProfiles(t, projectDir, "core", "go")
+	assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
+	assertProfileFile(t, projectDir, "go.mod", "module example\n")
+	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
+	assertProfileAbsent(t, projectDir, ".github/ci.yml")
+	if len(result.Conflicts) != 0 {
+		t.Errorf("Conflicts = %v, want none for disjoint template and profile changes", result.Conflicts)
+	}
+	if result.Old == result.New {
+		t.Error("Old == New, want the commit identity to advance")
+	}
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+		t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+	}
+}
+
+func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
+	repoDir := profileGitFixture(t)
+	projectDir := bootstrapProfiles(t, repoDir, "core", "go", "github")
+	ciPath := filepath.Join(projectDir, ".github", "ci.yml")
+	if err := os.WriteFile(ciPath, []byte("ci // local\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	updateTemplateFile(t, repoDir, "keep.txt", "keep v2\n")
+	result := updateProfiles(t, projectDir, "core")
+	assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
+	assertProfileAbsent(t, projectDir, "go.mod")
+	assertProfileAbsent(t, projectDir, "cmd")
+	assertProfileFile(t, projectDir, ".github/ci.yml", "ci // local\n")
+	paths := lockPaths(t, projectDir)
+	for _, rel := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml"} {
+		if slices.Contains(paths, rel) {
+			t.Errorf("lock still contains %q after removing its profile", rel)
+		}
+	}
+	if len(result.Conflicts) != 0 {
+		t.Errorf("Conflicts = %v, want none", result.Conflicts)
+	}
+	if result.Old == result.New {
+		t.Error("Old == New, want the commit identity to advance")
+	}
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
+		t.Errorf("stored enabled_profiles = %v, want [core]", got)
+	}
 }

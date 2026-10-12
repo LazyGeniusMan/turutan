@@ -411,3 +411,113 @@ func TestBootstrapManifestSourceMismatch(t *testing.T) {
 		}
 	})
 }
+
+func TestBootstrapConditionalProfiles(t *testing.T) {
+	const condManifest = "prompts:\n" +
+		"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
+		"  project_description:\n    prompt: \"Project description\"\n    type: string\n    default: \"\"\n" +
+		"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
+		"    default: [\"core\", \"ai\", \"github\", \"go\"]\n" +
+		"    options: [\"core\", \"ai\", \"github\", \"go\"]\n" +
+		"conditionals:\n" +
+		"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
+		"    skip: [\"go.mod\", \"go.mod.tmpl\", \"cmd/**\"]\n" +
+		"  - if: '{{ not (contains .enabled_profiles \"github\") }}'\n" +
+		"    skip: [\".github/**\"]\n"
+	files := map[string]string{
+		"go.mod.tmpl":         "module {{.project_name}}\n",
+		"cmd/app/main.go":     "main {{.project_name}}\n",
+		".github/ci.yml":      "ci\n",
+		"keep.txt":            "keep\n",
+		"README.md.tmpl":      "# {{.project_name}}\n",
+		".config/miserc.toml": "env\n",
+	}
+	t.Run("defaults keep all profiles", func(t *testing.T) {
+		src := makeTemplate(t, condManifest, files)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		for _, path := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml", "keep.txt"} {
+			if _, err := os.Stat(filepath.Join(target, path)); err != nil {
+				t.Errorf("expected %q rendered: %v", path, err)
+			}
+		}
+	})
+	t.Run("answers file array skips go and github", func(t *testing.T) {
+		src := makeTemplate(t, condManifest, files)
+		answersFile := filepath.Join(t.TempDir(), "answers.yml")
+		if err := os.WriteFile(answersFile, []byte("project_name: demo\nenabled_profiles:\n  - core\n  - ai\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.AnswersFile = answersFile
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		for _, path := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml"} {
+			if _, err := os.Stat(filepath.Join(target, path)); !os.IsNotExist(err) {
+				t.Errorf("file %q exists, want it skipped", path)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(target, "keep.txt")); err != nil {
+			t.Errorf("keep.txt missing: %v", err)
+		}
+	})
+	t.Run("comma-separated string answers file normalized", func(t *testing.T) {
+		src := makeTemplate(t, condManifest, files)
+		answersFile := filepath.Join(t.TempDir(), "answers.yml")
+		if err := os.WriteFile(answersFile, []byte("project_name: demo\nenabled_profiles: \"core, ai\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.AnswersFile = answersFile
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(target, "go.mod")); !os.IsNotExist(err) {
+			t.Error("go.mod exists, want it skipped for core+ai only")
+		}
+	})
+	t.Run("non-interactive missing key names key", func(t *testing.T) {
+		const noDefaultManifest = "prompts:\n" +
+			"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
+			"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
+			"    options: [\"core\", \"go\"]\n"
+		src := makeTemplate(t, noDefaultManifest, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
+		answersFile := filepath.Join(t.TempDir(), "answers.yml")
+		if err := os.WriteFile(answersFile, []byte("project_name: demo\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		opts := testOptions(&strings.Builder{})
+		opts.Defaults = false
+		opts.AnswersFile = answersFile
+		err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts)
+		if err == nil {
+			t.Fatal("Bootstrap succeeded, want missing-key error")
+		}
+		if !strings.Contains(err.Error(), `"enabled_profiles"`) {
+			t.Errorf("error = %v, want it to name the missing prompt key", err)
+		}
+	})
+	t.Run("interactive array prompt dedupes and validates", func(t *testing.T) {
+		src := makeTemplate(t, condManifest, files)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("demo\ndesc\ncore, go, go\n")}
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(target, "go.mod")); err != nil {
+			t.Errorf("go.mod missing, want go profile kept: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(target, ".github/ci.yml")); !os.IsNotExist(err) {
+			t.Error(".github/ci.yml exists, want it skipped without github profile")
+		}
+	})
+}

@@ -257,8 +257,9 @@ func renderStaged(
 	stdout io.Writer,
 	stdin io.Reader,
 ) (map[string]renderedEntry, error) {
+	normalizeUpdateAnswers(answers, manifest, opts)
 	if err := renderUpdateWithAnswers(
-		fetched.Dir, stage, answers, opts, stdout, stdin); err != nil {
+		fetched.Dir, stage, answers, manifest, opts, stdout, stdin); err != nil {
 		return nil, err
 	}
 	rendered, err := walkRendered(stage, manifest)
@@ -332,7 +333,26 @@ func updateAnswers(projectDir string, state *config.State, opts UpdateOptions) (
 		}
 		maps.Copy(answers, overlay)
 	}
+	if s, ok := answers["enabled_profiles"].(string); ok {
+		answers["enabled_profiles"] = splitDedupeList(s)
+	}
 	return answers, nil
+}
+
+func normalizeUpdateAnswers(answers map[string]any, manifest *config.Manifest, opts UpdateOptions) {
+	normalizeAnswersWithManifest(answers, manifest)
+	if manifest != nil && opts.Defaults {
+		for key, def := range manifest.Prompts {
+			if _, ok := answers[key]; ok {
+				continue
+			}
+			if def.Default == nil {
+				continue
+			}
+			answers[key] = manifestDefaultCopy(def.Default)
+		}
+		normalizeAnswersWithManifest(answers, manifest)
+	}
 }
 
 func dirtyFiles(projectDir string, lock *config.Lock) ([]string, error) {
@@ -532,10 +552,32 @@ func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte,
 		if err := filter.RemoveWithinRoot(m.projectDir, path); err != nil && !os.IsNotExist(err) {
 			return false, false, fmt.Errorf("update: removing dropped file %q: %w", path, err)
 		}
+		m.pruneEmptyParents(path)
 		return true, false, nil
 	}
 	fmt.Fprintf(m.stderr, "turutan: keeping locally modified %q dropped by the template\n", path)
 	return false, false, nil
+}
+
+// pruneEmptyParents removes directories left empty by a dropped file,
+// walking up toward the project root. os.Remove only succeeds on empty
+// directories, so paths holding user content stop the walk. ~keep
+func (m *merger) pruneEmptyParents(path string) {
+	dir := filepath.Dir(filepath.FromSlash(path))
+	for dir != "." && dir != "" {
+		abs, err := filter.SafeJoin(m.projectDir, dir)
+		if err != nil {
+			return
+		}
+		info, err := os.Lstat(abs)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return
+		}
+		if err := os.Remove(abs); err != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
 
 func (m *merger) mergeBoth(
@@ -722,18 +764,23 @@ func (m *merger) write(rel string, data []byte) error {
 func renderUpdateWithAnswers(
 	fetchedDir, stage string,
 	answers map[string]any,
+	manifest *config.Manifest,
 	opts UpdateOptions,
 	stdout io.Writer,
 	stdin io.Reader,
 ) error {
 	for range maxPromptAttempts {
+		if err := ensurePromptAnswers(answers, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "update"); err != nil {
+			return err
+		}
+		normalizeAnswersWithManifest(answers, manifest)
 		if err := os.RemoveAll(stage); err != nil {
 			return fmt.Errorf("update: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return fmt.Errorf("update: creating staging dir: %w", err)
 		}
-		err := template.RenderDir(fetchedDir, stage, answers)
+		err := template.RenderDirWithConditionals(fetchedDir, stage, answers, manifestConditionals(manifest))
 		if err == nil {
 			return nil
 		}
@@ -744,11 +791,9 @@ func renderUpdateWithAnswers(
 		if opts.NonInteractive {
 			return fmt.Errorf("update: missing answer for key %q (use --answers-file or --defaults): %w", key, err)
 		}
-		value, promptErr := promptValue(stdout, stdin, key)
-		if promptErr != nil {
-			return promptErr
+		if err := promptMissingKey(answers, manifest, stdout, stdin, key); err != nil {
+			return err
 		}
-		answers[key] = value
 	}
 	return fmt.Errorf("update: too many missing answers (over %d prompts)", maxPromptAttempts)
 }

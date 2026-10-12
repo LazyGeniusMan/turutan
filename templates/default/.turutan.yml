@@ -9,3 +9,127 @@ ignore:
 preserve:
   - "config/local.*.yml"
   - "data/**"
+prompts:
+  project_name:
+    prompt: "Project name"
+    type: string
+  project_description:
+    prompt: "Project description"
+    type: string
+    default: ""
+  enabled_profiles:
+    prompt: "Enabled profiles (comma-separated)"
+    type: array
+    default: ["core", "ai", "github", "go"]
+    options:
+      - "core"
+      - "ai"
+      - "c"
+      - "cpp"
+      - "csharp"
+      - "cloudflare"
+      - "docker"
+      - "elixir"
+      - "github"
+      - "gitlab"
+      - "go"
+      - "java"
+      - "kubernetes"
+      - "php"
+      - "python"
+      - "r"
+      - "ruby"
+      - "rust"
+      - "rust-polygot"
+      - "typescript"
+conditionals:
+  - if: '{{ not (contains .enabled_profiles "go") }}'
+    skip:
+      - "go.mod"
+      - "go.mod.tmpl"
+      - "cmd/**"
+      - "internal/**"
+      - ".golangci.yml"
+      - ".config/golangci-lint/**"
+      - ".config/goreleaser.yml"
+      - ".config/mise/config.go.toml"
+      - ".config/ai-rulez/domains/go/**"
+      - ".config/updatecli/go-version.yaml"
+  - if: '{{ not (contains .enabled_profiles "github") }}'
+    skip:
+      - ".github/**"
+      - ".github/jactionlint.yaml"
+      - ".config/mise/config.github.toml"
+      - ".config/ai-rulez/domains/github/**"
+      - ".config/ryl.toml"
+      - ".config/updatecli/github-actions.yaml"
+  - if: '{{ not (contains .enabled_profiles "ai") }}'
+    skip:
+      - ".config/ai-rulez/**"
+      - ".config/basemind/**"
+      - ".uncomment.toml"
+      - ".config/mise/config.ai.toml"
+  - if: '{{ not (contains .enabled_profiles "c") }}'
+    skip:
+      - ".config/mise/config.c.toml"
+      - ".config/ai-rulez/domains/c/**"
+  - if: '{{ not (contains .enabled_profiles "cpp") }}'
+    skip:
+      - ".config/mise/config.cpp.toml"
+      - ".config/ai-rulez/domains/cpp/**"
+  - if: '{{ not (contains .enabled_profiles "csharp") }}'
+    skip:
+      - ".config/mise/config.csharp.toml"
+      - ".config/ai-rulez/domains/csharp/**"
+  - if: '{{ not (contains .enabled_profiles "cloudflare") }}'
+    skip:
+      - ".config/mise/config.cloudflare.toml"
+      - ".config/ai-rulez/domains/cloudflare/**"
+  - if: '{{ not (contains .enabled_profiles "docker") }}'
+    skip:
+      - ".config/mise/config.docker.toml"
+      - ".config/ai-rulez/domains/docker/**"
+  - if: '{{ not (contains .enabled_profiles "elixir") }}'
+    skip:
+      - ".config/mise/config.elixir.toml"
+      - ".config/ai-rulez/domains/elixir/**"
+  - if: '{{ not (contains .enabled_profiles "gitlab") }}'
+    skip:
+      - ".config/mise/config.gitlab.toml"
+      - ".config/ai-rulez/domains/gitlab/**"
+  - if: '{{ not (contains .enabled_profiles "java") }}'
+    skip:
+      - ".config/mise/config.java.toml"
+      - ".config/ai-rulez/domains/java/**"
+  - if: '{{ not (contains .enabled_profiles "kubernetes") }}'
+    skip:
+      - ".config/mise/config.kubernetes.toml"
+      - ".config/ai-rulez/domains/kubernetes/**"
+  - if: '{{ not (contains .enabled_profiles "php") }}'
+    skip:
+      - ".config/mise/config.php.toml"
+      - ".config/ai-rulez/domains/php/**"
+  - if: '{{ not (contains .enabled_profiles "python") }}'
+    skip:
+      - ".config/mise/config.python.toml"
+      - ".config/ai-rulez/domains/python/**"
+  - if: '{{ not (contains .enabled_profiles "r") }}'
+    skip:
+      - ".config/mise/config.r.toml"
+      - ".config/ai-rulez/domains/r/**"
+  - if: '{{ not (contains .enabled_profiles "ruby") }}'
+    skip:
+      - ".config/mise/config.ruby.toml"
+      - ".config/ai-rulez/domains/ruby/**"
+  - if: '{{ not (contains .enabled_profiles "rust") }}'
+    skip:
+      - ".config/mise/config.rust.toml"
+      - ".config/ai-rulez/domains/rust/**"
+  - if: '{{ not (contains .enabled_profiles "rust-polygot") }}'
+    skip:
+      - ".config/mise/config.rust-polygot.toml"
+      - ".config/ai-rulez/domains/rust-polygot/**"
+  - if: '{{ not (contains .enabled_profiles "typescript") }}'
+    skip:
+      - ".config/mise/config.typescript.toml"
+      - ".config/ai-rulez/domains/typescript/**"

@@ -232,3 +232,136 @@ func TestRenderDirSymlinks(t *testing.T) {
 		}
 	})
 }
+
+func TestContainsFunc(t *testing.T) {
+	t.Run("sprig string order preserved", func(t *testing.T) {
+		is := assert.New(t)
+		is.True(containsFunc("cat", "fair catch"))
+		is.False(containsFunc("catch", "cat"))
+		is.True(containsFunc("world", "hello world"))
+		is.False(containsFunc("bye", "hello"))
+	})
+	t.Run("slices accept either order", func(t *testing.T) {
+		is := assert.New(t)
+		is.True(containsFunc([]string{"go", "ai"}, "go"))
+		is.True(containsFunc("go", []string{"go", "ai"}))
+		is.False(containsFunc([]string{"go", "ai"}, "rust"))
+		is.False(containsFunc("rust", []string{"go", "ai"}))
+		is.True(containsFunc([]any{"go", "ai"}, "ai"))
+		is.True(containsFunc("ai", []any{"go", "ai"}))
+		is.False(containsFunc(nil, "go"))
+		is.False(containsFunc("go", nil))
+	})
+}
+
+func TestEvaluateSkip(t *testing.T) {
+	tests := []struct {
+		name    string
+		answers map[string]any
+		conds   []Conditional
+		want    map[string]bool
+		wantErr string
+	}{
+		{name: "empty conds empty set", answers: map[string]any{}, conds: nil, want: map[string]bool{}},
+		{name: "truthy adds skips", answers: map[string]any{"enabled_profiles": []string{"ai"}}, conds: []Conditional{{If: `{{ not (contains .enabled_profiles "go") }}`, Skip: []string{"go.mod"}}}, want: map[string]bool{"go.mod": true}},
+		{name: "falsy adds nothing", answers: map[string]any{"enabled_profiles": []string{"go"}}, conds: []Conditional{{If: `{{ not (contains .enabled_profiles "go") }}`, Skip: []string{"go.mod"}}}, want: map[string]bool{}},
+		{name: "any slice handled", answers: map[string]any{"enabled_profiles": []any{"go"}}, conds: []Conditional{{If: `{{ contains .enabled_profiles "go" }}`, Skip: []string{"x"}}}, want: map[string]bool{"x": true}},
+		{name: "yes truthy", answers: map[string]any{}, conds: []Conditional{{If: "yes", Skip: []string{"a"}}}, want: map[string]bool{"a": true}},
+		{name: "empty falsy", answers: map[string]any{}, conds: []Conditional{{If: "", Skip: []string{"a"}}}, want: map[string]bool{}},
+		{name: "non-bool errors", answers: map[string]any{}, conds: []Conditional{{If: "maybe", Skip: []string{"a"}}}, wantErr: "not a boolean"},
+		{name: "missing key errors", answers: map[string]any{}, conds: []Conditional{{If: `{{ .absent_key }}`, Skip: []string{"a"}}}, wantErr: `no entry for key "absent_key"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := assert.New(t)
+			got, err := EvaluateSkip(tt.answers, tt.conds)
+			if tt.wantErr != "" {
+				is.Error(err)
+				is.Contains(err.Error(), tt.wantErr)
+				if key := parseMissingKey(err); tt.name == "missing key errors" {
+					is.Equal("absent_key", key)
+				}
+				return
+			}
+			is.NoError(err)
+			is.Equal(tt.want, got)
+		})
+	}
+}
+
+func TestRenderFSWithConditionals(t *testing.T) {
+	newFixture := func() fstest.MapFS {
+		return fstest.MapFS{
+			"go.mod.tmpl":     {Data: []byte("module {{.project_name}}\n")},
+			"github/ci.yml":   {Data: []byte("ci\n")},
+			"cmd/app/main.go": {Data: []byte("main\n")},
+			"keep.txt":        {Data: []byte("keep\n")},
+		}
+	}
+	goCond := []Conditional{{If: `{{ not (contains .enabled_profiles "go") }}`, Skip: []string{"go.mod", "cmd/**"}}}
+	t.Run("skips go files when profile absent", func(t *testing.T) {
+		is := assert.New(t)
+		dst := t.TempDir()
+		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{"ai"}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond))
+		_, err := os.Stat(filepath.Join(dst, "go.mod"))
+		is.True(os.IsNotExist(err))
+		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))
+		is.True(os.IsNotExist(err))
+		got, err := os.ReadFile(filepath.Join(dst, "keep.txt")) // #nosec G304 -- reads file from this test's temp dir
+		is.NoError(err)
+		is.Equal("keep\n", string(got))
+	})
+	t.Run("keeps go files when profile present", func(t *testing.T) {
+		is := assert.New(t)
+		dst := t.TempDir()
+		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{"go"}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond))
+		got, err := os.ReadFile(filepath.Join(dst, "go.mod")) // #nosec G304 -- reads file from this test's temp dir
+		is.NoError(err)
+		is.Equal("module demo\n", string(got))
+	})
+	t.Run("tmpl suffix matches stripped path", func(t *testing.T) {
+		is := assert.New(t)
+		dst := t.TempDir()
+		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{}}
+		conds := []Conditional{{If: "true", Skip: []string{"go.mod"}}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds))
+		_, err := os.Stat(filepath.Join(dst, "go.mod"))
+		is.True(os.IsNotExist(err))
+	})
+	t.Run("dir skip prunes tree", func(t *testing.T) {
+		is := assert.New(t)
+		dst := t.TempDir()
+		answers := map[string]any{"project_name": "demo"}
+		conds := []Conditional{{If: "true", Skip: []string{"github/**"}}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds))
+		_, err := os.Stat(filepath.Join(dst, "github", "ci.yml"))
+		is.True(os.IsNotExist(err))
+	})
+	t.Run("missing key propagates for prompting", func(t *testing.T) {
+		conds := []Conditional{{If: `{{ .absent_key }}`, Skip: []string{"a"}}}
+		err := RenderFSWithConditionals(newFixture(), t.TempDir(), map[string]any{}, conds)
+		is := assert.New(t)
+		is.Error(err)
+		is.Contains(err.Error(), `no entry for key "absent_key"`)
+	})
+}
+
+func TestRenderDirWithConditionals(t *testing.T) {
+	t.Run("skips dir entries via stripped match", func(t *testing.T) {
+		is := assert.New(t)
+		src := t.TempDir()
+		is.NoError(os.MkdirAll(filepath.Join(src, "cmd", "app"), 0o750))
+		is.NoError(os.WriteFile(filepath.Join(src, "go.mod.tmpl"), []byte("module {{.project_name}}\n"), 0o600))
+		is.NoError(os.WriteFile(filepath.Join(src, "cmd", "app", "main.go"), []byte("main\n"), 0o600))
+		dst := t.TempDir()
+		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{}}
+		conds := []Conditional{{If: "true", Skip: []string{"go.mod", "cmd/**"}}}
+		is.NoError(RenderDirWithConditionals(src, dst, answers, conds))
+		_, err := os.Stat(filepath.Join(dst, "go.mod"))
+		is.True(os.IsNotExist(err))
+		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))
+		is.True(os.IsNotExist(err))
+	})
+}

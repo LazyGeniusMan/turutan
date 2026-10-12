@@ -40,7 +40,7 @@ func Bootstrap(
 		defer fetched.Cleanup()
 	}
 	absTarget, answers, staged, cleanupStage, err := stageBootstrap(
-		target, fetched, opts, stdout, stdin)
+		target, fetched, manifest, opts, stdout, stdin)
 	if err != nil {
 		return err
 	}
@@ -128,6 +128,7 @@ func fetchBootstrapTemplate(
 func stageBootstrap(
 	target string,
 	fetched *template.Fetched,
+	manifest *config.Manifest,
 	opts Options,
 	stdout io.Writer,
 	stdin io.Reader,
@@ -136,12 +137,12 @@ func stageBootstrap(
 	if err != nil {
 		return "", nil, "", nil, err
 	}
-	answers, err := seedAnswers(absTarget, opts)
+	answers, err := seedAnswersWithManifest(absTarget, opts, manifest)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
 	staged, cleanup, err := renderWithAnswers(
-		fetched.Dir, answers, opts, stdout, stdin)
+		fetched.Dir, answers, manifest, opts, stdout, stdin)
 	if err != nil {
 		return "", nil, "", cleanup, err
 	}
@@ -242,6 +243,7 @@ func prepareTarget(target string, force bool) (string, error) {
 func renderWithAnswers(
 	srcDir string,
 	answers map[string]any,
+	manifest *config.Manifest,
 	opts Options,
 	stdout io.Writer,
 	stdin io.Reader,
@@ -252,13 +254,18 @@ func renderWithAnswers(
 	}
 	cleanup := func() { _ = os.RemoveAll(stage) }
 	for range maxPromptAttempts {
+		if err := ensurePromptAnswers(answers, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
+			return "", cleanup, err
+		}
+		normalizeAnswersWithManifest(answers, manifest)
+		conds := manifestConditionals(manifest)
 		if err := os.RemoveAll(stage); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 		}
-		err := template.RenderDir(srcDir, stage, answers)
+		err := template.RenderDirWithConditionals(srcDir, stage, answers, conds)
 		if err == nil {
 			return stage, cleanup, nil
 		}
@@ -271,13 +278,70 @@ func renderWithAnswers(
 				"bootstrap: missing answer for key %q "+"(use --answers-file or --defaults): %w",
 				key, err)
 		}
-		value, promptErr := promptValue(stdout, stdin, key)
-		if promptErr != nil {
-			return "", cleanup, promptErr
+		if err := promptMissingKey(answers, manifest, stdout, stdin, key); err != nil {
+			return "", cleanup, err
+		}
+	}
+	return "", cleanup, fmt.Errorf("bootstrap: too many missing answers (over %d prompts)", maxPromptAttempts)
+}
+
+func ensurePromptAnswers(
+	answers map[string]any,
+	manifest *config.Manifest,
+	nonInteractive, defaults bool,
+	stdout io.Writer,
+	stdin io.Reader,
+	op string,
+) error {
+	if manifest == nil {
+		return nil
+	}
+	for _, key := range promptOrder(manifest) {
+		if _, ok := answers[key]; ok {
+			continue
+		}
+		def := manifest.Prompts[key]
+		if defaults && def.Default != nil {
+			answers[key] = manifestDefaultCopy(def.Default)
+			continue
+		}
+		if nonInteractive {
+			return fmt.Errorf(
+				"%s: missing answer for key %q (use --answers-file or --defaults)",
+				op, key)
+		}
+		value, err := promptForKey(stdout, stdin, key, def)
+		if err != nil {
+			return err
 		}
 		answers[key] = value
 	}
-	return "", cleanup, fmt.Errorf("bootstrap: too many missing answers (over %d prompts)", maxPromptAttempts)
+	return nil
+}
+
+func promptMissingKey(
+	answers map[string]any,
+	manifest *config.Manifest,
+	stdout io.Writer,
+	stdin io.Reader,
+	key string,
+) error {
+	if manifest != nil {
+		if def, ok := manifest.Prompts[key]; ok {
+			value, err := promptForKey(stdout, stdin, key, def)
+			if err != nil {
+				return err
+			}
+			answers[key] = value
+			return nil
+		}
+	}
+	value, err := promptValue(stdout, stdin, key)
+	if err != nil {
+		return err
+	}
+	answers[key] = value
+	return nil
 }
 
 func publish(

@@ -157,7 +157,12 @@ func prepareFilesystemReresolve(
 		return nil, nil, nil, "", fmt.Errorf(
 			"check-update: creating staging dir: %w", err)
 	}
-	if err := template.RenderDir(fetched.Dir, stage, state.Answers); err != nil {
+	answers := map[string]any{}
+	for key, val := range state.Answers {
+		answers[key] = val
+	}
+	normalizeAnswersWithManifest(answers, manifest)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}

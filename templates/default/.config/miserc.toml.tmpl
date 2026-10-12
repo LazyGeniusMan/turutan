@@ -1,0 +1,2 @@
+env = [{{ range $i, $p := .enabled_profiles }}{{ if $i }}, {{ end }}"{{ $p }}"{{ end }}]
+auto_env = true

@@ -239,6 +239,161 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 	})
 }
 
+func TestDefaultProfileChangeOffline(t *testing.T) {
+	root := e2eModuleRoot(t)
+	fixture := filepath.Join(root, "templates", "default")
+	if _, err := os.Stat(filepath.Join(fixture, ".turutan.yml")); err != nil {
+		t.Skipf("default template fixture not found: %v", err)
+	}
+	t.Run("add go profile without template change", func(t *testing.T) {
+		t.Parallel()
+		proj := e2eBootstrapProfiles(t, fixture, "core")
+		if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
+			t.Fatal("go.mod exists after core-only bootstrap, want it skipped")
+		}
+		e2eUpdateProfiles(t, proj, "core", "go")
+		got, err := os.ReadFile(filepath.Join(proj, "go.mod"))
+		if err != nil {
+			t.Fatalf("reading added go.mod: %v", err)
+		}
+		if string(got) != "module demoe2e\n\ngo 1.26\n" {
+			t.Errorf("go.mod = %q, want re-rendered module", got)
+		}
+		if _, err := os.Stat(filepath.Join(proj, "cmd", "app", "main.go")); err != nil {
+			t.Errorf("cmd/app/main.go missing after adding the go profile: %v", err)
+		}
+		miserc, err := os.ReadFile(filepath.Join(proj, ".config", "miserc.toml"))
+		if err != nil {
+			t.Fatalf("reading miserc.toml: %v", err)
+		}
+		if !strings.Contains(string(miserc), `env = ["core", "go"]`) {
+			t.Errorf("miserc.toml = %q, want env [core go]", miserc)
+		}
+		if got := e2eStoredProfiles(t, proj); len(got) != 2 || got[0] != "core" || got[1] != "go" {
+			t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+		}
+	})
+	t.Run("remove go profile without template change", func(t *testing.T) {
+		t.Parallel()
+		proj := e2eBootstrapProfiles(t, fixture, "core", "go")
+		if _, err := os.Stat(filepath.Join(proj, "go.mod")); err != nil {
+			t.Fatalf("go.mod missing after core+go bootstrap: %v", err)
+		}
+		e2eUpdateProfiles(t, proj, "core")
+		for _, rel := range []string{"go.mod", "cmd", "internal"} {
+			if _, err := os.Stat(filepath.Join(proj, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+				t.Errorf("%s exists after removing the go profile, want it gone", rel)
+			}
+		}
+		miserc, err := os.ReadFile(filepath.Join(proj, ".config", "miserc.toml"))
+		if err != nil {
+			t.Fatalf("reading miserc.toml: %v", err)
+		}
+		if !strings.Contains(string(miserc), `env = ["core"]`) {
+			t.Errorf("miserc.toml = %q, want env [core]", miserc)
+		}
+		if strings.Contains(string(miserc), `"go"`) {
+			t.Errorf("miserc.toml = %q, want no go profile entry", miserc)
+		}
+		if got := e2eStoredProfiles(t, proj); len(got) != 1 || got[0] != "core" {
+			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		}
+	})
+}
+
+func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
+	root := e2eModuleRoot(t)
+	fixture := filepath.Join(root, "templates", "default")
+	if _, err := os.Stat(filepath.Join(fixture, ".turutan.yml")); err != nil {
+		t.Skipf("default template fixture not found: %v", err)
+	}
+	bin := e2eBuildTurutan(t, root)
+	work := t.TempDir()
+	coreAnswers := e2eWriteProfilesAnswers(t, "core")
+	coreGoAnswers := e2eWriteProfilesAnswers(t, "core", "go")
+	if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
+		"--answers-file", coreAnswers, "--defaults", "--non-interactive"); code != 0 {
+		t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+	}
+	proj := filepath.Join(work, "proj")
+	if out, code := e2eRun(t, bin, proj, "update",
+		"--answers-file", coreGoAnswers, "--force", "--non-interactive"); code != 0 {
+		t.Fatalf("update (add go) exit = %d, want 0:\n%s", code, out)
+	} else if !strings.Contains(out, "updated") {
+		t.Errorf("update output missing summary:\n%s", out)
+	}
+	got, err := os.ReadFile(filepath.Join(proj, "go.mod"))
+	if err != nil {
+		t.Fatalf("reading added go.mod: %v", err)
+	}
+	if !strings.Contains(string(got), "module demoe2e") {
+		t.Errorf("go.mod = %q, want demoe2e module", got)
+	}
+	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[1] != "go" {
+		t.Errorf("stored enabled_profiles = %v, want [core go]", profiles)
+	}
+	if out, code := e2eRun(t, bin, proj, "update",
+		"--answers-file", coreAnswers, "--force", "--non-interactive"); code != 0 {
+		t.Fatalf("update (remove go) exit = %d, want 0:\n%s", code, out)
+	} else if !strings.Contains(out, "updated") {
+		t.Errorf("update output missing summary:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
+		t.Error("go.mod exists after removing the go profile, want it gone")
+	}
+	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
+		t.Errorf("stored enabled_profiles = %v, want [core]", profiles)
+	}
+}
+
+func e2eWriteProfilesAnswers(t *testing.T, profiles ...string) string {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("project_name: demoe2e\n")
+	b.WriteString("enabled_profiles:\n")
+	for _, p := range profiles {
+		b.WriteString("  - " + p + "\n")
+	}
+	path := filepath.Join(t.TempDir(), "answers.yml")
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func e2eBootstrapProfiles(t *testing.T, fixture string, profiles ...string) string {
+	t.Helper()
+	proj := filepath.Join(t.TempDir(), "proj")
+	var stdout strings.Builder
+	opts := testOptions(&stdout)
+	opts.AnswersFile = e2eWriteProfilesAnswers(t, profiles...)
+	if err := Bootstrap(context.Background(), fixture, proj, opts); err != nil {
+		t.Fatalf("Bootstrap error: %v", err)
+	}
+	return proj
+}
+
+func e2eUpdateProfiles(t *testing.T, projectDir string, profiles ...string) {
+	t.Helper()
+	var stdout, stderr strings.Builder
+	opts := updateTestOptions(&stdout, &stderr)
+	opts.Force = true
+	opts.NonInteractive = true
+	opts.AnswersFile = e2eWriteProfilesAnswers(t, profiles...)
+	if _, err := Update(context.Background(), projectDir, opts); err != nil {
+		t.Fatalf("Update error: %v", err)
+	}
+}
+
+func e2eStoredProfiles(t *testing.T, projectDir string) []string {
+	t.Helper()
+	state, err := turutanconfig.LoadState(os.DirFS(projectDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return normalizeArrayValue(state.Answers["enabled_profiles"])
+}
+
 func e2eModuleRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)

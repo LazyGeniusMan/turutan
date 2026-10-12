@@ -11,8 +11,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/LazyGeniusMan/turutan/internal/filter"
 	"github.com/Masterminds/sprig/v3"
+
+	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
 const tmplSuffix = ".tmpl"
@@ -42,6 +43,12 @@ func parseMissingKey(err error) string {
 	return key
 }
 
+// Conditional selects skip globs when If evaluates truthy. ~keep
+type Conditional struct {
+	If   string
+	Skip []string
+}
+
 var skippedDirNames = []string{".turutan", ".git"}
 
 func isSkippedPath(slash string) bool {
@@ -53,7 +60,143 @@ func isSkippedPath(slash string) bool {
 	return false
 }
 
+func containsFunc(a, b any) bool {
+	if needle, ok := a.(string); ok {
+		if haystack, ok := b.(string); ok {
+			return strings.Contains(haystack, needle)
+		}
+		return sliceContains(b, needle)
+	}
+	if needle, ok := b.(string); ok {
+		return sliceContains(a, needle)
+	}
+	return false
+}
+
+func sliceContains(haystack any, needle string) bool {
+	switch v := haystack.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.Contains(v, needle)
+	case []string:
+		return slices.Contains(v, needle)
+	case []any:
+		for _, el := range v {
+			if s, ok := el.(string); ok {
+				if s == needle {
+					return true
+				}
+				continue
+			}
+			if fmt.Sprint(el) == needle {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func templateFuncMap() map[string]any {
+	funcs := sprig.TxtFuncMap()
+	delete(funcs, "env")
+	delete(funcs, "expandenv")
+	funcs["contains"] = containsFunc
+	return funcs
+}
+
+// EvaluateSkip evaluates each conditional If template against answers. ~keep
+// A truthy result adds its Skip globs to the returned set.
+func EvaluateSkip(answers map[string]any, conds []Conditional) (map[string]bool, error) {
+	skipSet := map[string]bool{}
+	for i, cond := range conds {
+		if cond.If == "" {
+			continue
+		}
+		tmpl, err := template.New(fmt.Sprintf("conditional[%d]", i)).
+			Option("missingkey=error").
+			Funcs(templateFuncMap()).
+			Parse(cond.If)
+		if err != nil {
+			return nil, fmt.Errorf("evaluating conditional[%d]: parsing: %w", i, err)
+		}
+		var rendered strings.Builder
+		if err := tmpl.Execute(&rendered, answers); err != nil {
+			wrapped := fmt.Errorf("evaluating conditional[%d]: %w", i, err)
+			if key := parseMissingKey(err); key != "" {
+				return nil, &MissingKeyError{Key: key, Err: wrapped}
+			}
+			return nil, wrapped
+		}
+		enabled, err := parseConditionalBool(strings.TrimSpace(rendered.String()))
+		if err != nil {
+			return nil, fmt.Errorf("evaluating conditional[%d]: %w", i, err)
+		}
+		if !enabled {
+			continue
+		}
+		for _, glob := range cond.Skip {
+			skipSet[glob] = true
+		}
+	}
+	return skipSet, nil
+}
+
+func parseConditionalBool(s string) (bool, error) {
+	switch strings.ToLower(s) {
+	case "true", "1", "yes":
+		return true, nil
+	case "false", "0", "", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("conditional result %q is not a boolean (want true/false)", s)
+	}
+}
+
+func skipGlobs(skipSet map[string]bool) []string {
+	globs := make([]string, 0, len(skipSet))
+	for glob := range skipSet {
+		globs = append(globs, glob)
+	}
+	slices.Sort(globs)
+	return globs
+}
+
+func matchesSkip(globs []string, slash string) (bool, error) {
+	if len(globs) == 0 {
+		return false, nil
+	}
+	stripped := strings.TrimSuffix(slash, tmplSuffix)
+	matched, err := filter.MatchAny(globs, slash)
+	if err != nil {
+		return false, err
+	}
+	if matched {
+		return true, nil
+	}
+	if stripped != slash {
+		matched, err := filter.MatchAny(globs, stripped)
+		if err != nil {
+			return false, err
+		}
+		return matched, nil
+	}
+	return false, nil
+}
+
 func RenderFS(srcFS fs.FS, dstDir string, answers map[string]any) error {
+	return RenderFSWithConditionals(srcFS, dstDir, answers, nil)
+}
+
+// RenderFSWithConditionals renders srcFS to dstDir, omitting paths selected by conds. ~keep
+func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any, conds []Conditional) error {
+	skipSet, err := EvaluateSkip(answers, conds)
+	if err != nil {
+		return err
+	}
+	globs := skipGlobs(skipSet)
 	return fs.WalkDir(srcFS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -63,6 +206,16 @@ func RenderFS(srcFS fs.FS, dstDir string, answers map[string]any) error {
 		}
 		slash := filter.ToSlash(path)
 		if isSkippedPath(slash) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		skip, err := matchesSkip(globs, slash)
+		if err != nil {
+			return fmt.Errorf("rendering template: matching conditional skip: %w", err)
+		}
+		if skip {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
@@ -86,12 +239,22 @@ func RenderFS(srcFS fs.FS, dstDir string, answers map[string]any) error {
 }
 
 func RenderDir(srcDir, dstDir string, answers map[string]any) error {
+	return RenderDirWithConditionals(srcDir, dstDir, answers, nil)
+}
+
+// RenderDirWithConditionals renders srcDir to dstDir, omitting paths selected by conds. ~keep
+func RenderDirWithConditionals(srcDir, dstDir string, answers map[string]any, conds []Conditional) error {
 	abs, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf("rendering template %q: %w", srcDir, err)
 	}
+	skipSet, err := EvaluateSkip(answers, conds)
+	if err != nil {
+		return err
+	}
+	globs := skipGlobs(skipSet)
 	return filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		return renderDirEntry(abs, dstDir, path, d, err, answers)
+		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, answers, globs)
 	})
 }
 
@@ -100,6 +263,16 @@ func renderDirEntry(
 	d fs.DirEntry,
 	walkErr error,
 	answers map[string]any,
+) error {
+	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, answers, nil)
+}
+
+func renderDirEntryWithConditionals(
+	abs, dstDir, path string,
+	d fs.DirEntry,
+	walkErr error,
+	answers map[string]any,
+	globs []string,
 ) error {
 	if walkErr != nil {
 		return walkErr
@@ -113,6 +286,16 @@ func renderDirEntry(
 	}
 	slash := filter.ToSlash(rel)
 	if isSkippedPath(slash) {
+		if d.IsDir() {
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	skip, err := matchesSkip(globs, slash)
+	if err != nil {
+		return fmt.Errorf("rendering template: matching conditional skip: %w", err)
+	}
+	if skip {
 		if d.IsDir() {
 			return filepath.SkipDir
 		}
@@ -176,13 +359,6 @@ func renderFile(srcFS fs.FS, slash, dst string, answers map[string]any) error {
 		return fmt.Errorf("rendering template: reading %q: %w", slash, err)
 	}
 	return renderFileBytes(data, stripTmpl(dst), slash, answers, 0o644)
-}
-
-func templateFuncMap() map[string]any {
-	funcs := sprig.TxtFuncMap()
-	delete(funcs, "env")
-	delete(funcs, "expandenv")
-	return funcs
 }
 
 func renderFileBytes(data []byte, dst, slash string, answers map[string]any, perm fs.FileMode) error {

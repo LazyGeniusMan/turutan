@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -113,7 +114,10 @@ func renderDiffTemplate(
 		return nil, nil, fmt.Errorf("diff: creating staging dir: %w", err)
 	}
 	defer os.RemoveAll(stage)
-	if err := template.RenderDir(fetched.Dir, stage, state.Answers); err != nil {
+	answers := map[string]any{}
+	maps.Copy(answers, state.Answers)
+	normalizeAnswersWithManifest(answers, manifest)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	rendered, err := walkRendered(stage, manifest)
