@@ -43,7 +43,6 @@ func parseMissingKey(err error) string {
 	return key
 }
 
-// Conditional selects skip globs when If evaluates truthy. ~keep
 type Conditional struct {
 	If   string
 	Skip []string
@@ -107,8 +106,6 @@ func templateFuncMap() map[string]any {
 	return funcs
 }
 
-// EvaluateSkip evaluates each conditional If template against answers. ~keep
-// A truthy result adds its Skip globs to the returned set.
 func EvaluateSkip(answers map[string]any, conds []Conditional) (map[string]bool, error) {
 	skipSet := map[string]bool{}
 	for i, cond := range conds {
@@ -190,7 +187,6 @@ func RenderFS(srcFS fs.FS, dstDir string, answers map[string]any) error {
 	return RenderFSWithConditionals(srcFS, dstDir, answers, nil)
 }
 
-// RenderFSWithConditionals renders srcFS to dstDir, omitting paths selected by conds. ~keep
 func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any, conds []Conditional) error {
 	skipSet, err := EvaluateSkip(answers, conds)
 	if err != nil {
@@ -242,7 +238,6 @@ func RenderDir(srcDir, dstDir string, answers map[string]any) error {
 	return RenderDirWithConditionals(srcDir, dstDir, answers, nil)
 }
 
-// RenderDirWithConditionals renders srcDir to dstDir, omitting paths selected by conds. ~keep
 func RenderDirWithConditionals(srcDir, dstDir string, answers map[string]any, conds []Conditional) error {
 	abs, err := filepath.Abs(srcDir)
 	if err != nil {

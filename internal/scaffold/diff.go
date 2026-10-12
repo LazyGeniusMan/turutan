@@ -23,11 +23,31 @@ import (
 
 const DiffContextLines = 3
 
+// DiffWhat selectors choose which side of a drift comparison to report.
+// Update review needs upstream template changes and local edits separately,
+// so diff --what scopes the same engine to either side or both.
+// ~keep
+const (
+	// DiffWhatAll compares the fresh render against the worktree, including
+	// files the new template dropped, for the default full review.
+	// ~keep
+	DiffWhatAll = "all"
+	// DiffWhatUpstream compares the fresh render against the recorded base so
+	// reviewers see template-side changes without local edits in the way.
+	// ~keep
+	DiffWhatUpstream = "upstream"
+	// DiffWhatLocal compares the recorded base against the worktree so
+	// reviewers see local edits without upstream template churn in the way.
+	// ~keep
+	DiffWhatLocal = "local"
+)
+
 type DiffOptions struct {
 	Ref     string
 	Engine  string
 	NoColor bool
 	Verbose bool
+	What    string
 	Stderr  io.Writer
 }
 
@@ -45,10 +65,46 @@ func ComputeDiff(
 	projectDir string,
 	opts DiffOptions,
 ) ([]FileDiff, error) {
+	what, err := normalizeDiffWhat(opts.What)
+	if err != nil {
+		return nil, err
+	}
 	state, lock, src, err := loadDiffInputs(projectDir, opts)
 	if err != nil {
 		return nil, err
 	}
+	switch what {
+	case DiffWhatUpstream:
+		return computeUpstreamDiff(ctx, projectDir, state, src, opts)
+	case DiffWhatLocal:
+		return computeLocalDiff(projectDir, state, lock, opts)
+	default:
+		return computeFullDiff(ctx, projectDir, state, lock, src, opts)
+	}
+}
+
+func normalizeDiffWhat(what string) (string, error) {
+	trimmed := strings.TrimSpace(what)
+	if trimmed == "" {
+		return DiffWhatAll, nil
+	}
+	switch trimmed {
+	case DiffWhatAll, DiffWhatUpstream, DiffWhatLocal:
+		return trimmed, nil
+	default:
+		return "", fmt.Errorf(
+			"diff: unknown --what %q (want all|upstream|local)", what)
+	}
+}
+
+func computeFullDiff(
+	ctx context.Context,
+	projectDir string,
+	state *config.State,
+	lock *config.Lock,
+	src *template.Source,
+	opts DiffOptions,
+) ([]FileDiff, error) {
 	rendered, manifest, err := renderDiffTemplate(
 		ctx, src, state, opts)
 	if err != nil {
@@ -62,6 +118,175 @@ func ComputeDiff(
 		"diff: compared %d rendered file(s), %d drifted",
 		len(rendered), len(diffs))
 	return diffs, nil
+}
+
+func computeUpstreamDiff(
+	ctx context.Context,
+	projectDir string,
+	state *config.State,
+	src *template.Source,
+	opts DiffOptions,
+) ([]FileDiff, error) {
+	rendered, manifest, err := renderDiffTemplate(
+		ctx, src, state, opts)
+	if err != nil {
+		return nil, err
+	}
+	base, err := readBaseEntries(projectDir, state.ResolvedCommit)
+	if err != nil {
+		return nil, err
+	}
+	byNew := make(map[string][]byte, len(base))
+	for path, data := range base {
+		byNew[config.ResolveRenames(path, manifest.Renames)] = data
+	}
+	var diffs []FileDiff
+	for _, path := range renderedPaths(rendered) {
+		ignored, err := filter.MatchAny(manifest.Ignore, path)
+		if err != nil {
+			return nil, fmt.Errorf("diff: %w", err)
+		}
+		if ignored {
+			continue
+		}
+		diff, changed, err := newFileDiff(
+			path, byNew[path], rendered[path].Data, false, false)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			if _, ok := byNew[path]; !ok {
+				diff.IsNew = true
+			}
+			diffs = append(diffs, diff)
+		}
+	}
+	for _, path := range basePaths(byNew) {
+		if _, ok := rendered[path]; ok {
+			continue
+		}
+		ignored, err := filter.MatchAny(manifest.Ignore, path)
+		if err != nil {
+			return nil, fmt.Errorf("diff: %w", err)
+		}
+		if ignored {
+			continue
+		}
+		diff, _, err := newFileDiff(path, byNew[path], nil, false, true)
+		if err != nil {
+			return nil, err
+		}
+		diffs = append(diffs, diff)
+	}
+	vlogf(opts.Stderr, opts.Verbose,
+		"diff: compared %d base file(s) with %d rendered file(s), %d drifted",
+		len(byNew), len(rendered), len(diffs))
+	return diffs, nil
+}
+
+func computeLocalDiff(
+	projectDir string,
+	state *config.State,
+	lock *config.Lock,
+	opts DiffOptions,
+) ([]FileDiff, error) {
+	base, err := readBaseEntries(projectDir, state.ResolvedCommit)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(base)+len(lock.Files))
+	seen := map[string]bool{}
+	for path := range base {
+		paths = append(paths, path)
+		seen[path] = true
+	}
+	for _, entry := range lock.Files {
+		if !seen[entry.Path] {
+			paths = append(paths, entry.Path)
+			seen[entry.Path] = true
+		}
+	}
+	sort.Strings(paths)
+	var diffs []FileDiff
+	for _, path := range paths {
+		local, err := filter.ReadFileWithinRoot(projectDir, path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf(
+					"diff: reading project file %q: %w", path, err)
+			}
+			diff, _, err := newFileDiff(path, base[path], nil, false, true)
+			if err != nil {
+				return nil, err
+			}
+			diffs = append(diffs, diff)
+			continue
+		}
+		diff, changed, err := newFileDiff(
+			path, base[path], local, len(base[path]) == 0 && len(local) > 0, false)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			diffs = append(diffs, diff)
+		}
+	}
+	vlogf(opts.Stderr, opts.Verbose,
+		"diff: compared %d base file(s) with the worktree, %d drifted",
+		len(base), len(diffs))
+	return diffs, nil
+}
+
+func readBaseEntries(projectDir, sha string) (map[string][]byte, error) {
+	dir := baseDirFor(projectDir, sha)
+	if dir == "" {
+		return nil, fmt.Errorf(
+			"diff: no base copy for %q; run turutan update to record one",
+			shortSHA(sha))
+	}
+	out := map[string][]byte{}
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." || d.IsDir() {
+			return nil
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if filter.IsSpecialFile(info) || !info.Mode().IsRegular() {
+			return nil
+		}
+		slash := filter.ToSlash(rel)
+		data, err := os.ReadFile(path) // #nosec G304, G122 -- reads file found by WalkDir of this run's base copy under .turutan/templates, not caller-controlled inclusion
+		if err != nil {
+			return err
+		}
+		out[slash] = data
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("diff: reading base copy: %w", err)
+	}
+	return out, nil
+}
+
+func basePaths(base map[string][]byte) []string {
+	paths := make([]string, 0, len(base))
+	for path := range base {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 func loadDiffInputs(

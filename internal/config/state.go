@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"gopkg.in/yaml.v3"
@@ -45,6 +46,8 @@ type State struct {
 	RequestedRef    string         `json:"requestedRef,omitempty"`
 	ResolvedCommit  string         `json:"resolvedCommit"`
 	Answers         map[string]any `json:"answers,omitempty"`
+	AnswersSchema   int            `json:"answersSchema,omitempty"`
+	Profiles        []string       `json:"profiles,omitempty"`
 	Skip            []string       `json:"skip,omitempty"`
 	Conflict        string         `json:"conflict,omitempty"`
 	Engine          string         `json:"engine"`
@@ -52,9 +55,10 @@ type State struct {
 }
 
 type LockFile struct {
-	Path   string `json:"path"`
-	SHA256 string `json:"sha256"`
-	Bytes  int64  `json:"bytes"`
+	Path    string `json:"path"`
+	SHA256  string `json:"sha256"`
+	Bytes   int64  `json:"bytes"`
+	Profile string `json:"profile,omitempty"`
 }
 
 type Lock struct {
@@ -76,7 +80,6 @@ type ManifestMigration struct {
 	Run  []string `yaml:"run"`
 }
 
-// ManifestPrompt declares a user-visible template variable and its input rules. ~keep
 type ManifestPrompt struct {
 	Prompt  string   `yaml:"prompt"`
 	Default any      `yaml:"default"`
@@ -85,22 +88,33 @@ type ManifestPrompt struct {
 	Help    string   `yaml:"help"`
 }
 
-// ManifestConditional skips template paths when its If expression renders truthy. ~keep
 type ManifestConditional struct {
 	If   string   `yaml:"if"`
 	Skip []string `yaml:"skip"`
 }
 
+// ManifestProfile describes one installable feature slice of a template.
+// Templates use profiles to ship optional file sets behind a single opt-in
+// id so projects only render the variants they asked for via enabled_profiles.
+// ~keep
+type ManifestProfile struct {
+	Label       string   `yaml:"label"`
+	Description string   `yaml:"description"`
+	Files       []string `yaml:"files"`
+}
+
 type Manifest struct {
-	Source       string                    `yaml:"source"`
-	MinEngine    string                    `yaml:"min-engine"`
-	Ignore       []string                  `yaml:"ignore"`
-	Preserve     []string                  `yaml:"preserve"`
-	Conflict     string                    `yaml:"conflict"`
-	Hooks        ManifestHooks             `yaml:"hooks"`
-	Migrations   []ManifestMigration       `yaml:"migrations"`
-	Prompts      map[string]ManifestPrompt `yaml:"prompts"`
-	Conditionals []ManifestConditional     `yaml:"conditionals"`
+	Source       string                     `yaml:"source"`
+	MinEngine    string                     `yaml:"min-engine"`
+	Ignore       []string                   `yaml:"ignore"`
+	Preserve     []string                   `yaml:"preserve"`
+	Conflict     string                     `yaml:"conflict"`
+	Hooks        ManifestHooks              `yaml:"hooks"`
+	Migrations   []ManifestMigration        `yaml:"migrations"`
+	Prompts      map[string]ManifestPrompt  `yaml:"prompts"`
+	Conditionals []ManifestConditional      `yaml:"conditionals"`
+	Renames      map[string]string          `yaml:"renames"`
+	Profiles     map[string]ManifestProfile `yaml:"profiles"`
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
@@ -119,6 +133,7 @@ func LoadState(fsys fs.FS) (*State, error) {
 }
 
 func SaveState(dir string, state *State) error {
+	state.Version = StateVersion
 	if err := ValidateState(state); err != nil {
 		return err
 	}
@@ -247,7 +262,39 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 	if err := ValidateManifest(&manifest); err != nil {
 		return nil, err
 	}
+	normalizeManifest(&manifest)
 	return &manifest, nil
+}
+
+func normalizeManifest(manifest *Manifest) {
+	if manifest == nil || len(manifest.Profiles) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(manifest.Profiles))
+	for id := range manifest.Profiles {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		if hasConditionalForProfile(manifest.Conditionals, id) {
+			continue
+		}
+		files := append([]string(nil), manifest.Profiles[id].Files...)
+		manifest.Conditionals = append(manifest.Conditionals, ManifestConditional{
+			If:   fmt.Sprintf(`{{ not (contains .enabled_profiles "%s") }}`, id),
+			Skip: files,
+		})
+	}
+}
+
+func hasConditionalForProfile(conds []ManifestConditional, id string) bool {
+	needle := `"` + id + `"`
+	for _, cond := range conds {
+		if strings.Contains(cond.If, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func ValidateManifest(manifest *Manifest) error {
@@ -266,6 +313,12 @@ func ValidateManifest(manifest *Manifest) error {
 		return err
 	}
 	if err := validateManifestConditionals(manifest.Conditionals); err != nil {
+		return err
+	}
+	if err := validateManifestProfiles(manifest.Profiles); err != nil {
+		return err
+	}
+	if err := validateManifestRenames(manifest.Renames); err != nil {
 		return err
 	}
 	if manifest.MinEngine != "" {
@@ -321,6 +374,30 @@ func validateManifestConditionals(conds []ManifestConditional) error {
 	return nil
 }
 
+func validateManifestProfiles(profiles map[string]ManifestProfile) error {
+	for id, profile := range profiles {
+		if id == "" {
+			return fmt.Errorf("invalid manifest: profile with empty id")
+		}
+		if err := filter.ValidateGlobs(profile.Files); err != nil {
+			return fmt.Errorf("invalid manifest: bad profile %q files pattern: %w", id, err)
+		}
+	}
+	return nil
+}
+
+func validateManifestRenames(renames map[string]string) error {
+	for old, new := range renames {
+		if strings.TrimSpace(old) == "" || strings.TrimSpace(new) == "" {
+			return fmt.Errorf("invalid manifest: rename %q -> %q must have non-empty paths", old, new)
+		}
+		if old == new {
+			return fmt.Errorf("invalid manifest: rename %q maps to itself", old)
+		}
+	}
+	return nil
+}
+
 func validateMigrationFrom(from string) error {
 	if from == "" {
 		return nil
@@ -332,6 +409,173 @@ func validateMigrationFrom(from string) error {
 		return nil
 	}
 	return fmt.Errorf("bad migration from %q: must be a semver range or a 7-64 hex commit prefix", from)
+}
+
+// GetProfiles returns the deduplicated enabled_profiles from raw answers.
+// Answers arrive as strings, string slices, or decoded YAML/JSON values
+// depending on the prompt path, so callers need one normalization point.
+// ~keep
+func GetProfiles(answers map[string]any) []string {
+	if answers == nil {
+		return nil
+	}
+	val, ok := answers["enabled_profiles"]
+	if !ok || val == nil {
+		return nil
+	}
+	var raw []string
+	switch v := val.(type) {
+	case []string:
+		raw = v
+	case []any:
+		for _, el := range v {
+			raw = append(raw, strings.Split(fmt.Sprint(el), ",")...)
+		}
+	case string:
+		raw = strings.Split(v, ",")
+	default:
+		raw = strings.Split(strings.TrimSpace(fmt.Sprint(val)), ",")
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, el := range raw {
+		trimmed := strings.TrimSpace(el)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+// GetProfiles reports the profiles recorded for this project.
+// Newer state carries Profiles explicitly while older checkouts only have
+// answers, so it falls back to GetProfiles to keep both readable.
+// ~keep
+func (s *State) GetProfiles() []string {
+	if s == nil {
+		return nil
+	}
+	if len(s.Profiles) > 0 {
+		out := make([]string, len(s.Profiles))
+		copy(out, s.Profiles)
+		return out
+	}
+	return GetProfiles(s.Answers)
+}
+
+// ProfilesForPath reports which of the given profiles own path.
+// Update and diff output attribute drift to profiles, so they need the
+// owning ids without reimplementing manifest glob matching each time.
+// ~keep
+func ProfilesForPath(manifest *Manifest, profiles []string, path string) []string {
+	if manifest == nil || len(manifest.Profiles) == 0 {
+		return nil
+	}
+	ids := profiles
+	if ids == nil {
+		ids = make([]string, 0, len(manifest.Profiles))
+		for id := range manifest.Profiles {
+			ids = append(ids, id)
+		}
+	}
+	slash := filter.ToSlash(path)
+	var matched []string
+	for _, id := range ids {
+		profile, ok := manifest.Profiles[id]
+		if !ok {
+			continue
+		}
+		for _, pattern := range profile.Files {
+			ok, err := filter.Match(pattern, slash)
+			if err != nil {
+				continue
+			}
+			if ok {
+				matched = append(matched, id)
+				break
+			}
+		}
+	}
+	slices.Sort(matched)
+	return matched
+}
+
+// ResolveRenames follows the manifest renames chain for an old path.
+// Templates rename files across releases, so lock and base lookups must map
+// recorded paths forward instead of reporting every rename as delete+add.
+// ~keep
+func ResolveRenames(old string, renames map[string]string) string {
+	if len(renames) == 0 || old == "" {
+		return old
+	}
+	cur := old
+	seen := map[string]bool{cur: true}
+	for range len(renames) + 1 {
+		next, ok := renames[cur]
+		if !ok || next == "" || next == cur {
+			return cur
+		}
+		if seen[next] {
+			return cur
+		}
+		seen[next] = true
+		cur = next
+	}
+	return cur
+}
+
+// ProfileDiff summarizes how the profile and prompt surface changed.
+// Update uses it to re-prompt only for genuinely new inputs instead of
+// replaying every question on each template sync.
+// ~keep
+type ProfileDiff struct {
+	Added      []string
+	Removed    []string
+	NewPrompts []string
+}
+
+// DiffProfiles compares previously answered profiles and prompts against a new manifest.
+// Sync needs the added/removed profile ids plus unseen prompt keys to decide
+// what to ask and what to warn about before re-rendering.
+// ~keep
+func DiffProfiles(oldAnswers map[string]any, newManifest *Manifest) ProfileDiff {
+	var diff ProfileDiff
+	if newManifest == nil {
+		return diff
+	}
+	oldSet := map[string]bool{}
+	for _, id := range GetProfiles(oldAnswers) {
+		oldSet[id] = true
+	}
+	newSet := map[string]bool{"core": true}
+	for id := range newManifest.Profiles {
+		newSet[id] = true
+	}
+	for id := range newSet {
+		if !oldSet[id] {
+			diff.Added = append(diff.Added, id)
+		}
+	}
+	for id := range oldSet {
+		if !newSet[id] {
+			diff.Removed = append(diff.Removed, id)
+		}
+	}
+	slices.Sort(diff.Added)
+	slices.Sort(diff.Removed)
+	for key := range newManifest.Prompts {
+		if oldAnswers == nil {
+			diff.NewPrompts = append(diff.NewPrompts, key)
+			continue
+		}
+		if _, ok := oldAnswers[key]; !ok {
+			diff.NewPrompts = append(diff.NewPrompts, key)
+		}
+	}
+	slices.Sort(diff.NewPrompts)
+	return diff
 }
 
 func writeJSON(dir, name string, value any) error {

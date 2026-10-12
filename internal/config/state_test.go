@@ -5,9 +5,12 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
 func validState() *State {
@@ -288,6 +291,68 @@ func TestLoadManifest(t *testing.T) {
 	})
 }
 
+func TestLoadManifestSynthesizesConditionals(t *testing.T) {
+	t.Parallel()
+	t.Run("profiles-only synthesizes skips", func(t *testing.T) {
+		t.Parallel()
+		data := []byte("profiles:\n  go:\n    label: Go\n    files: [\"go.mod\", \"cmd/**\"]\n  github:\n    label: GitHub\n    files: [\".github/**\"]\n")
+		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+		if err != nil {
+			t.Fatalf("LoadManifest error: %v", err)
+		}
+		if len(got.Conditionals) != 2 {
+			t.Fatalf("conditionals = %d, want 2 synthesized", len(got.Conditionals))
+		}
+		want := map[string][]string{
+			"go":     {"go.mod", "cmd/**"},
+			"github": {".github/**"},
+		}
+		for _, cond := range got.Conditionals {
+			matched := ""
+			for id := range want {
+				if cond.If == `{{ not (contains .enabled_profiles "`+id+`") }}` {
+					matched = id
+					break
+				}
+			}
+			if matched == "" {
+				t.Errorf("conditional %q is not profile-synthesized, want one", cond.If)
+				continue
+			}
+			if !slices.Equal(cond.Skip, want[matched]) {
+				t.Errorf("profile %q skip = %v, want %v", matched, cond.Skip, want[matched])
+			}
+			delete(want, matched)
+		}
+		if len(want) != 0 {
+			t.Errorf("missing synthesized conditionals for %v", want)
+		}
+	})
+	t.Run("explicit conditional dedupes synthesis", func(t *testing.T) {
+		t.Parallel()
+		data := []byte("conditionals:\n  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n    skip: [\"custom/**\"]\nprofiles:\n  go:\n    label: Go\n    files: [\"go.mod\"]\n  github:\n    label: GitHub\n    files: [\".github/**\"]\n")
+		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+		if err != nil {
+			t.Fatalf("LoadManifest error: %v", err)
+		}
+		if len(got.Conditionals) != 2 {
+			t.Fatalf("conditionals = %d, want 1 explicit + 1 synthesized", len(got.Conditionals))
+		}
+		if got.Conditionals[0].If != `{{ not (contains .enabled_profiles "go") }}` {
+			t.Errorf("conditionals[0].If = %q, want explicit go conditional kept", got.Conditionals[0].If)
+		}
+		if !slices.Equal(got.Conditionals[0].Skip, []string{"custom/**"}) {
+			t.Errorf("conditionals[0].Skip = %v, want [custom/**]", got.Conditionals[0].Skip)
+		}
+		if got.Conditionals[1].If != `{{ not (contains .enabled_profiles "github") }}` {
+			t.Errorf("conditionals[1].If = %q, want synthesized github conditional", got.Conditionals[1].If)
+		}
+		if !slices.Equal(got.Conditionals[1].Skip, []string{".github/**"}) {
+			t.Errorf("conditionals[1].Skip = %v, want [.github/**]", got.Conditionals[1].Skip)
+		}
+	})
+}
+
 func TestValidateManifestFrom(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -401,4 +466,412 @@ func TestValidateManifestConditionals(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStateVersionSingle(t *testing.T) {
+	t.Parallel()
+	t.Run("current version accepted", func(t *testing.T) {
+		t.Parallel()
+		if err := ValidateState(validState()); err != nil {
+			t.Errorf("ValidateState current error: %v", err)
+		}
+	})
+	t.Run("save stamps current version", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		state := validState()
+		state.Version = 0
+		if err := SaveState(dir, state); err != nil {
+			t.Fatalf("SaveState error: %v", err)
+		}
+		if state.Version != StateVersion {
+			t.Errorf("Version = %d, want %d after save", state.Version, StateVersion)
+		}
+	})
+	t.Run("v0 v2 and future rejected", func(t *testing.T) {
+		t.Parallel()
+		for _, version := range []int{0, 2, StateVersion + 1} {
+			if version == StateVersion {
+				continue
+			}
+			state := validState()
+			state.Version = version
+			if err := ValidateState(state); err == nil {
+				t.Errorf("ValidateState version %d succeeded, want error", version)
+			}
+		}
+	})
+}
+
+func TestValidateManifestProfiles(t *testing.T) {
+	t.Parallel()
+	t.Run("valid profiles accepted", func(t *testing.T) {
+		t.Parallel()
+		manifest := &Manifest{Profiles: map[string]ManifestProfile{
+			"go": {Label: "Go", Files: []string{"go.mod", "cmd/**"}},
+		}}
+		if err := ValidateManifest(manifest); err != nil {
+			t.Errorf("ValidateManifest error: %v", err)
+		}
+	})
+	t.Run("bad glob rejected", func(t *testing.T) {
+		t.Parallel()
+		manifest := &Manifest{Profiles: map[string]ManifestProfile{
+			"go": {Files: []string{"/abs"}},
+		}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Error("ValidateManifest with bad profile glob succeeded, want error")
+		}
+	})
+	t.Run("empty id rejected", func(t *testing.T) {
+		t.Parallel()
+		manifest := &Manifest{Profiles: map[string]ManifestProfile{
+			"": {Files: []string{"a.txt"}},
+		}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Error("ValidateManifest with empty profile id succeeded, want error")
+		}
+	})
+}
+
+func TestValidateManifestRenames(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		renames map[string]string
+		wantErr bool
+	}{
+		{name: "empty accepted", renames: nil, wantErr: false},
+		{name: "valid accepted", renames: map[string]string{"old.txt": "new.txt"}, wantErr: false},
+		{name: "empty old rejected", renames: map[string]string{"": "new.txt"}, wantErr: true},
+		{name: "empty new rejected", renames: map[string]string{"old.txt": ""}, wantErr: true},
+		{name: "self-map rejected", renames: map[string]string{"a.txt": "a.txt"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateManifest(&Manifest{Renames: tt.renames})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLockProfileOwner(t *testing.T) {
+	t.Parallel()
+	t.Run("profile survives round trip", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		lock := &Lock{
+			Source:      "s",
+			ResolvedSHA: strings.Repeat("a", 40),
+			Files:       []LockFile{{Path: "go.mod", SHA256: strings.Repeat("c", 64), Profile: "go"}},
+		}
+		if err := SaveLock(dir, lock); err != nil {
+			t.Fatalf("SaveLock error: %v", err)
+		}
+		got, err := LoadLock(os.DirFS(dir))
+		if err != nil {
+			t.Fatalf("LoadLock error: %v", err)
+		}
+		if got.Files[0].Profile != "go" {
+			t.Errorf("Profile = %q, want %q", got.Files[0].Profile, "go")
+		}
+	})
+	t.Run("hash ignores profile", func(t *testing.T) {
+		t.Parallel()
+		plain := []LockFile{FileEntry("a.txt", []byte("a"))}
+		owned := []LockFile{{Path: "a.txt", SHA256: plain[0].SHA256, Bytes: plain[0].Bytes, Profile: "go"}}
+		if ComputeManifestHash(plain) != ComputeManifestHash(owned) {
+			t.Error("ComputeManifestHash changed with profile, want owner excluded")
+		}
+	})
+}
+
+func TestGetProfiles(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		answers map[string]any
+		want    []string
+	}{
+		{name: "nil answers", answers: nil, want: nil},
+		{name: "missing key", answers: map[string]any{}, want: nil},
+		{name: "string list", answers: map[string]any{"enabled_profiles": "core, go,go"}, want: []string{"core", "go"}},
+		{name: "string slice", answers: map[string]any{"enabled_profiles": []string{"core", "go"}}, want: []string{"core", "go"}},
+		{name: "any slice", answers: map[string]any{"enabled_profiles": []any{"core", "go"}}, want: []string{"core", "go"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := GetProfiles(tt.answers); !slices.Equal(got, tt.want) {
+				t.Errorf("GetProfiles = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	t.Run("stored profiles win over answers", func(t *testing.T) {
+		t.Parallel()
+		state := validState()
+		state.Profiles = []string{"core"}
+		state.Answers = map[string]any{"enabled_profiles": []string{"core", "go"}}
+		if got := state.GetProfiles(); !slices.Equal(got, []string{"core"}) {
+			t.Errorf("GetProfiles = %v, want [core]", got)
+		}
+	})
+	t.Run("nil state", func(t *testing.T) {
+		t.Parallel()
+		var state *State
+		if got := state.GetProfiles(); got != nil {
+			t.Errorf("GetProfiles = %v, want nil", got)
+		}
+	})
+}
+
+func TestProfilesForPath(t *testing.T) {
+	t.Parallel()
+	manifest := &Manifest{Profiles: map[string]ManifestProfile{
+		"go":     {Files: []string{"go.mod", "cmd/**"}},
+		"github": {Files: []string{".github/**"}},
+	}}
+	t.Run("matches owner", func(t *testing.T) {
+		t.Parallel()
+		got := ProfilesForPath(manifest, []string{"go", "github"}, "cmd/main.go")
+		if !slices.Equal(got, []string{"go"}) {
+			t.Errorf("ProfilesForPath = %v, want [go]", got)
+		}
+	})
+	t.Run("nil profiles checks all", func(t *testing.T) {
+		t.Parallel()
+		got := ProfilesForPath(manifest, nil, ".github/workflows/ci.yml")
+		if !slices.Equal(got, []string{"github"}) {
+			t.Errorf("ProfilesForPath = %v, want [github]", got)
+		}
+	})
+	t.Run("unowned path", func(t *testing.T) {
+		t.Parallel()
+		if got := ProfilesForPath(manifest, nil, "README.md"); len(got) != 0 {
+			t.Errorf("ProfilesForPath = %v, want empty", got)
+		}
+	})
+	t.Run("nil manifest", func(t *testing.T) {
+		t.Parallel()
+		if got := ProfilesForPath(nil, nil, "a.txt"); len(got) != 0 {
+			t.Errorf("ProfilesForPath = %v, want empty", got)
+		}
+	})
+}
+
+func TestResolveRenames(t *testing.T) {
+	t.Parallel()
+	t.Run("unmapped returns path", func(t *testing.T) {
+		t.Parallel()
+		if got := ResolveRenames("a.txt", map[string]string{"b.txt": "c.txt"}); got != "a.txt" {
+			t.Errorf("ResolveRenames = %q, want a.txt", got)
+		}
+	})
+	t.Run("follows chains", func(t *testing.T) {
+		t.Parallel()
+		renames := map[string]string{"a.txt": "b.txt", "b.txt": "c.txt"}
+		if got := ResolveRenames("a.txt", renames); got != "c.txt" {
+			t.Errorf("ResolveRenames = %q, want c.txt", got)
+		}
+	})
+	t.Run("cycle terminates", func(t *testing.T) {
+		t.Parallel()
+		renames := map[string]string{"a.txt": "b.txt", "b.txt": "a.txt"}
+		got := ResolveRenames("a.txt", renames)
+		if got != "a.txt" && got != "b.txt" {
+			t.Errorf("ResolveRenames = %q, want cycle guard", got)
+		}
+	})
+}
+
+func TestDiffProfiles(t *testing.T) {
+	t.Parallel()
+	manifest := &Manifest{
+		Prompts: map[string]ManifestPrompt{
+			"project_name":     {},
+			"enabled_profiles": {Type: "array"},
+			"new_key":          {},
+		},
+		Profiles: map[string]ManifestProfile{
+			"go":     {Files: []string{"go.mod"}},
+			"github": {Files: []string{".github/**"}},
+		},
+	}
+	t.Run("added removed and new prompts", func(t *testing.T) {
+		t.Parallel()
+		old := map[string]any{
+			"project_name":     "demo",
+			"enabled_profiles": []string{"core", "go", "dropped"},
+		}
+		diff := DiffProfiles(old, manifest)
+		if !slices.Equal(diff.Added, []string{"github"}) {
+			t.Errorf("Added = %v, want [github]", diff.Added)
+		}
+		if !slices.Equal(diff.Removed, []string{"dropped"}) {
+			t.Errorf("Removed = %v, want [dropped]", diff.Removed)
+		}
+		if !slices.Equal(diff.NewPrompts, []string{"new_key"}) {
+			t.Errorf("NewPrompts = %v, want [new_key]", diff.NewPrompts)
+		}
+	})
+	t.Run("core never removed", func(t *testing.T) {
+		t.Parallel()
+		old := map[string]any{"enabled_profiles": []string{"core"}}
+		diff := DiffProfiles(old, manifest)
+		if slices.Contains(diff.Removed, "core") {
+			t.Errorf("Removed = %v, want no core", diff.Removed)
+		}
+	})
+	t.Run("nil manifest", func(t *testing.T) {
+		t.Parallel()
+		diff := DiffProfiles(map[string]any{"enabled_profiles": []string{"core"}}, nil)
+		if len(diff.Added) != 0 || len(diff.Removed) != 0 || len(diff.NewPrompts) != 0 {
+			t.Errorf("DiffProfiles = %+v, want empty", diff)
+		}
+	})
+}
+
+func TestDefaultTemplateProfiles(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
+	if err != nil {
+		t.Skipf("default template manifest not found: %v", err)
+	}
+	got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+	if err != nil {
+		t.Fatalf("LoadManifest error: %v", err)
+	}
+	if len(got.Profiles) != 19 {
+		t.Errorf("profiles = %d, want 19 (core implicit)", len(got.Profiles))
+	}
+	if _, ok := got.Profiles["core"]; ok {
+		t.Error("profiles has core, want core implicit only")
+	}
+	goProfile := got.Profiles["go"]
+	if !slices.Contains(goProfile.Files, "go.mod") {
+		t.Errorf("go files = %v, want go.mod", goProfile.Files)
+	}
+	if got := ProfilesForPath(got, nil, "cmd/main.go"); !slices.Contains(got, "go") {
+		t.Errorf("ProfilesForPath cmd/main.go = %v, want go", got)
+	}
+}
+
+func TestDefaultTemplateOwnership(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
+	if err != nil {
+		t.Skipf("default template manifest not found: %v", err)
+	}
+	manifest, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+	if err != nil {
+		t.Fatalf("LoadManifest error: %v", err)
+	}
+	t.Run("profiles are sole source with synthesized conditionals", func(t *testing.T) {
+		t.Parallel()
+		if strings.Contains(string(data), "\nconditionals:") {
+			t.Error("default manifest declares conditionals, want profiles-only source")
+		}
+		if len(manifest.Conditionals) != len(manifest.Profiles) {
+			t.Errorf("synthesized conditionals = %d, want %d profiles", len(manifest.Conditionals), len(manifest.Profiles))
+		}
+		seen := map[string]bool{}
+		for _, cond := range manifest.Conditionals {
+			matched := ""
+			for id := range manifest.Profiles {
+				wantIf := `{{ not (contains .enabled_profiles "` + id + `") }}`
+				if cond.If == wantIf {
+					matched = id
+					break
+				}
+			}
+			if matched == "" {
+				t.Errorf("conditional %q is not profile-synthesized, want one", cond.If)
+				continue
+			}
+			if seen[matched] {
+				t.Errorf("profile %q has duplicate conditionals", matched)
+			}
+			seen[matched] = true
+			want := append([]string(nil), manifest.Profiles[matched].Files...)
+			got := append([]string(nil), cond.Skip...)
+			slices.Sort(want)
+			slices.Sort(got)
+			if !slices.Equal(want, got) {
+				t.Errorf("profile %q skip = %v, want files %v", matched, got, want)
+			}
+		}
+	})
+	t.Run("every file owned by at most one profile or core", func(t *testing.T) {
+		t.Parallel()
+		coreGlobs := []string{
+			".config/fnox.toml",
+			".config/hk.pkl",
+			".config/mise/config.linux.toml",
+			".config/mise/config.toml",
+			".config/mise/scripts/**",
+			".config/tombi.toml",
+			".config/updatecli/mise.yaml",
+			".gitignore",
+			".vscode/**",
+			"README.md.tmpl",
+			"TEMPLATE_LICENSE",
+			"hooks/**",
+			".config/miserc.toml.tmpl",
+		}
+		isCore := func(rel string) bool {
+			for _, pattern := range coreGlobs {
+				ok, err := filter.Match(pattern, rel)
+				if err != nil {
+					continue
+				}
+				if ok {
+					return true
+				}
+			}
+			return false
+		}
+		if owners := ProfilesForPath(manifest, nil, ".config/mise/config.linux.toml"); len(owners) != 0 {
+			t.Errorf("config.linux.toml owners = %v, want core (unowned)", owners)
+		}
+		if !isCore(".config/mise/config.linux.toml") {
+			t.Error("config.linux.toml not in core set, want core-always")
+		}
+		root := filepath.Join("..", "..", "templates", "default")
+		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if rel == ManifestFileName || rel == ManifestFileNameAlt {
+				return nil
+			}
+			owners := ProfilesForPath(manifest, nil, rel)
+			core := isCore(rel)
+			if core && len(owners) > 0 {
+				t.Errorf("core file %q also owned by %v, want exclusive", rel, owners)
+				return nil
+			}
+			if len(owners) == 0 && !core {
+				t.Errorf("orphan file %q unowned and not in core set", rel)
+				return nil
+			}
+			if len(owners) > 2 || (len(owners) == 2 && !slices.Contains(owners, "ai")) {
+				t.Errorf("file %q owned by %v, want at most one plus ai co-ownership", rel, owners)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking default template: %v", err)
+		}
+	})
 }

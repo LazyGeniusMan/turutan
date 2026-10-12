@@ -51,10 +51,13 @@ func CheckUpdate(
 		ref = opts.Ref
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
-	fresh, changed, err := reresolve(
+	fresh, changed, profiles, err := reresolve(
 		ctx, state, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
+	}
+	if changed && len(profiles.Added)+len(profiles.Removed)+len(profiles.NewPrompts) == 0 {
+		profiles = fetchProfileDiff(ctx, state, ref, opts.Engine, opts.Stderr, opts.Verbose)
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
 	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
@@ -67,6 +70,9 @@ func CheckUpdate(
 			return nil, err
 		}
 	}
+	if err := reportProfileDiff(stdout, profiles); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -76,33 +82,68 @@ func reresolve(
 	ref, projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
-) (string, bool, error) {
+) (string, bool, config.ProfileDiff, error) {
 	switch template.SourceKind(state.SourceKind) {
 	case template.KindRemoteGit:
 		src, err := template.ParseSource(state.Template)
 		if err != nil {
-			return "", false, fmt.Errorf("check-update: %w", err)
+			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
 		}
 		sha, err := git.ResolveRemoteRef(ctx, src.Repo, ref)
 		if err != nil {
-			return "", false, fmt.Errorf("check-update: %w", err)
+			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
 		}
-		return sha, sha != state.ResolvedCommit, nil
+		return sha, sha != state.ResolvedCommit, config.ProfileDiff{}, nil
 	case template.KindLocalGit:
 		src, err := template.ParseSource(state.Template)
 		if err != nil {
-			return "", false, fmt.Errorf("check-update: %w", err)
+			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
 		}
 		sha, err := git.ResolveLocal(src.Repo, ref)
 		if err != nil {
-			return "", false, fmt.Errorf("check-update: %w", err)
+			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
 		}
-		return sha, sha != state.ResolvedCommit, nil
+		return sha, sha != state.ResolvedCommit, config.ProfileDiff{}, nil
 	case template.KindFilesystem:
 		return reresolveFilesystem(ctx, state, ref, projectDir, engine, stderr, verbose)
 	default:
-		return "", false, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
+		return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
 	}
+}
+
+func fetchProfileDiff(
+	ctx context.Context,
+	state *config.State,
+	ref, engine string,
+	stderr io.Writer,
+	verbose bool,
+) config.ProfileDiff {
+	src, err := template.ParseSource(state.Template)
+	if err != nil {
+		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
+		return config.ProfileDiff{}
+	}
+	if ref != "" {
+		src.RequestedRef = ref
+	}
+	fetched, err := template.Fetch(ctx, src)
+	if err != nil {
+		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
+		return config.ProfileDiff{}
+	}
+	if fetched.Cleanup != nil {
+		defer fetched.Cleanup()
+	}
+	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
+	if err != nil {
+		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
+		return config.ProfileDiff{}
+	}
+	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
+		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
+		return config.ProfileDiff{}
+	}
+	return relevantProfileDiff(manifest, config.DiffProfiles(state.Answers, manifest))
 }
 
 func reresolveFilesystem(
@@ -111,9 +152,9 @@ func reresolveFilesystem(
 	ref, projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
-) (string, bool, error) {
+) (string, bool, config.ProfileDiff, error) {
 	if ref != "" {
-		return "", false, fmt.Errorf(
+		return "", false, config.ProfileDiff{}, fmt.Errorf(
 			"check-update: ref %q is not supported "+
 				"for filesystem sources",
 			ref)
@@ -121,10 +162,15 @@ func reresolveFilesystem(
 	lock, _, manifest, stage, err := prepareFilesystemReresolve(
 		ctx, state, projectDir, engine, stderr, verbose)
 	if err != nil {
-		return "", false, err
+		return "", false, config.ProfileDiff{}, err
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
-	return compareFilesystemHashes(stage, manifest, state, lock)
+	profiles := relevantProfileDiff(manifest, config.DiffProfiles(state.Answers, manifest))
+	fresh, changed, err := compareFilesystemHashes(stage, manifest, state, lock)
+	if err != nil {
+		return "", false, config.ProfileDiff{}, err
+	}
+	return fresh, changed, profiles, nil
 }
 
 func prepareFilesystemReresolve(

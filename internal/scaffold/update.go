@@ -38,6 +38,9 @@ type UpdateOptions struct {
 	NonInteractive bool
 	Verbose        bool
 	Engine         string
+	Enable         []string
+	Disable        []string
+	Preview        bool
 	Stdout         io.Writer
 	Stderr         io.Writer
 	Stdin          io.Reader
@@ -69,6 +72,14 @@ func Update(
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
+	if err := reconcileProfiles(answers, manifest, opts, stderr); err != nil {
+		return nil, err
+	}
+	if opts.Preview {
+		return previewUpdate(
+			state, lock, fetched, manifest, answers,
+			opts, stdout, stderr, stdin)
+	}
 	rendered, old, fresh, merger, skipMigrations, stage, err := stageUpdate(
 		projectDir, state, fetched, manifest, answers,
 		opts, stdout, stderr, stdin)
@@ -89,7 +100,281 @@ func Update(
 	}
 	return finishUpdate(
 		projectDir, state, lock, src, wantRef, answers, fresh,
-		rendered, stage, stdout, updated, conflicts, migrated, old)
+		rendered, stage, manifest, stdout, updated, conflicts, migrated, old)
+}
+
+func reconcileProfiles(
+	answers map[string]any,
+	manifest *config.Manifest,
+	opts UpdateOptions,
+	stderr io.Writer,
+) error {
+	diff := relevantProfileDiff(manifest, config.DiffProfiles(answers, manifest))
+	if err := reportProfileDiff(stderr, diff); err != nil {
+		return err
+	}
+	if len(opts.Enable) == 0 && len(opts.Disable) == 0 {
+		return nil
+	}
+	offered := offeredProfiles(manifest)
+	known := map[string]bool{}
+	for _, id := range offered {
+		known[id] = true
+	}
+	for _, id := range opts.Enable {
+		if !known[strings.TrimSpace(id)] {
+			return fmt.Errorf(
+				"update: unknown profile %q (offered: %s)",
+				id, strings.Join(offered, ", "))
+		}
+	}
+	for _, id := range opts.Disable {
+		if !known[strings.TrimSpace(id)] {
+			return fmt.Errorf(
+				"update: unknown profile %q (offered: %s)",
+				id, strings.Join(offered, ", "))
+		}
+	}
+	drop := map[string]bool{}
+	for _, id := range opts.Disable {
+		drop[strings.TrimSpace(id)] = true
+	}
+	var next []string
+	present := map[string]bool{}
+	for _, id := range config.GetProfiles(answers) {
+		if drop[id] || present[id] {
+			continue
+		}
+		present[id] = true
+		next = append(next, id)
+	}
+	for _, id := range opts.Enable {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" || present[trimmed] {
+			continue
+		}
+		present[trimmed] = true
+		next = append(next, trimmed)
+	}
+	if next == nil {
+		next = []string{}
+	}
+	answers["enabled_profiles"] = next
+	return nil
+}
+
+func reportProfileDiff(stderr io.Writer, diff config.ProfileDiff) error {
+	if added := reportableProfiles(diff.Added); len(added) > 0 {
+		if _, err := fmt.Fprintf(stderr,
+			"turutan: template offers new profiles: %s\n",
+			strings.Join(added, ", ")); err != nil {
+			return err
+		}
+	}
+	if len(diff.Removed) > 0 {
+		if _, err := fmt.Fprintf(stderr,
+			"turutan: template dropped profiles: %s\n",
+			strings.Join(diff.Removed, ", ")); err != nil {
+			return err
+		}
+	}
+	if len(diff.NewPrompts) > 0 {
+		if _, err := fmt.Fprintf(stderr,
+			"turutan: template adds new prompts: %s\n",
+			strings.Join(diff.NewPrompts, ", ")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func offeredProfiles(manifest *config.Manifest) []string {
+	offered := []string{"core"}
+	if manifest != nil {
+		for id := range manifest.Profiles {
+			offered = append(offered, id)
+		}
+	}
+	sort.Strings(offered)
+	return offered
+}
+
+func reportableProfiles(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if id == "core" {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
+func relevantProfileDiff(
+	manifest *config.Manifest,
+	diff config.ProfileDiff,
+) config.ProfileDiff {
+	if manifest == nil || len(manifest.Profiles) == 0 {
+		diff.Removed = nil
+	}
+	return diff
+}
+
+type previewEntry struct {
+	Path     string
+	Kind     string
+	Profiles []string
+}
+
+func previewUpdate(
+	state *config.State,
+	lock *config.Lock,
+	fetched *template.Fetched,
+	manifest *config.Manifest,
+	answers map[string]any,
+	opts UpdateOptions,
+	stdout, stderr io.Writer,
+	stdin io.Reader,
+) (*UpdateResult, error) {
+	stage, err := os.MkdirTemp("", "turutan-update-*")
+	if err != nil {
+		return nil, fmt.Errorf(
+			"update: creating staging dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(stage) }()
+	rendered, err := renderStaged(
+		fetched, stage, manifest, answers, opts, stdout, stdin)
+	if err != nil {
+		return nil, err
+	}
+	old := state.ResolvedCommit
+	fresh := fetched.ResolvedCommit
+	if fresh == "" {
+		fresh = strings.TrimPrefix(
+			config.ComputeManifestHash(templateLockEntries(rendered)),
+			"sha256:")
+	}
+	vlogf(stderr, opts.Verbose, "update: preview %s -> %s", old, fresh)
+	plan := previewPlan(rendered, lock, manifest, answers)
+	if err := printPreview(stdout, plan); err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(plan))
+	for _, entry := range plan {
+		paths = append(paths, entry.Path)
+	}
+	return &UpdateResult{Old: old, New: fresh, Updated: paths}, nil
+}
+
+func previewPlan(
+	rendered map[string]renderedEntry,
+	lock *config.Lock,
+	manifest *config.Manifest,
+	answers map[string]any,
+) []previewEntry {
+	lockMap, _ := renamedLockMap(lock, manifest.Renames)
+	paths := make([]string, 0, len(lockMap)+len(rendered))
+	seen := map[string]bool{}
+	for path := range lockMap {
+		paths = append(paths, path)
+		seen[path] = true
+	}
+	for path := range rendered {
+		if !seen[path] {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	enabled := config.GetProfiles(answers)
+	var plan []previewEntry
+	for _, path := range paths {
+		locked, inLock := lockMap[path]
+		fresh, inRendered := rendered[path]
+		var kind string
+		switch {
+		case inRendered && !inLock:
+			kind = "added"
+		case !inRendered && inLock:
+			kind = "dropped"
+		case config.FileEntry(path, fresh.Data).SHA256 != locked.SHA256:
+			kind = "modified"
+		default:
+			continue
+		}
+		profiles := config.ProfilesForPath(manifest, enabled, path)
+		if len(profiles) == 0 {
+			profiles = []string{"core"}
+		}
+		plan = append(plan, previewEntry{Path: path, Kind: kind, Profiles: profiles})
+	}
+	return plan
+}
+
+func printPreview(stdout io.Writer, plan []previewEntry) error {
+	if len(plan) == 0 {
+		if _, err := fmt.Fprintln(stdout, "turutan: preview: no changes"); err != nil {
+			return err
+		}
+		return nil
+	}
+	groups := map[string][]previewEntry{}
+	var order []string
+	for _, entry := range plan {
+		key := strings.Join(entry.Profiles, ",")
+		if _, ok := groups[key]; !ok {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], entry)
+	}
+	sort.Strings(order)
+	for _, key := range order {
+		entries := groups[key]
+		noun := "files"
+		if len(entries) == 1 {
+			noun = "file"
+		}
+		if _, err := fmt.Fprintf(stdout,
+			"turutan: preview %s (%d %s):\n", key, len(entries), noun); err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			var marker string
+			switch entry.Kind {
+			case "added":
+				marker = "+"
+			case "dropped":
+				marker = "-"
+			default:
+				marker = "~"
+			}
+			if _, err := fmt.Fprintf(stdout, "  %s %s (%s)\n",
+				marker, entry.Path, entry.Kind); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func renamedLockMap(
+	lock *config.Lock,
+	renames map[string]string,
+) (map[string]config.LockFile, map[string]string) {
+	lockMap := make(map[string]config.LockFile, len(lock.Files))
+	oldPaths := map[string]string{}
+	for _, entry := range lock.Files {
+		next := config.ResolveRenames(entry.Path, renames)
+		if _, taken := lockMap[next]; taken {
+			continue
+		}
+		moved := entry
+		moved.Path = next
+		lockMap[next] = moved
+		if next != entry.Path {
+			oldPaths[next] = entry.Path
+		}
+	}
+	return lockMap, oldPaths
 }
 
 func finishUpdate(
@@ -102,12 +387,13 @@ func finishUpdate(
 	fresh string,
 	rendered map[string]renderedEntry,
 	stage string,
+	manifest *config.Manifest,
 	stdout io.Writer,
 	updated, conflicts, migrated []string,
 	old string,
 ) (*UpdateResult, error) {
 	if err := refreshStateLock(
-		projectDir, state, lock, src, wantRef, answers, fresh, rendered,
+		projectDir, state, lock, src, wantRef, answers, fresh, rendered, manifest,
 	); err != nil {
 		return nil, err
 	}
@@ -436,14 +722,13 @@ type merger struct {
 	conflict   ConflictMode
 	newSHA     string
 	baseDir    string
+	oldPaths   map[string]string
 	stderr     io.Writer
 }
 
 func (m *merger) merge(rendered map[string]renderedEntry, lock *config.Lock) ([]string, []string, error) {
-	lockMap := make(map[string]config.LockFile, len(lock.Files))
-	for _, entry := range lock.Files {
-		lockMap[entry.Path] = entry
-	}
+	lockMap, oldPaths := renamedLockMap(lock, m.manifest.Renames)
+	m.oldPaths = oldPaths
 	paths := make([]string, 0, len(lockMap)+len(rendered))
 	seen := map[string]bool{}
 	for path := range lockMap {
@@ -461,6 +746,10 @@ func (m *merger) merge(rendered map[string]renderedEntry, lock *config.Lock) ([]
 		wrote, conflicted, err := m.mergeOne(
 			path, lockMap[path], rendered[path],
 			inLock(lockMap, path), inRendered(rendered, path))
+		if err != nil {
+			return nil, nil, err
+		}
+		wrote, err = m.followRename(path, wrote, inRendered(rendered, path))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -506,11 +795,10 @@ func (m *merger) mergeOne(
 	if _, err := filter.SafeJoin(m.projectDir, filepath.FromSlash(path)); err != nil {
 		return false, false, fmt.Errorf("update: %w", err)
 	}
-	local, err := filter.ReadFileWithinRoot(m.projectDir, path)
-	if err != nil && !os.IsNotExist(err) {
-		return false, false, fmt.Errorf("update: reading project file %q: %w", path, err)
+	local, localExists, err := m.readLocal(path)
+	if err != nil {
+		return false, false, err
 	}
-	localExists := err == nil
 	switch {
 	case hasFresh && !hasLocked:
 		return m.mergeAdded(path, fresh.Data, local, localExists, preserved)
@@ -548,6 +836,87 @@ func (m *merger) mergeAdded(path string, fresh, local []byte, localExists, prese
 	return m.conflictBoth(path, local, fresh)
 }
 
+func (m *merger) readLocal(path string) ([]byte, bool, error) {
+	local, err := filter.ReadFileWithinRoot(m.projectDir, path)
+	if err == nil {
+		return local, true, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, false, fmt.Errorf("update: reading project file %q: %w", path, err)
+	}
+	old, ok := m.oldPaths[path]
+	if !ok || old == path {
+		return nil, false, nil
+	}
+	prior, err := filter.ReadFileWithinRoot(m.projectDir, old)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("update: reading project file %q: %w", old, err)
+	}
+	return prior, true, nil
+}
+
+func (m *merger) readBase(path string) ([]byte, bool, error) {
+	base, err := filter.ReadFileWithinRoot(m.baseDir, path)
+	if err == nil {
+		return base, true, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, true, fmt.Errorf("update: reading base copy of %q: %w", path, err)
+	}
+	old, ok := m.oldPaths[path]
+	if !ok || old == path {
+		return nil, false, nil
+	}
+	prior, err := filter.ReadFileWithinRoot(m.baseDir, old)
+	if err == nil {
+		return prior, true, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, true, fmt.Errorf("update: reading base copy of %q: %w", old, err)
+	}
+	return nil, false, nil
+}
+
+func (m *merger) followRename(path string, wrote, hasFresh bool) (bool, error) {
+	old, ok := m.oldPaths[path]
+	if !ok || old == path {
+		return wrote, nil
+	}
+	if _, err := filter.StatWithinRoot(m.projectDir, old); err != nil {
+		if os.IsNotExist(err) {
+			return wrote, nil
+		}
+		return wrote, fmt.Errorf("update: stating renamed file %q: %w", old, err)
+	}
+	if !wrote && hasFresh {
+		preserved, err := userOwned(path, m.manifest, m.state)
+		if err != nil {
+			return wrote, err
+		}
+		if !preserved {
+			data, err := filter.ReadFileWithinRoot(m.projectDir, old)
+			if err != nil {
+				return wrote, fmt.Errorf("update: reading renamed file %q: %w", old, err)
+			}
+			if err := m.write(path, data); err != nil {
+				return wrote, err
+			}
+			wrote = true
+		}
+	}
+	if !wrote {
+		return false, nil
+	}
+	if err := filter.RemoveWithinRoot(m.projectDir, old); err != nil && !os.IsNotExist(err) {
+		return wrote, fmt.Errorf("update: removing renamed file %q: %w", old, err)
+	}
+	m.pruneEmptyParents(old)
+	return wrote, nil
+}
+
 func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte, localExists bool) (bool, bool, error) {
 	if !localExists {
 		return false, false, nil
@@ -565,9 +934,6 @@ func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte,
 	return false, false, nil
 }
 
-// pruneEmptyParents removes directories left empty by a dropped file,
-// walking up toward the project root. os.Remove only succeeds on empty
-// directories, so paths holding user content stop the walk. ~keep
 func (m *merger) pruneEmptyParents(path string) {
 	dir := filepath.Dir(filepath.FromSlash(path))
 	for dir != "." && dir != "" {
@@ -682,12 +1048,12 @@ func (m *merger) mergeBinaryBoth(
 }
 
 func (m *merger) threeWay(path string, local, fresh []byte) (wrote, conflicted, handled bool, err error) {
-	base, err := filter.ReadFileWithinRoot(m.baseDir, path)
+	base, found, err := m.readBase(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, false, false, nil
-		}
-		return false, false, true, fmt.Errorf("update: reading base copy of %q: %w", path, err)
+		return false, false, true, err
+	}
+	if !found {
+		return false, false, false, nil
 	}
 	if bytes.Equal(base, local) {
 		if err := m.write(path, fresh); err != nil {
@@ -937,6 +1303,7 @@ func refreshStateLock(
 	answers map[string]any,
 	fresh string,
 	rendered map[string]renderedEntry,
+	manifest *config.Manifest,
 ) error {
 	paths := make([]string, 0, len(rendered))
 	for path := range rendered {
@@ -944,6 +1311,7 @@ func refreshStateLock(
 	}
 	sort.Strings(paths)
 	final := make([]config.LockFile, 0, len(paths))
+	enabled := config.GetProfiles(answers)
 	for _, path := range paths {
 		data, err := filter.ReadFileWithinRoot(projectDir, path)
 		if err != nil {
@@ -952,7 +1320,11 @@ func refreshStateLock(
 			}
 			return fmt.Errorf("update: reading merged file %q: %w", path, err)
 		}
-		final = append(final, config.FileEntry(path, data))
+		entry := config.FileEntry(path, data)
+		if tags := config.ProfilesForPath(manifest, enabled, path); len(tags) > 0 {
+			entry.Profile = strings.Join(tags, ",")
+		}
+		final = append(final, entry)
 	}
 	state.RequestedRef = wantRef
 	state.ResolvedCommit = fresh

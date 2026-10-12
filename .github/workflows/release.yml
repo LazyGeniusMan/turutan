@@ -1,10 +1,5 @@
 ---
 name: Release
-# Ship a verified artefact only (report section 3.1 ~keep): check:all gate, then
-# goreleaser builds once; the identical artefact is promoted without rebuild.
-# SBOMs are emitted by goreleaser (sboms section in .config/goreleaser.yml);
-# build provenance is attested below. Post-deploy smoke testing is a manual
-# follow-up until a staging environment exists to gate on.
 "on":
   push:
     tags:
@@ -60,7 +55,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # yamllint disable rule:line-length
-      # actions/attest-build-provenance v4.2.2, SHA-pinned ~keep.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
       # yamllint enable rule:line-length
