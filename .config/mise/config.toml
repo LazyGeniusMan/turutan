@@ -29,8 +29,12 @@ description = "Full-tree check-only gate for main and scheduled CI"
 run = "hk check --all"
 
 [tasks."check:diff"]
-description = "Diff-scoped check-only gate for pull request CI"
+description = "Diff-scoped check-only gate for working tree locally"
 run = "hk check"
+
+[tasks."check:pr"]
+description = "Branch-diff check-only gate for pull request CI"
+run = "hk check --pr"
 
 [tasks."fix:all"]
 description = "Full-tree deterministic auto-fix locally"

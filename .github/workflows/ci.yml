@@ -1,6 +1,6 @@
 ---
 name: CI
-# Scope rule, report 3.1/4/P1 ~keep: PR runs diff gate, main runs full net.
+# Scope rule, report 3.1/4/P1 ~keep: PR runs branch-diff gate, main runs full net.
 # Both are binary pass/fail gates (P5); CI is check-only, never rewrites (P3).
 on:
   pull_request:
@@ -31,8 +31,8 @@ jobs:
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
       - name: Install
         run: mise install
-      - name: Check (diff scope)
-        run: mise run check:diff
+      - name: Check (branch diff scope)
+        run: mise run check:pr
   main-check:
     name: Main check (full scope)
     if: ${{ github.event_name == 'push' }}
