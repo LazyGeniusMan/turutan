@@ -17,3 +17,5 @@ Pre-push (30s-2min, changed files): heavier lint full-file, incremental type-che
 Commit-msg: hygiene only (format, length, prefix).
 
 CI-safe vs local-only: `no-commit-to-branch` (branch-protection refusal) is `pre-push` hook ONLY, MUST NEVER appear in `check`/`fix` hooks used by CI. Pattern is `pre_push_ci` subset (same as `pre_push` minus `no-commit-to-branch`) for `check`/`fix`, full `pre_push` for `pre-push` hook.
+
+Serialization: when `check`/`fix` merge `...pre_commit` + `...pre_push_ci` (or any merged hook), two steps invoking the same process-locked binary (notably `golangci-lint run`) MUST serialize via `depends` (e.g. `golangci-lint-full` depends `golangci-lint`); never rely on parallel execution; `-j 1` is not a fix.

@@ -72,6 +72,7 @@ local pre_commit = new Mapping<String, Step> {
   }
   ["ryl"] = (Builtins.ryl) {
     profiles = List("github")
+    check = "ryl check {{files}}"
     depends = "uncomment"
   }
   ["jactionlint"] {
@@ -143,7 +144,7 @@ local pre_push_ci = new Mapping<String, Step> {
   }
   ["golangci-lint-full"] = (Builtins.golangci_lint) {
     profiles = List("go")
-    depends = "ai-rulez"
+    depends = "golangci-lint"
     check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false ./..."
     fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix ./..."
   }
