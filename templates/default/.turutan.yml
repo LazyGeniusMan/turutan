@@ -133,3 +133,113 @@ conditionals:
     skip:
       - ".config/mise/config.typescript.toml"
       - ".config/ai-rulez/domains/typescript/**"
+profiles:
+  ai:
+    label: "AI"
+    files:
+      - ".config/ai-rulez/**"
+      - ".config/basemind/**"
+      - ".uncomment.toml"
+      - ".config/mise/config.ai.toml"
+  c:
+    label: "C"
+    files:
+      - ".config/mise/config.c.toml"
+      - ".config/ai-rulez/domains/c/**"
+  cloudflare:
+    label: "Cloudflare"
+    files:
+      - ".config/mise/config.cloudflare.toml"
+      - ".config/ai-rulez/domains/cloudflare/**"
+  cpp:
+    label: "C++"
+    files:
+      - ".config/mise/config.cpp.toml"
+      - ".config/ai-rulez/domains/cpp/**"
+  csharp:
+    label: "C#"
+    files:
+      - ".config/mise/config.csharp.toml"
+      - ".config/ai-rulez/domains/csharp/**"
+  docker:
+    label: "Docker"
+    files:
+      - ".config/mise/config.docker.toml"
+      - ".config/ai-rulez/domains/docker/**"
+  elixir:
+    label: "Elixir"
+    files:
+      - ".config/mise/config.elixir.toml"
+      - ".config/ai-rulez/domains/elixir/**"
+  github:
+    label: "GitHub"
+    files:
+      - ".github/**"
+      - ".github/jactionlint.yaml"
+      - ".config/mise/config.github.toml"
+      - ".config/ai-rulez/domains/github/**"
+      - ".config/ryl.toml"
+      - ".config/updatecli/github-actions.yaml"
+  gitlab:
+    label: "GitLab"
+    files:
+      - ".config/mise/config.gitlab.toml"
+      - ".config/ai-rulez/domains/gitlab/**"
+  go:
+    label: "Go"
+    files:
+      - "go.mod"
+      - "go.mod.tmpl"
+      - "cmd/**"
+      - "internal/**"
+      - ".golangci.yml"
+      - ".config/golangci-lint/**"
+      - ".config/goreleaser.yml"
+      - ".config/mise/config.go.toml"
+      - ".config/ai-rulez/domains/go/**"
+      - ".config/updatecli/go-version.yaml"
+  java:
+    label: "Java"
+    files:
+      - ".config/mise/config.java.toml"
+      - ".config/ai-rulez/domains/java/**"
+  kubernetes:
+    label: "Kubernetes"
+    files:
+      - ".config/mise/config.kubernetes.toml"
+      - ".config/ai-rulez/domains/kubernetes/**"
+  php:
+    label: "PHP"
+    files:
+      - ".config/mise/config.php.toml"
+      - ".config/ai-rulez/domains/php/**"
+  python:
+    label: "Python"
+    files:
+      - ".config/mise/config.python.toml"
+      - ".config/ai-rulez/domains/python/**"
+  r:
+    label: "R"
+    files:
+      - ".config/mise/config.r.toml"
+      - ".config/ai-rulez/domains/r/**"
+  ruby:
+    label: "Ruby"
+    files:
+      - ".config/mise/config.ruby.toml"
+      - ".config/ai-rulez/domains/ruby/**"
+  rust:
+    label: "Rust"
+    files:
+      - ".config/mise/config.rust.toml"
+      - ".config/ai-rulez/domains/rust/**"
+  rust-polygot:
+    label: "Rust Polyglot"
+    files:
+      - ".config/mise/config.rust-polygot.toml"
+      - ".config/ai-rulez/domains/rust-polygot/**"
+  typescript:
+    label: "TypeScript"
+    files:
+      - ".config/mise/config.typescript.toml"
+      - ".config/ai-rulez/domains/typescript/**"

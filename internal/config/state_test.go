@@ -3,8 +3,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -400,5 +402,316 @@ func TestValidateManifestConditionals(t *testing.T) {
 				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestStateVersionCompat(t *testing.T) {
+	t.Parallel()
+	t.Run("v1 still loads", func(t *testing.T) {
+		t.Parallel()
+		state := validState()
+		state.Version = StateVersionV1
+		if err := ValidateState(state); err != nil {
+			t.Errorf("ValidateState v1 error: %v", err)
+		}
+	})
+	t.Run("v1 fixture loads", func(t *testing.T) {
+		t.Parallel()
+		data := fmt.Sprintf(
+			`{"version":1,"template":"tpl","sourceKind":"filesystem",`+
+				`"resolvedCommit":%q,"engine":"0.1.0","templateLicense":"MIT-0"}`,
+			strings.Repeat("b", 64))
+		got, err := LoadState(fstest.MapFS{StateFileName: {Data: []byte(data)}})
+		if err != nil {
+			t.Fatalf("LoadState v1 error: %v", err)
+		}
+		if got.Version != StateVersionV1 {
+			t.Errorf("Version = %d, want %d", got.Version, StateVersionV1)
+		}
+	})
+	t.Run("save writes v2 and migrates v1", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		state := validState()
+		state.Version = StateVersionV1
+		if err := SaveState(dir, state); err != nil {
+			t.Fatalf("SaveState error: %v", err)
+		}
+		if state.Version != StateVersion {
+			t.Errorf("Version = %d, want %d after save", state.Version, StateVersion)
+		}
+		got, err := LoadState(os.DirFS(dir))
+		if err != nil {
+			t.Fatalf("LoadState error: %v", err)
+		}
+		if got.Version != StateVersion {
+			t.Errorf("loaded Version = %d, want %d", got.Version, StateVersion)
+		}
+	})
+	t.Run("v0 and future rejected", func(t *testing.T) {
+		t.Parallel()
+		for _, version := range []int{0, StateVersion + 1} {
+			state := validState()
+			state.Version = version
+			if err := ValidateState(state); err == nil {
+				t.Errorf("ValidateState version %d succeeded, want error", version)
+			}
+		}
+	})
+}
+
+func TestValidateManifestProfiles(t *testing.T) {
+	t.Parallel()
+	t.Run("valid profiles accepted", func(t *testing.T) {
+		t.Parallel()
+		manifest := &Manifest{Profiles: map[string]ManifestProfile{
+			"go": {Label: "Go", Files: []string{"go.mod", "cmd/**"}},
+		}}
+		if err := ValidateManifest(manifest); err != nil {
+			t.Errorf("ValidateManifest error: %v", err)
+		}
+	})
+	t.Run("bad glob rejected", func(t *testing.T) {
+		t.Parallel()
+		manifest := &Manifest{Profiles: map[string]ManifestProfile{
+			"go": {Files: []string{"/abs"}},
+		}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Error("ValidateManifest with bad profile glob succeeded, want error")
+		}
+	})
+	t.Run("empty id rejected", func(t *testing.T) {
+		t.Parallel()
+		manifest := &Manifest{Profiles: map[string]ManifestProfile{
+			"": {Files: []string{"a.txt"}},
+		}}
+		if err := ValidateManifest(manifest); err == nil {
+			t.Error("ValidateManifest with empty profile id succeeded, want error")
+		}
+	})
+}
+
+func TestValidateManifestRenames(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		renames map[string]string
+		wantErr bool
+	}{
+		{name: "empty accepted", renames: nil, wantErr: false},
+		{name: "valid accepted", renames: map[string]string{"old.txt": "new.txt"}, wantErr: false},
+		{name: "empty old rejected", renames: map[string]string{"": "new.txt"}, wantErr: true},
+		{name: "empty new rejected", renames: map[string]string{"old.txt": ""}, wantErr: true},
+		{name: "self-map rejected", renames: map[string]string{"a.txt": "a.txt"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateManifest(&Manifest{Renames: tt.renames})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLockProfileOwner(t *testing.T) {
+	t.Parallel()
+	t.Run("profile survives round trip", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		lock := &Lock{
+			Source:      "s",
+			ResolvedSHA: strings.Repeat("a", 40),
+			Files:       []LockFile{{Path: "go.mod", SHA256: strings.Repeat("c", 64), Profile: "go"}},
+		}
+		if err := SaveLock(dir, lock); err != nil {
+			t.Fatalf("SaveLock error: %v", err)
+		}
+		got, err := LoadLock(os.DirFS(dir))
+		if err != nil {
+			t.Fatalf("LoadLock error: %v", err)
+		}
+		if got.Files[0].Profile != "go" {
+			t.Errorf("Profile = %q, want %q", got.Files[0].Profile, "go")
+		}
+	})
+	t.Run("hash ignores profile", func(t *testing.T) {
+		t.Parallel()
+		plain := []LockFile{FileEntry("a.txt", []byte("a"))}
+		owned := []LockFile{{Path: "a.txt", SHA256: plain[0].SHA256, Bytes: plain[0].Bytes, Profile: "go"}}
+		if ComputeManifestHash(plain) != ComputeManifestHash(owned) {
+			t.Error("ComputeManifestHash changed with profile, want owner excluded")
+		}
+	})
+}
+
+func TestGetProfiles(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		answers map[string]any
+		want    []string
+	}{
+		{name: "nil answers", answers: nil, want: nil},
+		{name: "missing key", answers: map[string]any{}, want: nil},
+		{name: "string list", answers: map[string]any{"enabled_profiles": "core, go,go"}, want: []string{"core", "go"}},
+		{name: "string slice", answers: map[string]any{"enabled_profiles": []string{"core", "go"}}, want: []string{"core", "go"}},
+		{name: "any slice", answers: map[string]any{"enabled_profiles": []any{"core", "go"}}, want: []string{"core", "go"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := GetProfiles(tt.answers); !slices.Equal(got, tt.want) {
+				t.Errorf("GetProfiles = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	t.Run("stored profiles win over answers", func(t *testing.T) {
+		t.Parallel()
+		state := validState()
+		state.Profiles = []string{"core"}
+		state.Answers = map[string]any{"enabled_profiles": []string{"core", "go"}}
+		if got := state.GetProfiles(); !slices.Equal(got, []string{"core"}) {
+			t.Errorf("GetProfiles = %v, want [core]", got)
+		}
+	})
+	t.Run("nil state", func(t *testing.T) {
+		t.Parallel()
+		var state *State
+		if got := state.GetProfiles(); got != nil {
+			t.Errorf("GetProfiles = %v, want nil", got)
+		}
+	})
+}
+
+func TestProfilesForPath(t *testing.T) {
+	t.Parallel()
+	manifest := &Manifest{Profiles: map[string]ManifestProfile{
+		"go":     {Files: []string{"go.mod", "cmd/**"}},
+		"github": {Files: []string{".github/**"}},
+	}}
+	t.Run("matches owner", func(t *testing.T) {
+		t.Parallel()
+		got := ProfilesForPath(manifest, []string{"go", "github"}, "cmd/main.go")
+		if !slices.Equal(got, []string{"go"}) {
+			t.Errorf("ProfilesForPath = %v, want [go]", got)
+		}
+	})
+	t.Run("nil profiles checks all", func(t *testing.T) {
+		t.Parallel()
+		got := ProfilesForPath(manifest, nil, ".github/workflows/ci.yml")
+		if !slices.Equal(got, []string{"github"}) {
+			t.Errorf("ProfilesForPath = %v, want [github]", got)
+		}
+	})
+	t.Run("unowned path", func(t *testing.T) {
+		t.Parallel()
+		if got := ProfilesForPath(manifest, nil, "README.md"); len(got) != 0 {
+			t.Errorf("ProfilesForPath = %v, want empty", got)
+		}
+	})
+	t.Run("nil manifest", func(t *testing.T) {
+		t.Parallel()
+		if got := ProfilesForPath(nil, nil, "a.txt"); len(got) != 0 {
+			t.Errorf("ProfilesForPath = %v, want empty", got)
+		}
+	})
+}
+
+func TestResolveRenames(t *testing.T) {
+	t.Parallel()
+	t.Run("unmapped returns path", func(t *testing.T) {
+		t.Parallel()
+		if got := ResolveRenames("a.txt", map[string]string{"b.txt": "c.txt"}); got != "a.txt" {
+			t.Errorf("ResolveRenames = %q, want a.txt", got)
+		}
+	})
+	t.Run("follows chains", func(t *testing.T) {
+		t.Parallel()
+		renames := map[string]string{"a.txt": "b.txt", "b.txt": "c.txt"}
+		if got := ResolveRenames("a.txt", renames); got != "c.txt" {
+			t.Errorf("ResolveRenames = %q, want c.txt", got)
+		}
+	})
+	t.Run("cycle terminates", func(t *testing.T) {
+		t.Parallel()
+		renames := map[string]string{"a.txt": "b.txt", "b.txt": "a.txt"}
+		got := ResolveRenames("a.txt", renames)
+		if got != "a.txt" && got != "b.txt" {
+			t.Errorf("ResolveRenames = %q, want cycle guard", got)
+		}
+	})
+}
+
+func TestDiffProfiles(t *testing.T) {
+	t.Parallel()
+	manifest := &Manifest{
+		Prompts: map[string]ManifestPrompt{
+			"project_name":     {},
+			"enabled_profiles": {Type: "array"},
+			"new_key":          {},
+		},
+		Profiles: map[string]ManifestProfile{
+			"go":     {Files: []string{"go.mod"}},
+			"github": {Files: []string{".github/**"}},
+		},
+	}
+	t.Run("added removed and new prompts", func(t *testing.T) {
+		t.Parallel()
+		old := map[string]any{
+			"project_name":     "demo",
+			"enabled_profiles": []string{"core", "go", "dropped"},
+		}
+		diff := DiffProfiles(old, manifest)
+		if !slices.Equal(diff.Added, []string{"github"}) {
+			t.Errorf("Added = %v, want [github]", diff.Added)
+		}
+		if !slices.Equal(diff.Removed, []string{"dropped"}) {
+			t.Errorf("Removed = %v, want [dropped]", diff.Removed)
+		}
+		if !slices.Equal(diff.NewPrompts, []string{"new_key"}) {
+			t.Errorf("NewPrompts = %v, want [new_key]", diff.NewPrompts)
+		}
+	})
+	t.Run("core never removed", func(t *testing.T) {
+		t.Parallel()
+		old := map[string]any{"enabled_profiles": []string{"core"}}
+		diff := DiffProfiles(old, manifest)
+		if slices.Contains(diff.Removed, "core") {
+			t.Errorf("Removed = %v, want no core", diff.Removed)
+		}
+	})
+	t.Run("nil manifest", func(t *testing.T) {
+		t.Parallel()
+		diff := DiffProfiles(map[string]any{"enabled_profiles": []string{"core"}}, nil)
+		if len(diff.Added) != 0 || len(diff.Removed) != 0 || len(diff.NewPrompts) != 0 {
+			t.Errorf("DiffProfiles = %+v, want empty", diff)
+		}
+	})
+}
+
+func TestDefaultTemplateProfiles(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
+	if err != nil {
+		t.Skipf("default template manifest not found: %v", err)
+	}
+	got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+	if err != nil {
+		t.Fatalf("LoadManifest error: %v", err)
+	}
+	if len(got.Profiles) != 19 {
+		t.Errorf("profiles = %d, want 19 (core implicit)", len(got.Profiles))
+	}
+	if _, ok := got.Profiles["core"]; ok {
+		t.Error("profiles has core, want core implicit only")
+	}
+	goProfile := got.Profiles["go"]
+	if !slices.Contains(goProfile.Files, "go.mod") {
+		t.Errorf("go files = %v, want go.mod", goProfile.Files)
+	}
+	if got := ProfilesForPath(got, nil, "cmd/main.go"); !slices.Contains(got, "go") {
+		t.Errorf("ProfilesForPath cmd/main.go = %v, want go", got)
 	}
 }
