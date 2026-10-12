@@ -128,3 +128,18 @@ func TestExitCodeMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckUpdateOffersCmd(t *testing.T) {
+	t.Run("ref flag registers", func(t *testing.T) {
+		cmd := newCheckUpdateCmd()
+		if cmd.Flags().Lookup("ref") == nil {
+			t.Error("flag --ref missing on check-update")
+		}
+	})
+	t.Run("profiles ref flag registers", func(t *testing.T) {
+		cmd := newProfilesCmd()
+		if cmd.Flags().Lookup("ref") == nil {
+			t.Error("flag --ref missing on profiles")
+		}
+	})
+}

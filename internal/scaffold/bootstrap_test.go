@@ -521,3 +521,162 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		}
 	})
 }
+
+func TestBootstrapDefaultREADME(t *testing.T) {
+	t.Run("readme renders project name", func(t *testing.T) {
+		src := filepath.Join("..", "..", "templates", "default")
+		if _, err := os.Stat(src); err != nil {
+			t.Skipf("default template not found: %v", err)
+		}
+		target := filepath.Join(t.TempDir(), "myapp")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		got, err := os.ReadFile(filepath.Join(target, "README.md")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatalf("reading rendered README.md: %v", err)
+		}
+		if !strings.Contains(string(got), "# myapp") {
+			t.Errorf("README.md missing project name heading:\n%.500s", got)
+		}
+		if !strings.Contains(string(got), "turutan") {
+			t.Errorf("README.md missing turutan attribution:\n%.500s", got)
+		}
+		gomod, err := os.ReadFile(filepath.Join(target, "go.mod")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatalf("reading rendered go.mod: %v", err)
+		}
+		if string(gomod) != "module myapp\n\ngo 1.26\n" {
+			t.Errorf("go.mod = %q, want defaulted module", gomod)
+		}
+	})
+}
+
+func TestBootstrapDefaultFileSet(t *testing.T) {
+	t.Run("rendered set matches template declaration", func(t *testing.T) {
+		src := filepath.Join("..", "..", "templates", "default")
+		if _, err := os.Stat(src); err != nil {
+			t.Skipf("default template not found: %v", err)
+		}
+		target := filepath.Join(t.TempDir(), "myapp")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		manifest, err := turutanconfig.LoadManifest(os.DirFS(src))
+		if err != nil {
+			t.Fatalf("LoadManifest error: %v", err)
+		}
+		enabled := []string{"core", "ai", "github", "go"}
+		enabledSet := map[string]bool{}
+		for _, id := range enabled {
+			enabledSet[id] = true
+		}
+		shouldRender := func(slash string) bool {
+			owners := turutanconfig.ProfilesForPath(manifest, nil, slash)
+			if len(owners) == 0 {
+				stripped := strings.TrimSuffix(slash, ".tmpl")
+				owners = turutanconfig.ProfilesForPath(manifest, nil, stripped)
+			}
+			if len(owners) == 0 {
+				return true
+			}
+			for _, id := range owners {
+				if !enabledSet[id] {
+					return false
+				}
+			}
+			return true
+		}
+		expected := map[string]bool{}
+		err = filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(src, path)
+			if err != nil {
+				return err
+			}
+			if rel == "." {
+				return nil
+			}
+			slash := filepath.ToSlash(rel)
+			if slash == ".turutan" || strings.HasPrefix(slash, ".turutan/") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if slash == ".git" || strings.HasPrefix(slash, ".git/") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if d.Type()&os.ModeSymlink != 0 {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			if !info.Mode().IsRegular() {
+				return nil
+			}
+			slash = strings.TrimSuffix(slash, ".tmpl")
+			if !shouldRender(slash) && !shouldRender(filepath.ToSlash(rel)) {
+				return nil
+			}
+			expected[slash] = true
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		actual := map[string]bool{}
+		err = filepath.WalkDir(target, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(target, path)
+			if err != nil {
+				return err
+			}
+			if rel == "." {
+				return nil
+			}
+			slash := filepath.ToSlash(rel)
+			if slash == ".turutan" || strings.HasPrefix(slash, ".turutan/") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if slash == ".turutan.json" || slash == ".turutan.lock" {
+				return nil
+			}
+			if d.IsDir() {
+				return nil
+			}
+			actual[slash] = true
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for path := range expected {
+			if !actual[path] {
+				t.Errorf("template declares %q but render missed it", path)
+			}
+		}
+		for path := range actual {
+			if !expected[path] {
+				t.Errorf("render produced undeclared %q", path)
+			}
+		}
+	})
+}

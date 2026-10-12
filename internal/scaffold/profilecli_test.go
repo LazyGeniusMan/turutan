@@ -478,3 +478,253 @@ func TestListProfiles(t *testing.T) {
 		t.Error("ListProfiles without state succeeded, want error")
 	}
 }
+
+func TestUpdateDisableValidation(t *testing.T) {
+	t.Run("unknown disable errors with offered list", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Disable = []string{"nope"}
+		_, err := Update(context.Background(), projectDir, opts)
+		if err == nil {
+			t.Fatal("Update with unknown --disable succeeded, want error")
+		}
+		if !strings.Contains(err.Error(), `unknown profile "nope"`) {
+			t.Errorf("error = %q, want it to name the profile", err)
+		}
+		if !strings.Contains(err.Error(), "go") {
+			t.Errorf("error = %q, want it to list offered profiles", err)
+		}
+	})
+	t.Run("same id enable and disable keeps it enabled", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Enable = []string{"go"}
+		opts.Disable = []string{"go"}
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core go] (enable wins)", got)
+		}
+		assertProfileFile(t, projectDir, "go.mod", "module example\n")
+	})
+	t.Run("whitespace ids are trimmed", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Enable = []string{"  go  "}
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+		}
+		assertProfileFile(t, projectDir, "go.mod", "module example\n")
+	})
+	t.Run("whitespace disable is trimmed", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Disable = []string{"  go  "}
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		}
+		assertProfileAbsent(t, projectDir, "go.mod")
+	})
+	t.Run("disable core removes it from stored answers", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Disable = []string{"core"}
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"go"}) {
+			t.Errorf("stored enabled_profiles = %v, want [go]", got)
+		}
+		assertProfileFile(t, projectDir, "go.mod", "module example\n")
+		assertProfileFile(t, projectDir, "keep.txt", "keep v1\n")
+	})
+}
+
+func TestUpdateDroppedProfilesStderr(t *testing.T) {
+	t.Run("dropped profile reported on stderr", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go", "github")
+		manifest, err := os.ReadFile(filepath.Join(src, ".turutan.yml")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		trimmed := strings.Replace(string(manifest), "  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n", "", 1)
+		if trimmed == string(manifest) {
+			t.Fatal("could not splice the fixture manifest")
+		}
+		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(trimmed), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr strings.Builder
+		result, err := Update(context.Background(), projectDir, updateCLIOptions(&stdout, &stderr))
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if !strings.Contains(stderr.String(), "turutan: template dropped profiles: github") {
+			t.Errorf("stderr = %q, want the dropped-profiles line", stderr.String())
+		}
+		assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
+		if len(result.Conflicts) != 0 {
+			t.Errorf("Conflicts = %v, want none", result.Conflicts)
+		}
+	})
+}
+
+func TestUpdateNewPromptsStderr(t *testing.T) {
+	t.Run("new prompt reported on stderr alongside change", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core")
+		manifest, err := os.ReadFile(filepath.Join(src, ".turutan.yml")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		augmented := strings.Replace(string(manifest),
+			"  project_name:\n    prompt: \"Project name\"\n    type: string\n",
+			"  project_name:\n    prompt: \"Project name\"\n    type: string\n  service_name:\n    prompt: \"Service name\"\n    type: string\n    default: \"svc\"\n", 1)
+		if augmented == string(manifest) {
+			t.Fatal("could not splice the fixture manifest")
+		}
+		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(augmented), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Defaults = true
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if !strings.Contains(stderr.String(), "turutan: template adds new prompts: service_name") {
+			t.Errorf("stderr = %q, want the new-prompts line", stderr.String())
+		}
+		assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
+	})
+}
+
+func TestUpdateLocalGitRename(t *testing.T) {
+	t.Run("commit identity advances across rename", func(t *testing.T) {
+		repoDir, old := initTemplateRepo(t, map[string]string{"old.txt": "hello\n"})
+		projectDir := bootstrapProject(t, repoDir)
+		if err := os.WriteFile(filepath.Join(repoDir, ".turutan.yml"), []byte("renames:\n  old.txt: new.txt\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(repoDir, "old.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(repoDir, "old.txt")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, "new.txt"), data, 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		fresh := commitAll(t, repoDir, "rename old to new")
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.Force = true
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if result.Old != old {
+			t.Errorf("Old = %q, want %q", result.Old, old)
+		}
+		if result.New != fresh {
+			t.Errorf("New = %q, want %q", result.New, fresh)
+		}
+		assertProfileFile(t, projectDir, "new.txt", "hello\n")
+		assertProfileAbsent(t, projectDir, "old.txt")
+		paths := lockPaths(t, projectDir)
+		if !slices.Contains(paths, "new.txt") {
+			t.Errorf("lock paths = %v, want them to track new.txt", paths)
+		}
+		if slices.Contains(paths, "old.txt") {
+			t.Errorf("lock paths = %v, want old.txt rewritten", paths)
+		}
+	})
+	t.Run("rename of profile-owned file", func(t *testing.T) {
+		files := map[string]string{".turutan.yml": profileCLIManifest}
+		for name, content := range profileCLIFiles {
+			files[name] = content
+		}
+		repoDir, _ := initTemplateRepo(t, files)
+		projectDir := bootstrapProfiles(t, repoDir, "core", "go")
+		assertProfileFile(t, projectDir, "go.mod", "module example\n")
+		manifest, err := os.ReadFile(filepath.Join(repoDir, ".turutan.yml")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		renamed := "renames:\n  go.mod: go-new.mod\n" + string(manifest)
+		if err := os.WriteFile(filepath.Join(repoDir, ".turutan.yml"), []byte(renamed), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(repoDir, "go.mod")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(repoDir, "go.mod")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, "go-new.mod"), data, 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		commitAll(t, repoDir, "rename profile-owned file")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if result.Old == result.New {
+			t.Error("Old == New, want the commit identity to advance")
+		}
+		if len(result.Conflicts) != 0 {
+			t.Errorf("Conflicts = %v, want none for a clean profile rename", result.Conflicts)
+		}
+	})
+}
+
+func TestUpdatePreserveExemptFromPruning(t *testing.T) {
+	t.Run("preserve-listed file under removed profile stays", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest+"preserve:\n  - \"go.mod\"\n", profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		if err := os.WriteFile(filepath.Join(projectDir, "go.mod"), []byte("module example // local\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Disable = []string{"go"}
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		assertProfileFile(t, projectDir, "go.mod", "module example // local\n")
+		if paths := lockPaths(t, projectDir); slices.Contains(paths, "go.mod") {
+			t.Error("lock still contains go.mod after --disable go, want it untracked")
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		}
+	})
+}

@@ -415,3 +415,105 @@ func TestCheckUpdateRemoteNetwork(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckUpdateGitOffers(t *testing.T) {
+	t.Run("local-git adding profile reports available with offers", func(t *testing.T) {
+		files := map[string]string{".turutan.yml": profileCLIManifest}
+		for name, content := range profileCLIFiles {
+			files[name] = content
+		}
+		repoDir, old := initTemplateRepo(t, files)
+		projectDir := bootstrapProfiles(t, repoDir, "core")
+		manifest, err := os.ReadFile(filepath.Join(repoDir, ".turutan.yml")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		augmented := strings.Replace(string(manifest),
+			"  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n",
+			"  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n  extra:\n    label: \"Extra\"\n    files: [\"extra.txt\"]\n", 1)
+		if augmented == string(manifest) {
+			t.Fatal("could not splice the fixture manifest")
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, ".turutan.yml"), []byte(augmented), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, "extra.txt"), []byte("extra\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		fresh := commitAll(t, repoDir, "offer extra profile")
+		var stdout strings.Builder
+		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		if err != nil {
+			t.Fatalf("CheckUpdate error: %v", err)
+		}
+		if !result.Available {
+			t.Fatal("Available = false, want true after template commit")
+		}
+		if result.Old != old {
+			t.Errorf("Old = %q, want %q", result.Old, old)
+		}
+		if result.New != fresh {
+			t.Errorf("New = %q, want %q", result.New, fresh)
+		}
+		if !strings.Contains(stdout.String(), "update available") {
+			t.Errorf("stdout = %q, want the update-available line", stdout.String())
+		}
+		if !strings.Contains(stdout.String(), "turutan: template offers new profiles:") {
+			t.Errorf("stdout = %q, want the offers line", stdout.String())
+		}
+		if !strings.Contains(stdout.String(), "extra") {
+			t.Errorf("stdout = %q, want it to name the extra profile", stdout.String())
+		}
+	})
+	t.Run("profile-only answer drift stays quiet on git", func(t *testing.T) {
+		files := map[string]string{".turutan.yml": profileCLIManifest}
+		for name, content := range profileCLIFiles {
+			files[name] = content
+		}
+		repoDir, sha := initTemplateRepo(t, files)
+		projectDir := bootstrapProfiles(t, repoDir, "core")
+		var stdout strings.Builder
+		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		if err != nil {
+			t.Fatalf("CheckUpdate error: %v", err)
+		}
+		if result.Available {
+			t.Error("Available = true, want false: enabling fewer profiles is not drift on git")
+		}
+		if result.Old != sha || result.New != sha {
+			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, sha)
+		}
+		if !strings.Contains(stdout.String(), "up to date") {
+			t.Errorf("stdout = %q, want the up-to-date line", stdout.String())
+		}
+	})
+	t.Run("manifest failure is best-effort without error", func(t *testing.T) {
+		files := map[string]string{".turutan.yml": profileCLIManifest}
+		for name, content := range profileCLIFiles {
+			files[name] = content
+		}
+		repoDir, _ := initTemplateRepo(t, files)
+		projectDir := bootstrapProfiles(t, repoDir, "core")
+		if err := os.WriteFile(filepath.Join(repoDir, ".turutan.yml"), []byte(":\n  bad indent\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repoDir, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		commitAll(t, repoDir, "break manifest")
+		var stdout strings.Builder
+		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		if err != nil {
+			t.Fatalf("CheckUpdate error: %v", err)
+		}
+		if !result.Available {
+			t.Error("Available = false, want true: the commit still advanced despite the broken manifest")
+		}
+		if !strings.Contains(stdout.String(), "update available") {
+			t.Errorf("stdout = %q, want the update-available line without the profile report", stdout.String())
+		}
+	})
+}

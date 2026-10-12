@@ -117,3 +117,35 @@ func TestDiffCmdExitCodes(t *testing.T) {
 		}
 	})
 }
+
+func TestDiffWhatLocalCmd(t *testing.T) {
+	t.Run("local shows project-only drift", func(t *testing.T) {
+		_, dst := bootstrapTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("local\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		runInProject(t, dst)
+		cmd := newDiffCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"--what", "local"})
+		err := cmd.Execute()
+		if exitCodeOf(err) != 2 {
+			t.Fatalf("diff err = %v (exit %d), want exit 2 for local drift", err, exitCodeOf(err))
+		}
+		if !strings.Contains(stdout.String(), "@@") {
+			t.Errorf("stdout = %q, want unified body for local drift", stdout.String())
+		}
+	})
+	t.Run("what flag defaults to all", func(t *testing.T) {
+		cmd := newDiffCmd()
+		flag := cmd.Flags().Lookup("what")
+		if flag == nil {
+			t.Fatal("flag --what missing")
+		}
+		if flag.DefValue != "all" {
+			t.Errorf("--what default = %q, want all", flag.DefValue)
+		}
+	})
+}

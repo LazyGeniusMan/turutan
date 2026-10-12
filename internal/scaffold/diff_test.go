@@ -344,3 +344,85 @@ func TestNewFileDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeDiffNoBase(t *testing.T) {
+	tests := []struct {
+		name string
+		what string
+	}{
+		{name: "upstream needs base", what: "upstream"},
+		{name: "local needs base", what: "local"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
+			projectDir := bootstrapProject(t, src)
+			if err := os.RemoveAll(filepath.Join(projectDir, ".turutan", "templates")); err != nil {
+				t.Fatal(err)
+			}
+			opts := diffOptions()
+			opts.What = tt.what
+			_, err := ComputeDiff(context.Background(), projectDir, opts)
+			if err == nil {
+				t.Fatalf("ComputeDiff --what %s without base succeeded, want error", tt.what)
+			}
+			if !strings.Contains(err.Error(), "no base copy") {
+				t.Errorf("error = %q, want it to mention no base copy", err)
+			}
+		})
+	}
+	t.Run("full review survives missing base", func(t *testing.T) {
+		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
+		projectDir := bootstrapProject(t, src)
+		if err := os.RemoveAll(filepath.Join(projectDir, ".turutan", "templates")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ComputeDiff(context.Background(), projectDir, diffOptions()); err != nil {
+			t.Fatalf("ComputeDiff all without base error: %v", err)
+		}
+	})
+}
+
+func TestComputeDiffRenames(t *testing.T) {
+	t.Run("upstream follows rename to new path", func(t *testing.T) {
+		src := makeTemplate(t, "", map[string]string{"old.txt": "hello\n"})
+		projectDir := bootstrapProject(t, src)
+		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("renames:\n  old.txt: new.txt\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(filepath.Join(src, "old.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(src, "old.txt")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(src, "new.txt"), []byte(string(data)+"more\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
+			t.Fatal(err)
+		}
+		opts := diffOptions()
+		opts.What = "upstream"
+		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("ComputeDiff error: %v", err)
+		}
+		paths := diffPaths(diffs)
+		found := false
+		for _, p := range paths {
+			if p == "new.txt" {
+				found = true
+			}
+			if p == "old.txt" {
+				t.Errorf("paths = %v, want no stale old.txt entry", paths)
+			}
+		}
+		if !found {
+			t.Fatalf("paths = %v, want new-path drift", paths)
+		}
+		for _, d := range diffs {
+			if d.Path == "new.txt" && !strings.Contains(d.Unified, "+more") {
+				t.Errorf("new.txt Unified missing drift line:\n%s", d.Unified)
+			}
+		}
+	})
+}

@@ -175,3 +175,57 @@ func TestUpdateProfileFlags(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateDisableCmd(t *testing.T) {
+	t.Run("unknown disable fails with offered list", func(t *testing.T) {
+		dst := bootstrapProfilesProject(t, "core")
+		runInProject(t, dst)
+		cmd := newUpdateCmd()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"--disable", "nope", "--force"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("update with unknown --disable succeeded, want error")
+		}
+		if !strings.Contains(err.Error(), `unknown profile "nope"`) {
+			t.Errorf("error = %q, want it to name the profile", err)
+		}
+	})
+	t.Run("same id enable and disable keeps it enabled", func(t *testing.T) {
+		dst := bootstrapProfilesProject(t, "core", "go")
+		runInProject(t, dst)
+		cmd := newUpdateCmd()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"--enable", "go", "--disable", "go", "--force"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("update error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dst, "go.mod")); err != nil {
+			t.Errorf("go.mod missing after enable-wins, want it kept: %v", err)
+		}
+	})
+	t.Run("whitespace disable is trimmed", func(t *testing.T) {
+		dst := bootstrapProfilesProject(t, "core", "go")
+		runInProject(t, dst)
+		cmd := newUpdateCmd()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"--disable", "  go  ", "--force"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("update error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dst, "go.mod")); !os.IsNotExist(err) {
+			t.Error("go.mod exists, want it removed after trimmed --disable")
+		}
+	})
+	t.Run("disable and preview flags register", func(t *testing.T) {
+		cmd := newUpdateCmd()
+		for _, name := range []string{"disable", "enable", "preview", "force", "answers-file"} {
+			if cmd.Flags().Lookup(name) == nil {
+				t.Errorf("flag --%s missing", name)
+			}
+		}
+	})
+}
