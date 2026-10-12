@@ -291,6 +291,68 @@ func TestLoadManifest(t *testing.T) {
 	})
 }
 
+func TestLoadManifestSynthesizesConditionals(t *testing.T) {
+	t.Parallel()
+	t.Run("profiles-only synthesizes skips", func(t *testing.T) {
+		t.Parallel()
+		data := []byte("profiles:\n  go:\n    label: Go\n    files: [\"go.mod\", \"cmd/**\"]\n  github:\n    label: GitHub\n    files: [\".github/**\"]\n")
+		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+		if err != nil {
+			t.Fatalf("LoadManifest error: %v", err)
+		}
+		if len(got.Conditionals) != 2 {
+			t.Fatalf("conditionals = %d, want 2 synthesized", len(got.Conditionals))
+		}
+		want := map[string][]string{
+			"go":     {"go.mod", "cmd/**"},
+			"github": {".github/**"},
+		}
+		for _, cond := range got.Conditionals {
+			matched := ""
+			for id := range want {
+				if cond.If == `{{ not (contains .enabled_profiles "`+id+`") }}` {
+					matched = id
+					break
+				}
+			}
+			if matched == "" {
+				t.Errorf("conditional %q is not profile-synthesized, want one", cond.If)
+				continue
+			}
+			if !slices.Equal(cond.Skip, want[matched]) {
+				t.Errorf("profile %q skip = %v, want %v", matched, cond.Skip, want[matched])
+			}
+			delete(want, matched)
+		}
+		if len(want) != 0 {
+			t.Errorf("missing synthesized conditionals for %v", want)
+		}
+	})
+	t.Run("explicit conditional dedupes synthesis", func(t *testing.T) {
+		t.Parallel()
+		data := []byte("conditionals:\n  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n    skip: [\"custom/**\"]\nprofiles:\n  go:\n    label: Go\n    files: [\"go.mod\"]\n  github:\n    label: GitHub\n    files: [\".github/**\"]\n")
+		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
+		if err != nil {
+			t.Fatalf("LoadManifest error: %v", err)
+		}
+		if len(got.Conditionals) != 2 {
+			t.Fatalf("conditionals = %d, want 1 explicit + 1 synthesized", len(got.Conditionals))
+		}
+		if got.Conditionals[0].If != `{{ not (contains .enabled_profiles "go") }}` {
+			t.Errorf("conditionals[0].If = %q, want explicit go conditional kept", got.Conditionals[0].If)
+		}
+		if !slices.Equal(got.Conditionals[0].Skip, []string{"custom/**"}) {
+			t.Errorf("conditionals[0].Skip = %v, want [custom/**]", got.Conditionals[0].Skip)
+		}
+		if got.Conditionals[1].If != `{{ not (contains .enabled_profiles "github") }}` {
+			t.Errorf("conditionals[1].If = %q, want synthesized github conditional", got.Conditionals[1].If)
+		}
+		if !slices.Equal(got.Conditionals[1].Skip, []string{".github/**"}) {
+			t.Errorf("conditionals[1].Skip = %v, want [.github/**]", got.Conditionals[1].Skip)
+		}
+	})
+}
+
 func TestValidateManifestFrom(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
