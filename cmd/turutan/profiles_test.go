@@ -72,8 +72,8 @@ func TestProfilesCmd(t *testing.T) {
 		}
 		got := stdout.String()
 		for _, want := range []string{
-			"offered profiles: core, github, go",
-			"enabled profiles: core, go",
+			"offered profiles: core, custom, github, go",
+			"enabled profiles: core, custom, go",
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("stdout = %q, want it to contain %q", got, want)

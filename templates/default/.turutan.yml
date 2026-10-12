@@ -1,11 +1,18 @@
 ---
 source: "git::https://github.com/LazyGeniusMan/turutan.git//templates/default"
 min-engine: ">=0.1.0"
+license: MIT-0
+license-files: [LICENSE]
+doc-files: [README.md]
 conflict: inline
 ignore:
   - "**/.git/**"
   - "**/node_modules/**"
-  - ".turutan/**"
+  - ".config/turutan/state.json"
+  - ".config/turutan/lock.json"
+  - ".config/turutan/templates/**"
+  - ".turutan.yml"
+  - ".turutan.yaml"
 preserve:
   - "config/local.*.yml"
   - "data/**"
@@ -20,7 +27,7 @@ prompts:
   enabled_profiles:
     prompt: "Enabled profiles (comma-separated)"
     type: array
-    default: ["core", "ai", "github", "go"]
+    default: ["core", "ai", "github"]
     options:
       - "core"
       - "ai"
@@ -42,6 +49,67 @@ prompts:
       - "rust"
       - "rust-polygot"
       - "typescript"
+      - "custom"
+  enabled_ai_agents:
+    prompt: "Enabled AI Agents (comma-separated)"
+    type: array
+    default: ["opencode", "pi"]
+    options:
+      - "claude"
+      - "cursor"
+      - "gemini"
+      - "copilot"
+      - "devin"
+      - "cline"
+      - "codex"
+      - "amp"
+      - "junie"
+      - "opencode"
+      - "hermes"
+      - "antigravity"
+      - "xum"
+      - "pi"
+      - "baz"
+      - "mcp"
+      - "aiassistant"
+      - "augment"
+      - "bob"
+      - "codebuddy"
+      - "codebuff"
+      - "codewhale"
+      - "commandcode"
+      - "copilot-cli"
+      - "cortex"
+      - "crush"
+      - "deepagents"
+      - "dsh"
+      - "factory"
+      - "gitlab-duo"
+      - "goose"
+      - "grok"
+      - "kilo"
+      - "kimi"
+      - "kiro"
+      - "letta"
+      - "mimocode"
+      - "muse"
+      - "omp"
+      - "openclaw"
+      - "poolside"
+      - "qoder"
+      - "qwen"
+      - "reasonix"
+      - "replit"
+      - "rovodev"
+      - "takt"
+      - "trae"
+      - "vibe"
+      - "warp"
+      - "zcode"
+      - "zed"
+      - "zoocode"
+      - "okf"
+      - "llms-txt"
 profiles:
   ai:
     label: "AI"
@@ -50,36 +118,50 @@ profiles:
       - ".config/basemind/**"
       - ".uncomment.toml"
       - ".config/mise/config.ai.toml"
+      - ".config/updatecli/mise-ai.yaml"
+      - ".config/hk/ai.pkl"
   c:
     label: "C"
     files:
       - ".config/mise/config.c.toml"
       - ".config/ai-rulez/domains/c/**"
+      - ".config/hk/c.pkl"
   cloudflare:
     label: "Cloudflare"
     files:
       - ".config/mise/config.cloudflare.toml"
       - ".config/ai-rulez/domains/cloudflare/**"
+      - ".config/hk/cloudflare.pkl"
   cpp:
     label: "C++"
     files:
       - ".config/mise/config.cpp.toml"
       - ".config/ai-rulez/domains/cpp/**"
+      - ".config/hk/cpp.pkl"
   csharp:
     label: "C#"
     files:
       - ".config/mise/config.csharp.toml"
       - ".config/ai-rulez/domains/csharp/**"
+      - ".config/hk/csharp.pkl"
+  custom:
+    label: "Custom — your overrides, never overwritten"
+    files:
+      - ".config/mise/config.custom.toml"
+      - ".config/fnox.toml"
+      - ".config/hk/custom.pkl"
   docker:
     label: "Docker"
     files:
       - ".config/mise/config.docker.toml"
       - ".config/ai-rulez/domains/docker/**"
+      - ".config/hk/docker.pkl"
   elixir:
     label: "Elixir"
     files:
       - ".config/mise/config.elixir.toml"
       - ".config/ai-rulez/domains/elixir/**"
+      - ".config/hk/elixir.pkl"
   github:
     label: "GitHub"
     files:
@@ -89,66 +171,76 @@ profiles:
       - ".config/ai-rulez/domains/github/**"
       - ".config/ryl.toml"
       - ".config/updatecli/github-actions.yaml"
+      - ".config/updatecli/mise-github.yaml"
+      - ".config/hk/github.pkl"
   gitlab:
     label: "GitLab"
     files:
       - ".config/mise/config.gitlab.toml"
       - ".config/ai-rulez/domains/gitlab/**"
+      - ".config/hk/gitlab.pkl"
   go:
     label: "Go"
     files:
-      - "go.mod"
-      - "go.mod.tmpl"
-      - "cmd/**"
-      - "internal/**"
       - ".golangci.yml"
       - ".config/golangci-lint/**"
       - ".config/goreleaser.yml"
       - ".config/mise/config.go.toml"
       - ".config/ai-rulez/domains/go/**"
       - ".config/updatecli/go-version.yaml"
+      - ".config/updatecli/mise-go.yaml"
+      - ".config/hk/go.pkl"
   java:
     label: "Java"
     files:
       - ".config/mise/config.java.toml"
       - ".config/ai-rulez/domains/java/**"
+      - ".config/hk/java.pkl"
   kubernetes:
     label: "Kubernetes"
     files:
       - ".config/mise/config.kubernetes.toml"
       - ".config/ai-rulez/domains/kubernetes/**"
+      - ".config/hk/kubernetes.pkl"
   php:
     label: "PHP"
     files:
       - ".config/mise/config.php.toml"
       - ".config/ai-rulez/domains/php/**"
+      - ".config/hk/php.pkl"
   python:
     label: "Python"
     files:
       - ".config/mise/config.python.toml"
       - ".config/ai-rulez/domains/python/**"
+      - ".config/hk/python.pkl"
   r:
     label: "R"
     files:
       - ".config/mise/config.r.toml"
       - ".config/ai-rulez/domains/r/**"
+      - ".config/hk/r.pkl"
   ruby:
     label: "Ruby"
     files:
       - ".config/mise/config.ruby.toml"
       - ".config/ai-rulez/domains/ruby/**"
+      - ".config/hk/ruby.pkl"
   rust:
     label: "Rust"
     files:
       - ".config/mise/config.rust.toml"
       - ".config/ai-rulez/domains/rust/**"
+      - ".config/hk/rust.pkl"
   rust-polygot:
     label: "Rust Polyglot"
     files:
       - ".config/mise/config.rust-polygot.toml"
       - ".config/ai-rulez/domains/rust-polygot/**"
+      - ".config/hk/rust-polygot.pkl"
   typescript:
     label: "TypeScript"
     files:
       - ".config/mise/config.typescript.toml"
       - ".config/ai-rulez/domains/typescript/**"
+      - ".config/hk/typescript.pkl"

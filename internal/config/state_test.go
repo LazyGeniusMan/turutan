@@ -558,6 +558,84 @@ func TestValidateManifestRenames(t *testing.T) {
 	}
 }
 
+func TestValidateManifestLicense(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		license string
+		files   []string
+		wantErr bool
+	}{
+		{name: "empty accepted", license: "", wantErr: false},
+		{name: "MIT-0 accepted", license: "MIT-0", files: []string{"LICENSE"}, wantErr: false},
+		{name: "Apache-2.0 accepted", license: "Apache-2.0", wantErr: false},
+		{name: "LicenseRef accepted", license: "LicenseRef-Custom-1.0", wantErr: false},
+		{name: "blank rejected", license: "   ", wantErr: true},
+		{name: "spaces rejected", license: "MIT OR Apache-2.0", wantErr: true},
+		{name: "empty entry rejected", files: []string{""}, wantErr: true},
+		{name: "absolute rejected", files: []string{"/LICENSE"}, wantErr: true},
+		{name: "escape rejected", files: []string{"../LICENSE"}, wantErr: true},
+		{name: "template suffix rejected", files: []string{"LICENSE.tmpl"}, wantErr: true},
+		{name: "state collision rejected", files: []string{"state.json"}, wantErr: true},
+		{name: "lock collision rejected", files: []string{"lock.json"}, wantErr: true},
+		{name: "templates collision rejected", files: []string{"templates/foo"}, wantErr: true},
+		{name: "duplicate rejected", files: []string{"LICENSE", "LICENSE"}, wantErr: true},
+		{name: "nested accepted", files: []string{"licenses/MIT-0.txt"}, wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateManifest(&Manifest{License: tt.license, LicenseFiles: tt.files})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateManifestDocFiles(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		files   []string
+		license []string
+		wantErr bool
+	}{
+		{name: "empty accepted", files: nil, wantErr: false},
+		{name: "rendered path accepted", files: []string{"README.md"}, wantErr: false},
+		{name: "nested accepted", files: []string{"docs/guide.md"}, wantErr: false},
+		{name: "empty entry rejected", files: []string{""}, wantErr: true},
+		{name: "absolute rejected", files: []string{"/README.md"}, wantErr: true},
+		{name: "escape rejected", files: []string{"../README.md"}, wantErr: true},
+		{name: "template suffix rejected", files: []string{"README.md.tmpl"}, wantErr: true},
+		{name: "state collision rejected", files: []string{"state.json"}, wantErr: true},
+		{name: "lock collision rejected", files: []string{"lock.json"}, wantErr: true},
+		{name: "templates collision rejected", files: []string{"templates/foo"}, wantErr: true},
+		{name: "duplicate rejected", files: []string{"README.md", "README.md"}, wantErr: true},
+		{
+			name:    "license overlap rejected",
+			files:   []string{"LICENSE"},
+			license: []string{"LICENSE"},
+			wantErr: true,
+		},
+		{
+			name:    "disjoint license accepted",
+			files:   []string{"README.md"},
+			license: []string{"LICENSE"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateManifest(&Manifest{LicenseFiles: tt.license, DocFiles: tt.files})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestLockProfileOwner(t *testing.T) {
 	t.Parallel()
 	t.Run("profile survives round trip", func(t *testing.T) {
@@ -587,6 +665,32 @@ func TestLockProfileOwner(t *testing.T) {
 			t.Error("ComputeManifestHash changed with profile, want owner excluded")
 		}
 	})
+}
+
+func TestNormalizeProfiles(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input []string
+		want  []string
+	}{
+		{name: "nil injects pair", input: nil, want: []string{"core", "custom"}},
+		{name: "empty injects pair", input: []string{}, want: []string{"core", "custom"}},
+		{name: "core only gains custom last", input: []string{"core"}, want: []string{"core", "custom"}},
+		{name: "custom only gains core first", input: []string{"custom"}, want: []string{"core", "custom"}},
+		{name: "middle kept in order", input: []string{"go", "ai"}, want: []string{"core", "go", "ai", "custom"}},
+		{name: "shuffled core custom reordered", input: []string{"go", "custom", "core", "ai"}, want: []string{"core", "go", "ai", "custom"}},
+		{name: "dupes keep first", input: []string{"go", "go", "core", "ai", "custom", "go"}, want: []string{"core", "go", "ai", "custom"}},
+		{name: "blanks dropped", input: []string{"", "  ", "go"}, want: []string{"core", "go", "custom"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := NormalizeProfiles(tt.input); !slices.Equal(got, tt.want) {
+				t.Errorf("NormalizeProfiles(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestGetProfiles(t *testing.T) {
@@ -717,6 +821,21 @@ func TestDiffProfiles(t *testing.T) {
 			t.Errorf("NewPrompts = %v, want [new_key]", diff.NewPrompts)
 		}
 	})
+	t.Run("custom immune from added and removed", func(t *testing.T) {
+		t.Parallel()
+		for _, old := range []map[string]any{
+			{"enabled_profiles": []string{"core", "go"}},
+			{"enabled_profiles": []string{"core", "go", "custom"}},
+		} {
+			diff := DiffProfiles(old, manifest)
+			if slices.Contains(diff.Added, "custom") {
+				t.Errorf("Added = %v, want no custom", diff.Added)
+			}
+			if slices.Contains(diff.Removed, "custom") {
+				t.Errorf("Removed = %v, want no custom", diff.Removed)
+			}
+		}
+	})
 	t.Run("core never removed", func(t *testing.T) {
 		t.Parallel()
 		old := map[string]any{"enabled_profiles": []string{"core"}}
@@ -744,18 +863,30 @@ func TestDefaultTemplateProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest error: %v", err)
 	}
-	if len(got.Profiles) != 19 {
-		t.Errorf("profiles = %d, want 19 (core implicit)", len(got.Profiles))
+	if len(got.Profiles) != 20 {
+		t.Errorf("profiles = %d, want 20 (core implicit)", len(got.Profiles))
 	}
 	if _, ok := got.Profiles["core"]; ok {
 		t.Error("profiles has core, want core implicit only")
 	}
-	goProfile := got.Profiles["go"]
-	if !slices.Contains(goProfile.Files, "go.mod") {
-		t.Errorf("go files = %v, want go.mod", goProfile.Files)
+	customProfile, ok := got.Profiles["custom"]
+	if !ok {
+		t.Error("profiles lacks custom, want always-enabled custom")
+	} else if !slices.Contains(customProfile.Files, ".config/fnox.toml") {
+		t.Errorf("custom files = %v, want fnox seed", customProfile.Files)
 	}
-	if got := ProfilesForPath(got, nil, "cmd/main.go"); !slices.Contains(got, "go") {
-		t.Errorf("ProfilesForPath cmd/main.go = %v, want go", got)
+	goProfile := got.Profiles["go"]
+	if !slices.Contains(goProfile.Files, ".config/mise/config.go.toml") {
+		t.Errorf("go files = %v, want go toolchain", goProfile.Files)
+	}
+	if slices.Contains(goProfile.Files, "go.mod") || slices.Contains(goProfile.Files, "cmd/**") || slices.Contains(goProfile.Files, "internal/**") {
+		t.Errorf("go files = %v, want no source layout opinion", goProfile.Files)
+	}
+	if got := ProfilesForPath(got, nil, ".config/mise/config.go.toml"); !slices.Contains(got, "go") {
+		t.Errorf("ProfilesForPath config.go.toml = %v, want go", got)
+	}
+	if got := ProfilesForPath(got, nil, "cmd/main.go"); len(got) != 0 {
+		t.Errorf("ProfilesForPath cmd/main.go = %v, want unowned", got)
 	}
 }
 
@@ -807,17 +938,14 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 	t.Run("every file owned by at most one profile or core", func(t *testing.T) {
 		t.Parallel()
 		coreGlobs := []string{
-			".config/fnox.toml",
-			".config/hk.pkl",
+			".config/hk/core.pkl",
+			".config/hk/index.pkl.tmpl",
 			".config/mise/config.linux.toml",
 			".config/mise/config.toml",
-			".config/mise/scripts/**",
 			".config/tombi.toml",
-			".config/updatecli/mise.yaml",
+			".config/updatecli/mise-core.yaml",
 			".gitignore",
 			".vscode/**",
-			"README.md.tmpl",
-			"TEMPLATE_LICENSE",
 			"hooks/**",
 			".config/miserc.toml.tmpl",
 		}
@@ -839,6 +967,18 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 		if !isCore(".config/mise/config.linux.toml") {
 			t.Error("config.linux.toml not in core set, want core-always")
 		}
+		for _, rel := range []string{
+			".config/mise/config.custom.toml",
+			".config/fnox.toml",
+			".config/hk/custom.pkl",
+		} {
+			if owners := ProfilesForPath(manifest, nil, rel); !slices.Equal(owners, []string{"custom"}) {
+				t.Errorf("%s owners = %v, want [custom]", rel, owners)
+			}
+			if isCore(rel) {
+				t.Errorf("%s in core set, want custom-owned only", rel)
+			}
+		}
 		root := filepath.Join("..", "..", "templates", "default")
 		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -856,12 +996,14 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 				return nil
 			}
 			owners := ProfilesForPath(manifest, nil, rel)
+			licensed := slices.Contains(manifest.LicenseFiles, rel)
+			docced := slices.Contains(manifest.DocFiles, strings.TrimSuffix(rel, ".tmpl"))
 			core := isCore(rel)
-			if core && len(owners) > 0 {
+			if core && (len(owners) > 0 || licensed || docced) {
 				t.Errorf("core file %q also owned by %v, want exclusive", rel, owners)
 				return nil
 			}
-			if len(owners) == 0 && !core {
+			if len(owners) == 0 && !core && !licensed && !docced {
 				t.Errorf("orphan file %q unowned and not in core set", rel)
 				return nil
 			}
@@ -872,6 +1014,90 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatalf("walking default template: %v", err)
+		}
+	})
+}
+
+func TestStateLockLocations(t *testing.T) {
+	t.Parallel()
+	commit := strings.Repeat("a", 64)
+	digest := "sha256:" + strings.Repeat("b", 64)
+	stateFile := func(engine string) *fstest.MapFile {
+		return &fstest.MapFile{Data: []byte(
+			`{"version":1,"template":"tpl","sourceKind":"filesystem",` +
+				`"resolvedCommit":"` + commit + `","engine":"` + engine + `",` +
+				`"templateLicense":"MIT-0"}`)}
+	}
+	lockFile := &fstest.MapFile{Data: []byte(
+		`{"source":"tpl","resolved_sha":"` + commit + `",` +
+			`"manifest_hash":"` + digest + `","files":[]}`)}
+	t.Run("legacy fallback loads", func(t *testing.T) {
+		t.Parallel()
+		fsys := fstest.MapFS{
+			legacyStateFileName: stateFile("turutan/legacy"),
+			legacyLockFileName:  lockFile,
+		}
+		state, err := LoadState(fsys)
+		if err != nil {
+			t.Fatalf("LoadState legacy error: %v", err)
+		}
+		if state.Engine != "turutan/legacy" {
+			t.Errorf("Engine = %q, want legacy fallback", state.Engine)
+		}
+		if _, err := LoadLock(fsys); err != nil {
+			t.Fatalf("LoadLock legacy error: %v", err)
+		}
+	})
+	t.Run("new location wins", func(t *testing.T) {
+		t.Parallel()
+		fsys := fstest.MapFS{
+			StateFileName:       stateFile("turutan/new"),
+			LockFileName:        lockFile,
+			legacyStateFileName: stateFile("turutan/legacy"),
+			legacyLockFileName:  lockFile,
+		}
+		state, err := LoadState(fsys)
+		if err != nil {
+			t.Fatalf("LoadState error: %v", err)
+		}
+		if state.Engine != "turutan/new" {
+			t.Errorf("Engine = %q, want new location to win", state.Engine)
+		}
+	})
+	t.Run("corrupt new file does not fall back", func(t *testing.T) {
+		t.Parallel()
+		fsys := fstest.MapFS{
+			StateFileName:       {Data: []byte("{bad json")},
+			legacyStateFileName: stateFile("turutan/legacy"),
+		}
+		if _, err := LoadState(fsys); err == nil {
+			t.Error("LoadState with corrupt new file succeeded, want error")
+		}
+	})
+	t.Run("saves land in new location", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		state := &State{
+			Template: "tpl", SourceKind: "filesystem",
+			ResolvedCommit: commit, Engine: "turutan/0.1.0",
+			TemplateLicense: TemplateLicenseMIT0,
+		}
+		if err := SaveState(dir, state); err != nil {
+			t.Fatalf("SaveState error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(StateFileName))); err != nil {
+			t.Errorf("new state file missing: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, legacyStateFileName)); !os.IsNotExist(err) {
+			t.Error("legacy state file written, want new location only")
+		}
+		if err := SaveLock(dir, &Lock{
+			Source: "tpl", ResolvedSHA: commit, ManifestHash: digest,
+		}); err != nil {
+			t.Fatalf("SaveLock error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(LockFileName))); err != nil {
+			t.Errorf("new lock file missing: %v", err)
 		}
 	})
 }

@@ -52,7 +52,7 @@ func newBootstrapCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false,
 		"seed project_name from target basename; answers-file overlay wins")
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "",
-		"conflict record mode for future updates (inline|rej; stored in .turutan.json)")
+		"conflict record mode for future updates (inline|rej; stored in .config/turutan/state.json)")
 	cmd.Flags().StringVar(&flags.skip, "skip", "", "comma-separated template paths kept as-is")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "bootstrap into a non-empty directory")
 	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared hooks")

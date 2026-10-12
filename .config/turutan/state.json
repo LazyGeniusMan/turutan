@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "template": "templates/default",
+  "sourceKind": "filesystem",
+  "resolvedCommit": "e6268a587ce3d42cf2e7b0b708f523be7e0663ed3232189f9eb67ea776b5b7f4",
+  "answers": {
+    "enabled_ai_agents": [
+      "pi",
+      "opencode"
+    ],
+    "enabled_profiles": [
+      "core",
+      "ai",
+      "github",
+      "go",
+      "custom"
+    ],
+    "project_description": "",
+    "project_name": "turutan"
+  },
+  "skip": [
+    "README.md",
+    ".golangci.yml"
+  ],
+  "engine": "turutan/dev",
+  "templateLicense": "MIT-0"
+}

@@ -163,8 +163,8 @@ func TestUpdateEnableDisable(t *testing.T) {
 		if !slices.Contains(result.Updated, "go.mod") {
 			t.Errorf("Updated = %v, want it to list go.mod", result.Updated)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
 		}
 		if !strings.Contains(stderr.String(), "turutan: template offers new profiles:") {
 			t.Errorf("stderr = %q, want the new-profiles report", stderr.String())
@@ -188,8 +188,8 @@ func TestUpdateEnableDisable(t *testing.T) {
 		if !slices.Contains(result.Updated, "go.mod") {
 			t.Errorf("Updated = %v, want it to list go.mod", result.Updated)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
 		}
 	})
 	t.Run("unknown profile errors with offered list", func(t *testing.T) {
@@ -218,11 +218,11 @@ func TestUpdatePreview(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		beforeState, err := os.ReadFile(filepath.Join(projectDir, ".turutan.json")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		beforeState, err := os.ReadFile(filepath.Join(projectDir, config.StateFileName)) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatal(err)
 		}
-		beforeLock, err := os.ReadFile(filepath.Join(projectDir, ".turutan.lock")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		beforeLock, err := os.ReadFile(filepath.Join(projectDir, config.LockFileName)) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,19 +236,19 @@ func TestUpdatePreview(t *testing.T) {
 		if got, _ := os.ReadFile(filepath.Join(projectDir, "hello.txt")); string(got) != "v1\n" { // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 			t.Errorf("hello.txt = %q, want preview to leave the worktree alone", got)
 		}
-		afterState, err := os.ReadFile(filepath.Join(projectDir, ".turutan.json")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		afterState, err := os.ReadFile(filepath.Join(projectDir, config.StateFileName)) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatal(err)
 		}
-		afterLock, err := os.ReadFile(filepath.Join(projectDir, ".turutan.lock")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		afterLock, err := os.ReadFile(filepath.Join(projectDir, config.LockFileName)) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatal(err)
 		}
 		if string(afterState) != string(beforeState) {
-			t.Error("preview mutated .turutan.json")
+			t.Error("preview mutated state.json")
 		}
 		if string(afterLock) != string(beforeLock) {
-			t.Error("preview mutated .turutan.lock")
+			t.Error("preview mutated lock.json")
 		}
 		for _, want := range []string{"preview", "hello.txt", "modified"} {
 			if !strings.Contains(stdout.String(), want) {
@@ -468,11 +468,11 @@ func TestListProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListProfiles error: %v", err)
 	}
-	if !slices.Equal(info.Offered, []string{"core", "github", "go"}) {
-		t.Errorf("Offered = %v, want [core github go]", info.Offered)
+	if !slices.Equal(info.Offered, []string{"core", "custom", "github", "go"}) {
+		t.Errorf("Offered = %v, want [core custom github go]", info.Offered)
 	}
-	if !slices.Equal(info.Enabled, []string{"core", "go"}) {
-		t.Errorf("Enabled = %v, want [core go]", info.Enabled)
+	if !slices.Equal(info.Enabled, []string{"core", "custom", "go"}) {
+		t.Errorf("Enabled = %v, want [core custom go]", info.Enabled)
 	}
 	if _, err := ListProfiles(context.Background(), t.TempDir(), ProfileOptions{}); err == nil {
 		t.Error("ListProfiles without state succeeded, want error")
@@ -507,8 +507,8 @@ func TestUpdateDisableValidation(t *testing.T) {
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go] (enable wins)", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core go custom] (enable wins)", got)
 		}
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	})
@@ -521,8 +521,8 @@ func TestUpdateDisableValidation(t *testing.T) {
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
 		}
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	})
@@ -535,25 +535,52 @@ func TestUpdateDisableValidation(t *testing.T) {
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
 		}
 		assertProfileAbsent(t, projectDir, "go.mod")
 	})
-	t.Run("disable core removes it from stored answers", func(t *testing.T) {
+	t.Run("disable core is refused", func(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
 		projectDir := bootstrapProfiles(t, src, "core", "go")
 		var stdout, stderr strings.Builder
 		opts := updateCLIOptions(&stdout, &stderr)
 		opts.Disable = []string{"core"}
-		if _, err := Update(context.Background(), projectDir, opts); err != nil {
-			t.Fatalf("Update error: %v", err)
+		if _, err := Update(context.Background(), projectDir, opts); err == nil {
+			t.Fatal("Update with --disable core succeeded, want refusal")
+		} else if !strings.Contains(err.Error(), `cannot disable always-enabled profile "core"`) {
+			t.Errorf("error = %q, want the always-enabled refusal", err)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"go"}) {
-			t.Errorf("stored enabled_profiles = %v, want [go]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want unchanged [core go custom]", got)
 		}
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 		assertProfileFile(t, projectDir, "keep.txt", "keep v1\n")
+	})
+	t.Run("disable custom is refused", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Disable = []string{"custom"}
+		if _, err := Update(context.Background(), projectDir, opts); err == nil {
+			t.Fatal("Update with --disable custom succeeded, want refusal")
+		} else if !strings.Contains(err.Error(), `cannot disable always-enabled profile "custom"`) {
+			t.Errorf("error = %q, want the always-enabled refusal", err)
+		}
+	})
+	t.Run("enable core and custom is a no-op", func(t *testing.T) {
+		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
+		projectDir := bootstrapProfiles(t, src, "core", "go")
+		var stdout, stderr strings.Builder
+		opts := updateCLIOptions(&stdout, &stderr)
+		opts.Enable = []string{"core", "custom"}
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+		}
 	})
 }
 
@@ -723,8 +750,8 @@ func TestUpdatePreserveExemptFromPruning(t *testing.T) {
 		if paths := lockPaths(t, projectDir); slices.Contains(paths, "go.mod") {
 			t.Error("lock still contains go.mod after --disable go, want it untracked")
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
 		}
 	})
 }

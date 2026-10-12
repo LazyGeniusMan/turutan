@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -22,12 +23,17 @@ import (
 )
 
 const (
-	StateFileName       = ".turutan.json"
-	LockFileName        = ".turutan.lock"
+	StateFileName       = ".config/turutan/state.json"
+	LockFileName        = ".config/turutan/lock.json"
 	ManifestFileName    = ".turutan.yml"
 	ManifestFileNameAlt = ".turutan.yaml"
 	StateVersion        = 1
 	TemplateLicenseMIT0 = "MIT-0"
+)
+
+const (
+	legacyStateFileName = ".turutan.json"
+	legacyLockFileName  = ".turutan.lock"
 )
 
 var hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -106,6 +112,9 @@ type ManifestProfile struct {
 type Manifest struct {
 	Source       string                     `yaml:"source"`
 	MinEngine    string                     `yaml:"min-engine"`
+	License      string                     `yaml:"license"`
+	LicenseFiles []string                   `yaml:"license-files"`
+	DocFiles     []string                   `yaml:"doc-files"`
 	Ignore       []string                   `yaml:"ignore"`
 	Preserve     []string                   `yaml:"preserve"`
 	Conflict     string                     `yaml:"conflict"`
@@ -118,9 +127,9 @@ type Manifest struct {
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
-	data, err := fs.ReadFile(fsys, StateFileName)
+	data, err := readStateFile(fsys, StateFileName, legacyStateFileName)
 	if err != nil {
-		return nil, fmt.Errorf("reading %q: %w", StateFileName, err)
+		return nil, err
 	}
 	var state State
 	if err := json.Unmarshal(data, &state); err != nil {
@@ -174,9 +183,9 @@ func ValidateState(state *State) error {
 }
 
 func LoadLock(fsys fs.FS) (*Lock, error) {
-	data, err := fs.ReadFile(fsys, LockFileName)
+	data, err := readStateFile(fsys, LockFileName, legacyLockFileName)
 	if err != nil {
-		return nil, fmt.Errorf("reading %q: %w", LockFileName, err)
+		return nil, err
 	}
 	var lock Lock
 	if err := json.Unmarshal(data, &lock); err != nil {
@@ -326,6 +335,18 @@ func ValidateManifest(manifest *Manifest) error {
 			return fmt.Errorf("invalid manifest: bad min-engine %q: %w", manifest.MinEngine, err)
 		}
 	}
+	if err := validateManifestLicense(manifest.License); err != nil {
+		return err
+	}
+	if err := validateManifestLicenseFiles(manifest.LicenseFiles); err != nil {
+		return err
+	}
+	if err := validateManifestDocFiles(manifest.DocFiles); err != nil {
+		return err
+	}
+	if err := validateManifestPlantedOverlap(manifest.LicenseFiles, manifest.DocFiles); err != nil {
+		return err
+	}
 	for i, migration := range manifest.Migrations {
 		if len(migration.Run) == 0 {
 			return fmt.Errorf("invalid manifest: migrations[%d] has empty run: must list at least one command", i)
@@ -335,6 +356,77 @@ func ValidateManifest(manifest *Manifest) error {
 		}
 		if err := validateMigrationFrom(migration.From); err != nil {
 			return fmt.Errorf("invalid manifest: migrations[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
+var manifestLicenseRe = regexp.MustCompile(`^[A-Za-z0-9.+:\-]+$`)
+
+func validateManifestLicense(license string) error {
+	if license == "" {
+		return nil
+	}
+	trimmed := strings.TrimSpace(license)
+	if trimmed == "" || !manifestLicenseRe.MatchString(trimmed) {
+		return fmt.Errorf(
+			"invalid manifest: bad license %q: must be a non-empty SPDX identifier "+
+				"(letters, digits, and .+:-)", license)
+	}
+	return nil
+}
+
+func validateManifestLicenseFiles(files []string) error {
+	return validateManifestPlantedFiles(files, "license-files")
+}
+
+func validateManifestDocFiles(files []string) error {
+	return validateManifestPlantedFiles(files, "doc-files")
+}
+
+func validateManifestPlantedFiles(files []string, key string) error {
+	seen := map[string]bool{}
+	for i, entry := range files {
+		if strings.TrimSpace(entry) == "" {
+			return fmt.Errorf("invalid manifest: %s[%d] is empty", key, i)
+		}
+		slash := filter.ToSlash(entry)
+		if strings.HasPrefix(slash, "/") || filepath.IsAbs(entry) {
+			return fmt.Errorf("invalid manifest: %s[%d] %q is not relative", key, i, entry)
+		}
+		for segment := range strings.SplitSeq(slash, "/") {
+			if segment == ".." {
+				return fmt.Errorf("invalid manifest: %s[%d] %q escapes its root", key, i, entry)
+			}
+		}
+		if strings.HasSuffix(slash, ".tmpl") {
+			return fmt.Errorf("invalid manifest: %s[%d] %q must not be a template", key, i, entry)
+		}
+		dest := ".config/turutan/" + slash
+		if dest == ".config/turutan/state.json" ||
+			dest == ".config/turutan/lock.json" ||
+			dest == ".config/turutan/templates" ||
+			strings.HasPrefix(dest, ".config/turutan/templates/") {
+			return fmt.Errorf(
+				"invalid manifest: %s[%d] %q collides with state artifacts", key, i, entry)
+		}
+		if seen[slash] {
+			return fmt.Errorf("invalid manifest: %s[%d] %q is a duplicate", key, i, entry)
+		}
+		seen[slash] = true
+	}
+	return nil
+}
+
+func validateManifestPlantedOverlap(licenseFiles, docFiles []string) error {
+	licensed := map[string]bool{}
+	for _, entry := range licenseFiles {
+		licensed[filter.ToSlash(entry)] = true
+	}
+	for i, entry := range docFiles {
+		if licensed[filter.ToSlash(entry)] {
+			return fmt.Errorf(
+				"invalid manifest: doc-files[%d] %q is also listed in license-files", i, entry)
 		}
 	}
 	return nil
@@ -409,6 +501,28 @@ func validateMigrationFrom(from string) error {
 		return nil
 	}
 	return fmt.Errorf("bad migration from %q: must be a semver range or a 7-64 hex commit prefix", from)
+}
+
+// NormalizeProfiles deduplicates ids (keeping the first occurrence),
+// forces core first and custom last, injecting both when missing.
+// Bootstrap and update funnel every enabled_profiles value through it so
+// the always-enabled pair stays ordered no matter the prompt path.
+// ~keep
+func NormalizeProfiles(ids []string) []string {
+	seen := map[string]bool{}
+	rest := []string{}
+	for _, id := range ids {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		if trimmed == "core" || trimmed == "custom" {
+			continue
+		}
+		rest = append(rest, trimmed)
+	}
+	return append(append([]string{"core"}, rest...), "custom")
 }
 
 // GetProfiles returns the deduplicated enabled_profiles from raw answers.
@@ -549,19 +663,21 @@ func DiffProfiles(oldAnswers map[string]any, newManifest *Manifest) ProfileDiff 
 	for _, id := range GetProfiles(oldAnswers) {
 		oldSet[id] = true
 	}
-	newSet := map[string]bool{"core": true}
+	newSet := map[string]bool{"core": true, "custom": true}
 	for id := range newManifest.Profiles {
 		newSet[id] = true
 	}
 	for id := range newSet {
-		if !oldSet[id] {
-			diff.Added = append(diff.Added, id)
+		if id == "custom" || oldSet[id] {
+			continue
 		}
+		diff.Added = append(diff.Added, id)
 	}
 	for id := range oldSet {
-		if !newSet[id] {
-			diff.Removed = append(diff.Removed, id)
+		if id == "custom" || newSet[id] {
+			continue
 		}
+		diff.Removed = append(diff.Removed, id)
 	}
 	slices.Sort(diff.Added)
 	slices.Sort(diff.Removed)
@@ -584,11 +700,27 @@ func writeJSON(dir, name string, value any) error {
 		return fmt.Errorf("encoding %q: %w", name, err)
 	}
 	data = append(data, '\n')
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	parent := filepath.Dir(filepath.Join(dir, name))
+	if err := os.MkdirAll(parent, 0o750); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
 		return fmt.Errorf("writing %q: %w", name, err)
 	}
 	return nil
+}
+
+func readStateFile(fsys fs.FS, name, legacy string) ([]byte, error) {
+	data, err := fs.ReadFile(fsys, name)
+	if err == nil {
+		return data, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("reading %q: %w", name, err)
+	}
+	legacyData, legacyErr := fs.ReadFile(fsys, legacy)
+	if legacyErr != nil {
+		return nil, fmt.Errorf("reading %q: %w", name, err)
+	}
+	return legacyData, nil
 }

@@ -17,7 +17,7 @@ func renderFixture() fstest.MapFS {
 		"internal/app/app.go.tmpl": {Data: []byte("// Package app implements the {{.project_name}} application logic.\npackage app\n\n// Greet returns the project greeting.\nfunc Greet() string {\n\treturn \"{{.project_name}}\"\n}\n")},
 		"README.md.tmpl":           {Data: []byte("# {{.project_name | upper}}\n")},
 		"static.txt":               {Data: []byte("verbatim {{not_a_template}}\n")},
-		".turutan/skip.yml":        {Data: []byte("must not render\n")},
+		".config/turutan/skip.yml": {Data: []byte("must not render\n")},
 		".git/config":              {Data: []byte("must not render\n")},
 	}
 }
@@ -34,7 +34,7 @@ func TestRenderFS(t *testing.T) {
 				t.Errorf("expected rendered file %q: %v", path, err)
 			}
 		}
-		for _, path := range []string{"go.mod.tmpl", ".turutan/skip.yml", ".git/config"} {
+		for _, path := range []string{"go.mod.tmpl", ".config/turutan/skip.yml", ".git/config"} {
 			if _, err := os.Stat(filepath.Join(dst, path)); err == nil {
 				t.Errorf("file %q should not be rendered", path)
 			}
@@ -106,9 +106,9 @@ func TestRenderFSSkipsNestedMetadataDirs(t *testing.T) {
 		name    string
 		skipped string
 	}{
-		{name: "nested turutan tree", skipped: "a/.turutan/b.yml"},
+		{name: "state dir skipped", skipped: ".config/turutan/state.json"},
 		{name: "nested git tree", skipped: "a/.git/config"},
-		{name: "deeply nested turutan file", skipped: "a/b/.turutan/c/d.yml"},
+		{name: "base store skipped", skipped: ".config/turutan/templates/abc/f.txt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,9 +133,9 @@ func TestRenderDirSkipsNestedMetadataDirs(t *testing.T) {
 		name    string
 		skipped string
 	}{
-		{name: "nested turutan tree", skipped: "a/.turutan/b.yml"},
+		{name: "state dir skipped", skipped: ".config/turutan/state.json"},
 		{name: "nested git tree", skipped: "a/.git/config"},
-		{name: "deeply nested turutan file", skipped: "a/b/.turutan/c/d.yml"},
+		{name: "base store skipped", skipped: ".config/turutan/templates/abc/f.txt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,6 +144,7 @@ func TestRenderDirSkipsNestedMetadataDirs(t *testing.T) {
 			skippedPath := filepath.Join(src, filepath.FromSlash(tt.skipped))
 			is.NoError(os.MkdirAll(filepath.Dir(skippedPath), 0o755))
 			is.NoError(os.WriteFile(skippedPath, []byte("must not render\n"), 0o600))
+			is.NoError(os.MkdirAll(filepath.Join(src, "a"), 0o755))
 			is.NoError(os.WriteFile(filepath.Join(src, "a", "keep.txt"), []byte("keep\n"), 0o600))
 			dst := t.TempDir()
 			is.NoError(RenderDir(src, dst, map[string]any{}))

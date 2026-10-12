@@ -48,11 +48,22 @@ type Conditional struct {
 	Skip []string
 }
 
-var skippedDirNames = []string{".turutan", ".git"}
+var skippedDirNames = []string{".git"}
+
+const skippedStateSubtree = ".config/turutan"
+
+var skippedFileNames = []string{".turutan.yml", ".turutan.yaml"}
 
 func isSkippedPath(slash string) bool {
+	if slash == skippedStateSubtree ||
+		strings.HasPrefix(slash, skippedStateSubtree+"/") {
+		return true
+	}
 	for segment := range strings.SplitSeq(slash, "/") {
 		if slices.Contains(skippedDirNames, segment) {
+			return true
+		}
+		if slices.Contains(skippedFileNames, segment) {
 			return true
 		}
 	}

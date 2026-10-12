@@ -10,10 +10,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
+	"github.com/LazyGeniusMan/turutan/internal/git"
 	"github.com/LazyGeniusMan/turutan/internal/template"
 	"github.com/Masterminds/semver/v3"
 )
@@ -95,6 +97,44 @@ func resolveBootstrapSrc(
 	return src, nil
 }
 
+func relativizeForStore(projectDir string, src *template.Source) template.Source {
+	out := *src
+	if out.Kind != template.KindFilesystem || out.Repo == "" ||
+		!filepath.IsAbs(out.Repo) {
+		return out
+	}
+	if rel, err := filepath.Rel(projectDir, out.Repo); err == nil {
+		out.Repo = filepath.ToSlash(rel)
+	}
+	return out
+}
+
+func parseStoredSource(projectDir, raw string) (*template.Source, error) {
+	if join, ok := storedRelativePath(projectDir, raw); ok {
+		return template.ParseSource(join)
+	}
+	return template.ParseSource(raw)
+}
+
+func storedRelativePath(projectDir, raw string) (string, bool) {
+	rest := raw
+	if strings.HasPrefix(rest, "git::") {
+		return "", false
+	}
+	if strings.Contains(rest, "://") || git.IsScpLike(rest) {
+		return "", false
+	}
+	locator := rest
+	if idx := strings.Index(rest, "?"); idx >= 0 {
+		locator = rest[:idx]
+	}
+	if locator == "" || filepath.IsAbs(locator) ||
+		filepath.IsAbs(filepath.FromSlash(locator)) {
+		return "", false
+	}
+	return filepath.Join(projectDir, filepath.FromSlash(raw)), true
+}
+
 func fetchBootstrapTemplate(
 	ctx context.Context,
 	src *template.Source,
@@ -146,6 +186,12 @@ func stageBootstrap(
 	if err != nil {
 		return "", nil, "", cleanup, err
 	}
+	if err := plantLicenseFiles(fetched.Dir, staged, manifest); err != nil {
+		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+	}
+	if err := plantDocFiles(staged, manifest); err != nil {
+		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+	}
 	return absTarget, answers, staged, cleanup, nil
 }
 
@@ -162,7 +208,9 @@ func finishBootstrap(
 	stdout, stderr io.Writer,
 	stdin io.Reader,
 ) error {
-	files, err := publish(staged, absTarget, manifest, opts)
+	stored := relativizeForStore(absTarget, src)
+	src = &stored
+	files, err := publish(staged, absTarget, manifest, opts, config.GetProfiles(answers))
 	if err != nil {
 		return err
 	}
@@ -171,7 +219,7 @@ func finishBootstrap(
 		resolved = strings.TrimPrefix(
 			config.ComputeManifestHash(files), "sha256:")
 	}
-	license := resolveTemplateLicense(os.DirFS(fetched.Dir))
+	license := resolveTemplateLicense(os.DirFS(fetched.Dir), manifest)
 	vlogf(stderr, opts.Verbose, "bootstrap: template license %s", license)
 	if err := writeStateAndLock(
 		absTarget, src, resolved, answers, opts, files, engine, license,
@@ -350,10 +398,12 @@ func publish(
 	staged, target string,
 	manifest *config.Manifest,
 	opts Options,
+	enabled []string,
 ) ([]config.LockFile, error) {
 	var files []config.LockFile
 	pub := &publisher{
 		staged: staged, target: target, manifest: manifest, opts: opts,
+		enabled: enabled,
 	}
 	err := filepath.WalkDir(staged, func(path string, d fs.DirEntry, err error) error {
 		return pub.publishEntry(path, d, err, &files)
@@ -369,6 +419,7 @@ type publisher struct {
 	target   string
 	manifest *config.Manifest
 	opts     Options
+	enabled  []string
 }
 
 func (p *publisher) publishEntry(
@@ -475,7 +526,7 @@ func (p *publisher) keepOrFail(
 	slash string,
 	files *[]config.LockFile,
 ) (bool, error) {
-	kept, err := keepExisting(slash, p.manifest, p.opts)
+	kept, err := keepExisting(slash, p.manifest, p.opts, p.enabled)
 	if err != nil {
 		return false, err
 	}
@@ -494,7 +545,7 @@ func (p *publisher) keepOrFail(
 	return false, nil
 }
 
-func keepExisting(slash string, manifest *config.Manifest, opts Options) (bool, error) {
+func keepExisting(slash string, manifest *config.Manifest, opts Options, enabled []string) (bool, error) {
 	preserved, err := filter.MatchAny(manifest.Preserve, slash)
 	if err != nil {
 		return false, fmt.Errorf("bootstrap: matching preserve globs: %w", err)
@@ -506,7 +557,11 @@ func keepExisting(slash string, manifest *config.Manifest, opts Options) (bool, 
 	if err != nil {
 		return false, fmt.Errorf("bootstrap: matching --skip entries: %w", err)
 	}
-	return skipped, nil
+	if skipped {
+		return true, nil
+	}
+	owned := config.NormalizeProfiles(enabled)
+	return slices.Contains(config.ProfilesForPath(manifest, owned, slash), "custom"), nil
 }
 
 func warnManifestSourceMismatch(stderr io.Writer, manifest *config.Manifest, src *template.Source) {

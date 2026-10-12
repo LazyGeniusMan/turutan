@@ -7,17 +7,24 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
-const baseStoreSubdir = ".turutan/templates"
+const baseStoreSubdir = ".config/turutan/templates"
+
+const legacyBaseStoreSubdir = ".turutan/templates"
 
 func BasePath(projectDir, sha string) (string, error) {
+	return basePathIn(projectDir, sha, baseStoreSubdir)
+}
+
+func basePathIn(projectDir, sha, subdir string) (string, error) {
 	if sha == "" {
 		return "", fmt.Errorf("base store: empty identity")
 	}
-	rel, err := filter.SecureJoin(baseStoreSubdir, filter.ToSlash(sha))
+	rel, err := filter.SecureJoin(subdir, filter.ToSlash(sha))
 	if err != nil {
 		return "", fmt.Errorf("base store: %w", err)
 	}
@@ -25,12 +32,16 @@ func BasePath(projectDir, sha string) (string, error) {
 }
 
 func HasBase(projectDir, sha string) bool {
-	dir, err := BasePath(projectDir, sha)
-	if err != nil {
-		return false
+	for _, subdir := range []string{baseStoreSubdir, legacyBaseStoreSubdir} {
+		dir, err := basePathIn(projectDir, sha, subdir)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return true
+		}
 	}
-	info, err := os.Stat(dir)
-	return err == nil && info.IsDir()
+	return false
 }
 
 func StoreBase(projectDir, sha, srcDir string) error {
@@ -77,15 +88,21 @@ func storeBaseEntry(
 }
 
 func skipBaseMeta(slash string, d fs.DirEntry) (bool, error) {
-	for _, skipped := range []string{".turutan", ".git"} {
-		if slash == skipped ||
-			len(slash) > len(skipped) &&
-				slash[:len(skipped)+1] == skipped+"/" {
-			if d.IsDir() {
-				return true, filepath.SkipDir
-			}
-			return true, nil
+	if slash == ".git" || strings.HasPrefix(slash, ".git/") {
+		if d.IsDir() {
+			return true, filepath.SkipDir
 		}
+		return true, nil
+	}
+	switch {
+	case slash == ".config/turutan/state.json",
+		slash == ".config/turutan/lock.json",
+		slash == ".config/turutan/templates",
+		strings.HasPrefix(slash, ".config/turutan/templates/"):
+		if d.IsDir() {
+			return true, filepath.SkipDir
+		}
+		return true, nil
 	}
 	return false, nil
 }
@@ -119,5 +136,16 @@ func ReadBaseFile(projectDir, sha, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return filter.ReadFileWithinRoot(dir, name)
+	data, err := filter.ReadFileWithinRoot(dir, name)
+	if err == nil {
+		return data, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	legacyDir, legacyErr := basePathIn(projectDir, sha, legacyBaseStoreSubdir)
+	if legacyErr != nil {
+		return nil, legacyErr
+	}
+	return filter.ReadFileWithinRoot(legacyDir, name)
 }

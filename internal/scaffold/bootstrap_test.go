@@ -4,13 +4,17 @@ package scaffold
 
 import (
 	"context"
+	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	turutanconfig "github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/filter"
 	git "github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing/object"
@@ -332,12 +336,15 @@ func TestBootstrapDefaultTemplateOffline(t *testing.T) {
 		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
-		got, err := os.ReadFile(filepath.Join(target, "go.mod"))
+		got, err := os.ReadFile(filepath.Join(target, ".config", "turutan", "README.md"))
 		if err != nil {
-			t.Fatalf("reading rendered go.mod: %v", err)
+			t.Fatalf("reading rendered README.md: %v", err)
 		}
-		if string(got) != "module myapp\n\ngo 1.26\n" {
-			t.Errorf("go.mod = %q, want defaulted module", got)
+		if !strings.Contains(string(got), "# myapp") {
+			t.Errorf("README.md = %q, want defaulted project name", got)
+		}
+		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Errorf("config.go.toml present with default profiles, want it skipped (go not in defaults)")
 		}
 	})
 }
@@ -533,7 +540,7 @@ func TestBootstrapDefaultREADME(t *testing.T) {
 		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
-		got, err := os.ReadFile(filepath.Join(target, "README.md")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		got, err := os.ReadFile(filepath.Join(target, ".config", "turutan", "README.md")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatalf("reading rendered README.md: %v", err)
 		}
@@ -543,12 +550,11 @@ func TestBootstrapDefaultREADME(t *testing.T) {
 		if !strings.Contains(string(got), "turutan") {
 			t.Errorf("README.md missing turutan attribution:\n%.500s", got)
 		}
-		gomod, err := os.ReadFile(filepath.Join(target, "go.mod")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
-		if err != nil {
-			t.Fatalf("reading rendered go.mod: %v", err)
+		if _, err := os.Stat(filepath.Join(target, "README.md")); !os.IsNotExist(err) {
+			t.Error("README.md still at project root, want it planted under .config/turutan only")
 		}
-		if string(gomod) != "module myapp\n\ngo 1.26\n" {
-			t.Errorf("go.mod = %q, want defaulted module", gomod)
+		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Errorf("config.go.toml present with default profiles, want it skipped (go not in defaults)")
 		}
 	})
 }
@@ -568,7 +574,7 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
-		enabled := []string{"core", "ai", "github", "go"}
+		enabled := []string{"core", "ai", "github", "custom"}
 		enabledSet := map[string]bool{}
 		for _, id := range enabled {
 			enabledSet[id] = true
@@ -589,7 +595,22 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 			}
 			return true
 		}
+		plantedSrc := map[string]bool{}
+		plantedDests := map[string]bool{}
+		for _, entry := range manifest.LicenseFiles {
+			slash := filepath.ToSlash(entry)
+			plantedSrc[slash] = true
+			plantedDests[".config/turutan/"+slash] = true
+		}
+		for _, entry := range manifest.DocFiles {
+			slash := filepath.ToSlash(entry)
+			plantedSrc[slash] = true
+			plantedDests[".config/turutan/"+slash] = true
+		}
 		expected := map[string]bool{}
+		for dest := range plantedDests {
+			expected[dest] = true
+		}
 		err = filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -602,7 +623,7 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 				return nil
 			}
 			slash := filepath.ToSlash(rel)
-			if slash == ".turutan" || strings.HasPrefix(slash, ".turutan/") {
+			if slash == ".config/turutan" || strings.HasPrefix(slash, ".config/turutan/") {
 				if d.IsDir() {
 					return filepath.SkipDir
 				}
@@ -631,6 +652,15 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 			if !shouldRender(slash) && !shouldRender(filepath.ToSlash(rel)) {
 				return nil
 			}
+			if ignored, err := filter.MatchAny(manifest.Ignore, slash); err == nil && ignored {
+				return nil
+			}
+			if ignored, err := filter.MatchAny(manifest.Ignore, filepath.ToSlash(rel)); err == nil && ignored {
+				return nil
+			}
+			if plantedSrc[slash] || plantedSrc[filepath.ToSlash(rel)] {
+				return nil
+			}
 			expected[slash] = true
 			return nil
 		})
@@ -650,13 +680,25 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 				return nil
 			}
 			slash := filepath.ToSlash(rel)
-			if slash == ".turutan" || strings.HasPrefix(slash, ".turutan/") {
-				if d.IsDir() {
-					return filepath.SkipDir
+			if slash == ".config/turutan" || strings.HasPrefix(slash, ".config/turutan/") {
+				if !plantedDests[slash] {
+					if d.IsDir() {
+						beneath := false
+						for dest := range plantedDests {
+							if strings.HasPrefix(dest, slash+"/") {
+								beneath = true
+								break
+							}
+						}
+						if !beneath {
+							return filepath.SkipDir
+						}
+						return nil
+					}
+					return nil
 				}
-				return nil
 			}
-			if slash == ".turutan.json" || slash == ".turutan.lock" {
+			if slash == turutanconfig.StateFileName || slash == turutanconfig.LockFileName {
 				return nil
 			}
 			if d.IsDir() {
@@ -677,6 +719,254 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 			if !expected[path] {
 				t.Errorf("render produced undeclared %q", path)
 			}
+		}
+	})
+}
+
+func TestBootstrapFilesystemStoresRelative(t *testing.T) {
+	t.Run("absolute input under target stores relative", func(t *testing.T) {
+		root := t.TempDir()
+		tpl := filepath.Join(root, "tpl")
+		if err := os.MkdirAll(tpl, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tpl, ".turutan.yml"), []byte(basicManifest), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for name, content := range basicFiles {
+			path := filepath.Join(tpl, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		target := filepath.Join(root, "proj")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), tpl, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		state, err := turutanconfig.LoadState(os.DirFS(target))
+		if err != nil {
+			t.Fatalf("LoadState error: %v", err)
+		}
+		if state.SourceKind != "filesystem" {
+			t.Errorf("SourceKind = %q, want filesystem", state.SourceKind)
+		}
+		if filepath.IsAbs(state.Template) {
+			t.Errorf("Template = %q, want project-relative path", state.Template)
+		}
+		if state.Template != "../tpl" {
+			t.Errorf("Template = %q, want %q", state.Template, "../tpl")
+		}
+	})
+	t.Run("moved checkout keeps resolving", func(t *testing.T) {
+		root := t.TempDir()
+		tpl := filepath.Join(root, "tpl")
+		if err := os.MkdirAll(tpl, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tpl, ".turutan.yml"), []byte(basicManifest), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for name, content := range basicFiles {
+			path := filepath.Join(tpl, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		target := filepath.Join(root, "proj")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), tpl, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		moved := t.TempDir()
+		if err := copyDirContents(root, moved); err != nil {
+			t.Fatalf("copying checkout: %v", err)
+		}
+		if err := os.RemoveAll(root); err != nil {
+			t.Fatal(err)
+		}
+		movedProj := filepath.Join(moved, "proj")
+		var updateOut strings.Builder
+		if _, err := CheckUpdate(context.Background(), movedProj, checkUpdateOptions(&updateOut)); err != nil {
+			t.Fatalf("CheckUpdate after move error: %v", err)
+		}
+		if diffs, err := ComputeDiff(context.Background(), movedProj, diffOptions()); err != nil {
+			t.Fatalf("ComputeDiff after move error: %v", err)
+		} else if len(diffs) != 0 {
+			t.Errorf("drift after move = %d files, want none", len(diffs))
+		}
+	})
+}
+
+func copyDirContents(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, info.Mode().Perm())
+	})
+}
+
+func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
+	fixture := filepath.Join("..", "..", "templates", "default")
+	if _, err := os.Stat(fixture); err != nil {
+		t.Skipf("default template not found: %v", err)
+	}
+	readRecommendations := func(t *testing.T, proj string) []string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(proj, ".vscode", "extensions.json"))
+		if err != nil {
+			t.Fatalf("reading rendered extensions.json: %v", err)
+		}
+		var decoded struct {
+			Recommendations []string `json:"recommendations"`
+		}
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("extensions.json is not valid JSON: %v\n%s", err, data)
+		}
+		return decoded.Recommendations
+	}
+	writeProfilesAnswers := func(t *testing.T, profiles ...string) string {
+		t.Helper()
+		var b strings.Builder
+		b.WriteString("project_name: exttest\n")
+		b.WriteString("enabled_profiles:\n")
+		for _, p := range profiles {
+			b.WriteString("  - " + p + "\n")
+		}
+		path := filepath.Join(t.TempDir(), "answers.yml")
+		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	t.Run("defaults render base only", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), fixture, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		got := readRecommendations(t, target)
+		for _, want := range []string{"tombi-toml.tombi", "hverlin.mise-vscode"} {
+			if !slices.Contains(got, want) {
+				t.Errorf("recommendations = %v, want %q", got, want)
+			}
+		}
+		for _, unwanted := range []string{"golang.go", "charliermarsh.ruff", "astral-sh.ty", "void-zero.vite-plus-extension-pack"} {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("recommendations = %v, want no %q without its profile", got, unwanted)
+			}
+		}
+	})
+	t.Run("profiles add their extensions", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.AnswersFile = writeProfilesAnswers(t, "core", "go", "python", "typescript")
+		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		got := readRecommendations(t, target)
+		for _, want := range []string{"golang.go", "charliermarsh.ruff", "astral-sh.ty", "void-zero.vite-plus-extension-pack"} {
+			if !slices.Contains(got, want) {
+				t.Errorf("recommendations = %v, want %q", got, want)
+			}
+		}
+	})
+	t.Run("go alone adds only golang", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.AnswersFile = writeProfilesAnswers(t, "core", "go")
+		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		got := readRecommendations(t, target)
+		if !slices.Contains(got, "golang.go") {
+			t.Errorf("recommendations = %v, want golang.go", got)
+		}
+		for _, unwanted := range []string{"charliermarsh.ruff", "astral-sh.ty", "void-zero.vite-plus-extension-pack"} {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("recommendations = %v, want no %q", got, unwanted)
+			}
+		}
+	})
+}
+
+func TestBootstrapDefaultEnabledPresets(t *testing.T) {
+	fixture := filepath.Join("..", "..", "templates", "default")
+	if _, err := os.Stat(fixture); err != nil {
+		t.Skipf("default template not found: %v", err)
+	}
+	readPresetsLine := func(t *testing.T, proj string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(proj, ".config", "ai-rulez", "config.toml"))
+		if err != nil {
+			t.Fatalf("reading rendered config.toml: %v", err)
+		}
+		for line := range strings.Lines(string(data)) {
+			if strings.HasPrefix(strings.TrimSpace(line), "presets =") {
+				return strings.TrimSpace(line)
+			}
+		}
+		t.Fatal("rendered config.toml has no presets line")
+		return ""
+	}
+	t.Run("explicit answers render only the chosen presets", func(t *testing.T) {
+		answersFile := filepath.Join(t.TempDir(), "answers.yml")
+		if err := os.WriteFile(answersFile, []byte("project_name: presettest\nenabled_ai_agents:\n  - pi\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.AnswersFile = answersFile
+		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		if got := readPresetsLine(t, target); got != `presets = ["pi"]` {
+			t.Errorf("presets line = %q, want only pi", got)
+		}
+	})
+	t.Run("defaults render the manifest default", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		if err := Bootstrap(context.Background(), fixture, target, testOptions(&stdout)); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		if got := readPresetsLine(t, target); got != `presets = ["opencode", "pi"]` {
+			t.Errorf("presets line = %q, want the manifest default", got)
 		}
 	})
 }

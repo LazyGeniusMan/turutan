@@ -57,7 +57,7 @@ func CheckUpdate(
 		return nil, err
 	}
 	if changed && len(profiles.Added)+len(profiles.Removed)+len(profiles.NewPrompts) == 0 {
-		profiles = fetchProfileDiff(ctx, state, ref, opts.Engine, opts.Stderr, opts.Verbose)
+		profiles = fetchProfileDiff(ctx, projectDir, state, ref, opts.Engine, opts.Stderr, opts.Verbose)
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
 	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
@@ -85,7 +85,7 @@ func reresolve(
 ) (string, bool, config.ProfileDiff, error) {
 	switch template.SourceKind(state.SourceKind) {
 	case template.KindRemoteGit:
-		src, err := template.ParseSource(state.Template)
+		src, err := parseStoredSource(projectDir, state.Template)
 		if err != nil {
 			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
 		}
@@ -95,7 +95,7 @@ func reresolve(
 		}
 		return sha, sha != state.ResolvedCommit, config.ProfileDiff{}, nil
 	case template.KindLocalGit:
-		src, err := template.ParseSource(state.Template)
+		src, err := parseStoredSource(projectDir, state.Template)
 		if err != nil {
 			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
 		}
@@ -113,12 +113,13 @@ func reresolve(
 
 func fetchProfileDiff(
 	ctx context.Context,
+	projectDir string,
 	state *config.State,
 	ref, engine string,
 	stderr io.Writer,
 	verbose bool,
 ) config.ProfileDiff {
-	src, err := template.ParseSource(state.Template)
+	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
 		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
 		return config.ProfileDiff{}
@@ -166,7 +167,7 @@ func reresolveFilesystem(
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
 	profiles := relevantProfileDiff(manifest, config.DiffProfiles(state.Answers, manifest))
-	fresh, changed, err := compareFilesystemHashes(stage, manifest, state, lock)
+	fresh, changed, err := compareFilesystemHashes(projectDir, stage, manifest, state, lock)
 	if err != nil {
 		return "", false, config.ProfileDiff{}, err
 	}
@@ -184,7 +185,7 @@ func prepareFilesystemReresolve(
 	if err != nil {
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
-	src, err := template.ParseSource(state.Template)
+	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
@@ -211,8 +212,17 @@ func prepareFilesystemReresolve(
 	for key, val := range state.Answers {
 		answers[key] = val
 	}
+	seedMissingDefaults(answers, manifest)
 	normalizeAnswersWithManifest(answers, manifest)
 	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
+		_ = os.RemoveAll(stage)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+	}
+	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
+		_ = os.RemoveAll(stage)
+		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+	}
+	if err := plantDocFiles(stage, manifest); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
@@ -220,7 +230,7 @@ func prepareFilesystemReresolve(
 }
 
 func compareFilesystemHashes(
-	stage string,
+	projectDir, stage string,
 	manifest *config.Manifest,
 	state *config.State,
 	lock *config.Lock,
@@ -237,6 +247,8 @@ func compareFilesystemHashes(
 	if err != nil {
 		return "", false, fmt.Errorf("check-update: %w", err)
 	}
+	rendered = withoutPresentCustom(projectDir, rendered, manifest, state)
+	locked = withoutPresentCustom(projectDir, locked, manifest, state)
 	changed := config.ComputeManifestHash(rendered) !=
 		config.ComputeManifestHash(locked)
 	if !changed {
@@ -245,6 +257,25 @@ func compareFilesystemHashes(
 	fresh := strings.TrimPrefix(
 		config.ComputeManifestHash(display), "sha256:")
 	return fresh, true, nil
+}
+
+func withoutPresentCustom(
+	projectDir string,
+	files []config.LockFile,
+	manifest *config.Manifest,
+	state *config.State,
+) []config.LockFile {
+	if state == nil {
+		return files
+	}
+	kept := files[:0]
+	for _, file := range files {
+		if customOwned(manifest, state.Answers, file.Path) && filePresent(projectDir, file.Path) {
+			continue
+		}
+		kept = append(kept, file)
+	}
+	return kept
 }
 
 func renderedEntries(

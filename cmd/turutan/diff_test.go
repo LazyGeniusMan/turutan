@@ -113,7 +113,7 @@ func TestDiffCmdExitCodes(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(after) != string(before) {
-			t.Error("diff mutated .turutan.lock")
+			t.Error("diff mutated lock.json")
 		}
 	})
 }

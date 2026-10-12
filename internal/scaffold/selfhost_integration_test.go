@@ -45,6 +45,13 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if state.TemplateLicense != turutanconfig.TemplateLicenseMIT0 {
 			t.Errorf("TemplateLicense = %q, want MIT-0", state.TemplateLicense)
 		}
+		planted, err := os.ReadFile(filepath.Join(proj, ".config", "turutan", "LICENSE"))
+		if err != nil {
+			t.Fatalf("planted .config/turutan/LICENSE missing: %v", err)
+		}
+		if !strings.Contains(string(planted), "MIT No Attribution") {
+			t.Errorf("planted LICENSE lacks MIT-0 text:\n%.200s", planted)
+		}
 		if state.Engine != "turutan/0.1.0" {
 			t.Errorf("Engine = %q, want turutan/0.1.0", state.Engine)
 		}
@@ -133,12 +140,12 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 			t.Errorf("identity = %q -> %q, want %q -> %q", result.Old, result.New, sha1, sha1)
 		}
 
-		gomodPath := filepath.Join(proj, "go.mod")
-		original, err := os.ReadFile(gomodPath)
+		anchorPath := filepath.Join(proj, ".gitignore")
+		original, err := os.ReadFile(anchorPath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(gomodPath, append(append([]byte{}, original...), []byte("\n// local edit\n")...), 0o600); err != nil {
+		if err := os.WriteFile(anchorPath, append(append([]byte{}, original...), []byte("\n# local edit\n")...), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		diffs, err := ComputeDiff(context.Background(), proj, DiffOptions{})
@@ -151,7 +158,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if _, code := e2eRun(t, bin, proj, "diff"); code != 2 {
 			t.Errorf("turutan diff exit = %d after local edit, want 2", code)
 		}
-		if err := os.WriteFile(gomodPath, original, 0o600); err != nil {
+		if err := os.WriteFile(anchorPath, original, 0o600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -248,39 +255,36 @@ func TestDefaultProfileChangeOffline(t *testing.T) {
 	t.Run("add go profile without template change", func(t *testing.T) {
 		t.Parallel()
 		proj := e2eBootstrapProfiles(t, fixture, "core")
-		if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
-			t.Fatal("go.mod exists after core-only bootstrap, want it skipped")
+		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Fatal("config.go.toml exists after core-only bootstrap, want it skipped")
 		}
 		e2eUpdateProfiles(t, proj, "core", "go")
-		got, err := os.ReadFile(filepath.Join(proj, "go.mod"))
+		got, err := os.ReadFile(filepath.Join(proj, ".config", "mise", "config.go.toml"))
 		if err != nil {
-			t.Fatalf("reading added go.mod: %v", err)
+			t.Fatalf("reading added config.go.toml: %v", err)
 		}
-		if string(got) != "module demoe2e\n\ngo 1.26\n" {
-			t.Errorf("go.mod = %q, want re-rendered module", got)
-		}
-		if _, err := os.Stat(filepath.Join(proj, "cmd", "app", "main.go")); err != nil {
-			t.Errorf("cmd/app/main.go missing after adding the go profile: %v", err)
+		if !strings.Contains(string(got), "golangci-lint") {
+			t.Errorf("config.go.toml = %q, want go toolchain", got)
 		}
 		miserc, err := os.ReadFile(filepath.Join(proj, ".config", "miserc.toml"))
 		if err != nil {
 			t.Fatalf("reading miserc.toml: %v", err)
 		}
-		if !strings.Contains(string(miserc), `env = ["core", "go"]`) {
-			t.Errorf("miserc.toml = %q, want env [core go]", miserc)
+		if !strings.Contains(string(miserc), `env = ["core", "go", "custom"]`) {
+			t.Errorf("miserc.toml = %q, want env [core go custom]", miserc)
 		}
-		if got := e2eStoredProfiles(t, proj); len(got) != 2 || got[0] != "core" || got[1] != "go" {
-			t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+		if got := e2eStoredProfiles(t, proj); len(got) != 3 || got[0] != "core" || got[1] != "go" || got[2] != "custom" {
+			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
 		}
 	})
 	t.Run("remove go profile without template change", func(t *testing.T) {
 		t.Parallel()
 		proj := e2eBootstrapProfiles(t, fixture, "core", "go")
-		if _, err := os.Stat(filepath.Join(proj, "go.mod")); err != nil {
-			t.Fatalf("go.mod missing after core+go bootstrap: %v", err)
+		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); err != nil {
+			t.Fatalf("config.go.toml missing after core+go bootstrap: %v", err)
 		}
 		e2eUpdateProfiles(t, proj, "core")
-		for _, rel := range []string{"go.mod", "cmd", "internal"} {
+		for _, rel := range []string{".config/mise/config.go.toml", ".golangci.yml"} {
 			if _, err := os.Stat(filepath.Join(proj, filepath.FromSlash(rel))); !os.IsNotExist(err) {
 				t.Errorf("%s exists after removing the go profile, want it gone", rel)
 			}
@@ -289,14 +293,14 @@ func TestDefaultProfileChangeOffline(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reading miserc.toml: %v", err)
 		}
-		if !strings.Contains(string(miserc), `env = ["core"]`) {
-			t.Errorf("miserc.toml = %q, want env [core]", miserc)
+		if !strings.Contains(string(miserc), `env = ["core", "custom"]`) {
+			t.Errorf("miserc.toml = %q, want env [core custom]", miserc)
 		}
 		if strings.Contains(string(miserc), `"go"`) {
 			t.Errorf("miserc.toml = %q, want no go profile entry", miserc)
 		}
-		if got := e2eStoredProfiles(t, proj); len(got) != 1 || got[0] != "core" {
-			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		if got := e2eStoredProfiles(t, proj); len(got) != 2 || got[0] != "core" || got[1] != "custom" {
+			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
 		}
 	})
 }
@@ -316,7 +320,7 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 		t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 	}
 	proj := filepath.Join(work, "proj")
-	e2eAssertMisercEnv(t, proj, `env = ["core"]`)
+	e2eAssertMisercEnv(t, proj, `env = ["core", "custom"]`)
 	e2eAssertReadmeProject(t, proj, "demoe2e")
 	if out, code := e2eRun(t, bin, proj, "update",
 		"--answers-file", coreGoAnswers, "--force", "--non-interactive"); code != 0 {
@@ -324,17 +328,17 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 	} else if !strings.Contains(out, "updated") {
 		t.Errorf("update output missing summary:\n%s", out)
 	}
-	got, err := os.ReadFile(filepath.Join(proj, "go.mod"))
+	got, err := os.ReadFile(filepath.Join(proj, ".config", "mise", "config.go.toml"))
 	if err != nil {
-		t.Fatalf("reading added go.mod: %v", err)
+		t.Fatalf("reading added config.go.toml: %v", err)
 	}
-	if !strings.Contains(string(got), "module demoe2e") {
-		t.Errorf("go.mod = %q, want demoe2e module", got)
+	if !strings.Contains(string(got), "golangci-lint") {
+		t.Errorf("config.go.toml = %q, want go toolchain", got)
 	}
-	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[1] != "go" {
-		t.Errorf("stored enabled_profiles = %v, want [core go]", profiles)
+	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 3 || profiles[1] != "go" || profiles[2] != "custom" {
+		t.Errorf("stored enabled_profiles = %v, want [core go custom]", profiles)
 	}
-	e2eAssertMisercEnv(t, proj, `env = ["core", "go"]`)
+	e2eAssertMisercEnv(t, proj, `env = ["core", "go", "custom"]`)
 	e2eAssertReadmeProject(t, proj, "demoe2e")
 	if out, code := e2eRun(t, bin, proj, "update",
 		"--answers-file", coreAnswers, "--force", "--non-interactive"); code != 0 {
@@ -342,13 +346,13 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 	} else if !strings.Contains(out, "updated") {
 		t.Errorf("update output missing summary:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
-		t.Error("go.mod exists after removing the go profile, want it gone")
+	if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+		t.Error("config.go.toml exists after removing the go profile, want it gone")
 	}
-	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
-		t.Errorf("stored enabled_profiles = %v, want [core]", profiles)
+	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[0] != "core" || profiles[1] != "custom" {
+		t.Errorf("stored enabled_profiles = %v, want [core custom]", profiles)
 	}
-	e2eAssertMisercEnv(t, proj, `env = ["core"]`)
+	e2eAssertMisercEnv(t, proj, `env = ["core", "custom"]`)
 	e2eAssertReadmeProject(t, proj, "demoe2e")
 }
 
@@ -385,12 +389,12 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		} else if code != 1 {
 			t.Errorf("diff --what bogus exit = %d, want 1", code)
 		}
-		readme := filepath.Join(proj, "README.md")
-		original, err := os.ReadFile(readme)
+		anchor := filepath.Join(proj, ".gitignore")
+		original, err := os.ReadFile(anchor)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(readme, append(append([]byte{}, original...), []byte("\n// local edit\n")...), 0o600); err != nil {
+		if err := os.WriteFile(anchor, append(append([]byte{}, original...), []byte("\n# local edit\n")...), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--non-interactive"); code != 2 {
@@ -398,29 +402,29 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "local", "--non-interactive"); code != 2 {
 			t.Errorf("diff --what local exit = %d after local edit, want 2:\n%s", code, out)
-		} else if !strings.Contains(out, "README.md") {
-			t.Errorf("diff --what local output missing README.md:\n%s", out)
+		} else if !strings.Contains(out, ".gitignore") {
+			t.Errorf("diff --what local output missing .gitignore:\n%s", out)
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "upstream", "--non-interactive"); code != 0 {
 			t.Errorf("diff --what upstream exit = %d with only local edits, want 0:\n%s", code, out)
 		} else if !strings.Contains(out, "no drift") {
 			t.Errorf("diff --what upstream output missing no-drift line:\n%s", out)
 		}
-		if err := os.WriteFile(readme, original, 0o600); err != nil {
+		if err := os.WriteFile(anchor, original, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		tmplReadme := filepath.Join(tmpl, "README.md.tmpl")
-		tmplOriginal, err := os.ReadFile(tmplReadme)
+		tmplAnchor := filepath.Join(tmpl, ".gitignore")
+		tmplOriginal, err := os.ReadFile(tmplAnchor)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(tmplReadme, append(append([]byte{}, tmplOriginal...), []byte("\nupstream change\n")...), 0o600); err != nil {
+		if err := os.WriteFile(tmplAnchor, append(append([]byte{}, tmplOriginal...), []byte("\n# upstream change\n")...), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "upstream", "--non-interactive"); code != 2 {
 			t.Errorf("diff --what upstream exit = %d after template change, want 2:\n%s", code, out)
-		} else if !strings.Contains(out, "README.md") {
-			t.Errorf("diff --what upstream output missing README.md:\n%s", out)
+		} else if !strings.Contains(out, ".gitignore") {
+			t.Errorf("diff --what upstream output missing .gitignore:\n%s", out)
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "local", "--non-interactive"); code != 0 {
 			t.Errorf("diff --what local exit = %d with only template changes, want 0:\n%s", code, out)
@@ -443,47 +447,47 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		proj := filepath.Join(work, "proj")
 		if out, code := e2eRun(t, bin, proj, "update", "--enable", "go", "--preview", "--non-interactive"); code != 0 {
 			t.Fatalf("update --preview exit = %d, want 0:\n%s", code, out)
-		} else if !strings.Contains(out, "preview") || !strings.Contains(out, "go.mod") {
-			t.Errorf("update --preview output missing plan for go.mod:\n%s", out)
+		} else if !strings.Contains(out, "preview") || !strings.Contains(out, "config.go.toml") {
+			t.Errorf("update --preview output missing plan for config.go.toml:\n%s", out)
 		}
-		if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
-			t.Error("go.mod exists after --preview, want preview to write nothing")
+		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Error("config.go.toml exists after --preview, want preview to write nothing")
 		}
-		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
-			t.Errorf("stored enabled_profiles = %v after --preview, want [core]", profiles)
+		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[0] != "core" || profiles[1] != "custom" {
+			t.Errorf("stored enabled_profiles = %v after --preview, want [core custom]", profiles)
 		}
 		if out, code := e2eRun(t, bin, proj, "update", "--enable", "go", "--force", "--non-interactive"); code != 0 {
 			t.Fatalf("update --enable go exit = %d, want 0:\n%s", code, out)
 		} else if !strings.Contains(out, "updated") {
 			t.Errorf("update --enable go output missing summary:\n%s", out)
 		}
-		if got, err := os.ReadFile(filepath.Join(proj, "go.mod")); err != nil {
-			t.Errorf("go.mod missing after --enable go: %v", err)
-		} else if !strings.Contains(string(got), "module demoe2e") {
-			t.Errorf("go.mod = %q, want demoe2e module", got)
+		if got, err := os.ReadFile(filepath.Join(proj, ".config", "mise", "config.go.toml")); err != nil {
+			t.Errorf("config.go.toml missing after --enable go: %v", err)
+		} else if !strings.Contains(string(got), "golangci-lint") {
+			t.Errorf("config.go.toml = %q, want go toolchain", got)
 		}
-		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[1] != "go" {
-			t.Errorf("stored enabled_profiles = %v, want [core go]", profiles)
+		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 3 || profiles[1] != "go" || profiles[2] != "custom" {
+			t.Errorf("stored enabled_profiles = %v, want [core go custom]", profiles)
 		}
-		e2eAssertMisercEnv(t, proj, `env = ["core", "go"]`)
+		e2eAssertMisercEnv(t, proj, `env = ["core", "go", "custom"]`)
 		if out, code := e2eRun(t, bin, proj, "update", "--disable", "go", "--preview", "--non-interactive"); code != 0 {
 			t.Fatalf("update --disable go --preview exit = %d, want 0:\n%s", code, out)
-		} else if !strings.Contains(out, "preview") || !strings.Contains(out, "go.mod") {
-			t.Errorf("update --disable preview output missing plan for go.mod:\n%s", out)
+		} else if !strings.Contains(out, "preview") || !strings.Contains(out, "config.go.toml") {
+			t.Errorf("update --disable preview output missing plan for config.go.toml:\n%s", out)
 		}
-		if _, err := os.Stat(filepath.Join(proj, "go.mod")); err != nil {
-			t.Errorf("go.mod missing after --disable preview, want preview to write nothing: %v", err)
+		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); err != nil {
+			t.Errorf("config.go.toml missing after --disable preview, want preview to write nothing: %v", err)
 		}
 		if out, code := e2eRun(t, bin, proj, "update", "--disable", "go", "--force", "--non-interactive"); code != 0 {
 			t.Fatalf("update --disable go exit = %d, want 0:\n%s", code, out)
 		} else if !strings.Contains(out, "updated") {
 			t.Errorf("update --disable go output missing summary:\n%s", out)
 		}
-		if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
-			t.Error("go.mod exists after --disable go, want it gone")
+		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Error("config.go.toml exists after --disable go, want it gone")
 		}
-		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
-			t.Errorf("stored enabled_profiles = %v, want [core]", profiles)
+		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[0] != "core" || profiles[1] != "custom" {
+			t.Errorf("stored enabled_profiles = %v, want [core custom]", profiles)
 		}
 		if _, code := e2eRun(t, bin, proj, "update", "--enable", "nope", "--force", "--non-interactive"); code == 0 {
 			t.Error("update --enable nope exit = 0, want non-zero for unknown profile")
@@ -513,8 +517,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		}
 		if out, code := e2eRun(t, bin, proj, "profiles", "--non-interactive"); code != 0 {
 			t.Fatalf("profiles exit = %d, want 0:\n%s", code, out)
-		} else if !strings.Contains(out, "enabled profiles: core, go") {
-			t.Errorf("profiles output missing enabled core, go:\n%s", out)
+		} else if !strings.Contains(out, "enabled profiles: core, custom, go") {
+			t.Errorf("profiles output missing enabled core, custom, go:\n%s", out)
 		}
 	})
 
@@ -552,7 +556,7 @@ func e2eAssertMisercEnv(t *testing.T, proj, want string) {
 
 func e2eAssertReadmeProject(t *testing.T, proj, want string) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(proj, "README.md"))
+	data, err := os.ReadFile(filepath.Join(proj, ".config", "turutan", "README.md"))
 	if err != nil {
 		t.Fatalf("reading README.md: %v", err)
 	}
