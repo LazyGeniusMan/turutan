@@ -14,6 +14,7 @@ PITCHFORK_WEB_PORT = 3120
 betterleaks = "1"
 fnox = "1"
 hk = "2"
+syft = "1"
 "github:protonpass/pass-cli" = "2"
 pitchfork = "2"
 pkl = "0"
@@ -24,27 +25,39 @@ updatecli = "0"
 run = "exec fnox daemon start"
 
 [tasks."check:all"]
+description = "Full-tree check-only gate for main and scheduled CI"
 run = "hk check --all"
 
 [tasks."check:diff"]
+description = "Diff-scoped check-only gate for working tree locally"
 run = "hk check"
 
+[tasks."check:pr"]
+description = "Branch-diff check-only gate for pull request CI"
+run = "hk check --from-ref origin/main --to-ref HEAD"
+
 [tasks."fix:all"]
+description = "Full-tree deterministic auto-fix locally"
 run = "hk fix --all"
 
 [tasks."fix:diff"]
+description = "Diff-scoped deterministic auto-fix locally"
 run = "hk fix"
 
 [tasks."pre-commit:all"]
+description = "Full-tree pre-commit hook scope"
 run = "hk run pre-commit --all"
 
 [tasks."pre-commit:diff"]
+description = "Staged diff pre-commit hook scope"
 run = "hk run pre-commit"
 
 [tasks."pre-push:all"]
+description = "Full-tree pre-push hook scope"
 run = "hk run pre-push --all"
 
 [tasks."pre-push:diff"]
+description = "Changed-file pre-push hook scope"
 run = "hk run pre-push"
 
 [tasks."updatecli:check"]
@@ -58,7 +71,7 @@ env = { "UPDATECLI_GITHUB_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
 run = "updatecli pipeline apply --config .config/updatecli/"
 
 [tasks.release]
-run = "echo 'release command'"
+run = "goreleaser release --clean"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"

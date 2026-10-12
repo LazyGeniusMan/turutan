@@ -1,0 +1,33 @@
+---
+name: Scheduled
+# Weekly full-tree safety net, report 3.1/4/P1 ~keep: owns DB refresh, drift.
+# Too slow for PR/main gates. Binary pass/fail (P5); check-only, no rewrite.
+"on":
+  schedule:
+    - cron: 0 3 * * 1
+  workflow_dispatch:
+concurrency:
+  group: scheduled-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  full-check:
+    name: Scheduled check (full scope)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install tools
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
+      - name: Install
+        run: mise install
+      - name: Check (full scope)
+        run: mise run check:all
