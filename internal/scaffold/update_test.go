@@ -347,6 +347,54 @@ func TestUpdatePreserve(t *testing.T) {
 			t.Errorf("merge.txt missing inline markers:\n%s", got)
 		}
 	})
+	t.Run("pristine preserved survives template-only change", func(t *testing.T) {
+		src := makeTemplate(t, "preserve:\n  - \"keep.txt\"\n", map[string]string{
+			"keep.txt": "template v1\n",
+		})
+		projectDir := bootstrapProject(t, src)
+		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("template v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr strings.Builder
+		result, err := Update(context.Background(), projectDir, updateTestOptions(&stdout, &stderr))
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "keep.txt")); string(got) != "template v1\n" {
+			t.Errorf("keep.txt = %q, want pristine local copy kept", got)
+		}
+		if len(result.Conflicts) != 0 {
+			t.Errorf("Conflicts = %v, want none", result.Conflicts)
+		}
+		if len(result.Updated) != 0 {
+			t.Errorf("Updated = %v, want none", result.Updated)
+		}
+	})
+	t.Run("deleted preserved stays deleted", func(t *testing.T) {
+		src := makeTemplate(t, "preserve:\n  - \"keep.txt\"\n", map[string]string{
+			"keep.txt": "template v1\n",
+		})
+		projectDir := bootstrapProject(t, src)
+		if err := os.Remove(filepath.Join(projectDir, "keep.txt")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("template v2\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.Force = true
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(projectDir, "keep.txt")); !os.IsNotExist(err) {
+			t.Error("keep.txt resurrected, want locally deleted file kept gone")
+		}
+		if len(result.Conflicts) != 0 {
+			t.Errorf("Conflicts = %v, want none", result.Conflicts)
+		}
+	})
 }
 
 func TestUpdateMigrations(t *testing.T) {
@@ -1024,8 +1072,8 @@ func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
 	if !slices.Contains(result.Updated, "go.mod") {
 		t.Errorf("Updated = %v, want it to list the added go.mod", result.Updated)
 	}
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
-		t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+		t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
 	}
 	assertCheckUpdateQuiet(t, projectDir)
 }
@@ -1051,8 +1099,8 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 		if !slices.Contains(result.Updated, "go.mod") {
 			t.Errorf("Updated = %v, want it to list the dropped go.mod", result.Updated)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
+			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
 		}
 		assertCheckUpdateQuiet(t, projectDir)
 	})
@@ -1087,8 +1135,8 @@ func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
 	}
 	assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
-		t.Errorf("stored enabled_profiles = %v, want unchanged [core go]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+		t.Errorf("stored enabled_profiles = %v, want unchanged [core go custom]", got)
 	}
 }
 
@@ -1118,8 +1166,8 @@ func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
 	if result.Old == result.New {
 		t.Error("Old == New, want the commit identity to advance")
 	}
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
-		t.Errorf("stored enabled_profiles = %v, want [core go]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
+		t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
 	}
 }
 
@@ -1148,7 +1196,55 @@ func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 	if result.Old == result.New {
 		t.Error("Old == New, want the commit identity to advance")
 	}
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
-		t.Errorf("stored enabled_profiles = %v, want [core]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
+		t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
 	}
+}
+
+func TestUpdateBackfillsNewPromptDefault(t *testing.T) {
+	src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
+	projectDir := bootstrapProject(t, src)
+	writeFiles(t, src, map[string]string{
+		".turutan.yml": "prompts:\n" +
+			"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
+			"  new_feature:\n    prompt: \"New feature\"\n    type: array\n" +
+			"    default: [\"alpha\", \"beta\"]\n",
+		"feat.txt.tmpl": "[{{ range $i, $p := .new_feature }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",
+	})
+	t.Run("plain non-interactive update uses the new default", func(t *testing.T) {
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr)
+		opts.NonInteractive = true
+		if _, err := Update(context.Background(), projectDir, opts); err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		assertProfileFile(t, projectDir, "feat.txt", "[\"alpha\", \"beta\"]\n")
+		state, err := config.LoadState(os.DirFS(projectDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := normalizeArrayValue(state.Answers["new_feature"])
+		if !slices.Equal(got, []string{"alpha", "beta"}) {
+			t.Errorf("stored new_feature = %v (%T), want [alpha beta]", state.Answers["new_feature"], state.Answers["new_feature"])
+		}
+	})
+	t.Run("diff succeeds on the backfilled checkout", func(t *testing.T) {
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
+		if err != nil {
+			t.Fatalf("ComputeDiff error: %v", err)
+		}
+		if len(diffs) != 0 {
+			t.Errorf("diffs = %+v, want none after the backfilled update", diffs)
+		}
+	})
+	t.Run("check-update reports up to date", func(t *testing.T) {
+		var stdout strings.Builder
+		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		if err != nil {
+			t.Fatalf("CheckUpdate error: %v", err)
+		}
+		if result.Available {
+			t.Error("Available = true after the backfilled update, want up to date")
+		}
+	})
 }

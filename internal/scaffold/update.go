@@ -65,7 +65,7 @@ func Update(
 		return nil, err
 	}
 	src, wantRef, fetched, manifest, err := fetchUpdateTemplate(
-		ctx, state, opts, stderr)
+		ctx, projectDir, state, opts, stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +75,14 @@ func Update(
 	if err := reconcileProfiles(answers, manifest, opts, stderr); err != nil {
 		return nil, err
 	}
+	if !opts.Force {
+		if err := guardCleanTree(projectDir, lock, manifest, answers); err != nil {
+			return nil, err
+		}
+	}
 	if opts.Preview {
 		return previewUpdate(
-			state, lock, fetched, manifest, answers,
+			projectDir, state, lock, fetched, manifest, answers,
 			opts, stdout, stderr, stdin)
 	}
 	rendered, old, fresh, merger, skipMigrations, stage, err := stageUpdate(
@@ -101,6 +106,30 @@ func Update(
 	return finishUpdate(
 		projectDir, state, lock, src, wantRef, answers, fresh,
 		rendered, stage, manifest, stdout, updated, conflicts, migrated, old)
+}
+
+// customOwned reports whether path is owned by the always-enabled custom
+// profile. Custom-owned files seed once and are never overwritten, so every
+// sync path consults it before writing, reporting, or dirty-checking.
+// ~keep
+func customOwned(manifest *config.Manifest, answers map[string]any, path string) bool {
+	if manifest == nil {
+		return false
+	}
+	enabled := config.NormalizeProfiles(config.GetProfiles(answers))
+	return slices.Contains(config.ProfilesForPath(manifest, enabled, path), "custom")
+}
+
+func filePresent(projectDir, path string) bool {
+	_, err := filter.StatWithinRoot(projectDir, path)
+	return err == nil
+}
+
+func (m *merger) customOwned(path string) bool {
+	if m == nil || m.state == nil {
+		return false
+	}
+	return customOwned(m.manifest, m.state.Answers, path)
 }
 
 func reconcileProfiles(
@@ -133,6 +162,12 @@ func reconcileProfiles(
 			return fmt.Errorf(
 				"update: unknown profile %q (offered: %s)",
 				id, strings.Join(offered, ", "))
+		}
+	}
+	for _, id := range opts.Disable {
+		if trimmed := strings.TrimSpace(id); trimmed == "core" || trimmed == "custom" {
+			return fmt.Errorf(
+				"update: cannot disable always-enabled profile %q", trimmed)
 		}
 	}
 	drop := map[string]bool{}
@@ -189,10 +224,14 @@ func reportProfileDiff(stderr io.Writer, diff config.ProfileDiff) error {
 }
 
 func offeredProfiles(manifest *config.Manifest) []string {
-	offered := []string{"core"}
+	seen := map[string]bool{"core": true, "custom": true}
+	offered := []string{"core", "custom"}
 	if manifest != nil {
 		for id := range manifest.Profiles {
-			offered = append(offered, id)
+			if !seen[id] {
+				seen[id] = true
+				offered = append(offered, id)
+			}
 		}
 	}
 	sort.Strings(offered)
@@ -202,7 +241,7 @@ func offeredProfiles(manifest *config.Manifest) []string {
 func reportableProfiles(ids []string) []string {
 	var out []string
 	for _, id := range ids {
-		if id == "core" {
+		if id == "core" || id == "custom" {
 			continue
 		}
 		out = append(out, id)
@@ -227,6 +266,7 @@ type previewEntry struct {
 }
 
 func previewUpdate(
+	projectDir string,
 	state *config.State,
 	lock *config.Lock,
 	fetched *template.Fetched,
@@ -255,7 +295,7 @@ func previewUpdate(
 			"sha256:")
 	}
 	vlogf(stderr, opts.Verbose, "update: preview %s -> %s", old, fresh)
-	plan := previewPlan(rendered, lock, manifest, answers)
+	plan := previewPlan(projectDir, rendered, lock, manifest, answers)
 	if err := printPreview(stdout, plan); err != nil {
 		return nil, err
 	}
@@ -267,6 +307,7 @@ func previewUpdate(
 }
 
 func previewPlan(
+	projectDir string,
 	rendered map[string]renderedEntry,
 	lock *config.Lock,
 	manifest *config.Manifest,
@@ -304,6 +345,9 @@ func previewPlan(
 		profiles := config.ProfilesForPath(manifest, enabled, path)
 		if len(profiles) == 0 {
 			profiles = []string{"core"}
+		}
+		if slices.Contains(profiles, "custom") && filePresent(projectDir, path) {
+			continue
 		}
 		plan = append(plan, previewEntry{Path: path, Kind: kind, Profiles: profiles})
 	}
@@ -434,16 +478,11 @@ func loadUpdateInputs(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if !opts.Force {
-		if err := guardCleanTree(projectDir, lock); err != nil {
-			return nil, nil, nil, err
-		}
-	}
 	return state, lock, answers, nil
 }
 
-func guardCleanTree(projectDir string, lock *config.Lock) error {
-	dirty, err := dirtyFiles(projectDir, lock)
+func guardCleanTree(projectDir string, lock *config.Lock, manifest *config.Manifest, answers map[string]any) error {
+	dirty, err := dirtyFiles(projectDir, lock, manifest, answers)
 	if err != nil {
 		return err
 	}
@@ -458,6 +497,7 @@ func guardCleanTree(projectDir string, lock *config.Lock) error {
 
 func fetchUpdateTemplate(
 	ctx context.Context,
+	projectDir string,
 	state *config.State,
 	opts UpdateOptions,
 	stderr io.Writer,
@@ -465,7 +505,7 @@ func fetchUpdateTemplate(
 	vlogf(stderr, opts.Verbose,
 		"update: stored commit %s requested ref %q",
 		state.ResolvedCommit, state.RequestedRef)
-	src, err := template.ParseSource(state.Template)
+	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
 		return nil, "", nil, nil, fmt.Errorf("update: %w", err)
 	}
@@ -550,6 +590,12 @@ func renderStaged(
 		fetched.Dir, stage, answers, manifest, opts, stdout, stdin); err != nil {
 		return nil, err
 	}
+	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
+		return nil, fmt.Errorf("update: %w", err)
+	}
+	if err := plantDocFiles(stage, manifest); err != nil {
+		return nil, fmt.Errorf("update: %w", err)
+	}
 	rendered, err := walkRendered(stage, manifest)
 	if err != nil {
 		return nil, fmt.Errorf("update: %w", err)
@@ -590,14 +636,20 @@ func logUpdateBase(
 }
 
 func baseDirFor(projectDir, old string) string {
-	if old == "" || !HasBase(projectDir, old) {
+	if old == "" {
 		return ""
 	}
-	dir, err := BasePath(projectDir, old)
-	if err != nil {
-		return ""
+	if dir, err := BasePath(projectDir, old); err == nil {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
 	}
-	return dir
+	if dir, err := basePathIn(projectDir, old, legacyBaseStoreSubdir); err == nil {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	return ""
 }
 
 func updateStreams(opts UpdateOptions) (io.Writer, io.Writer, io.Reader) {
@@ -628,24 +680,18 @@ func updateAnswers(projectDir string, state *config.State, opts UpdateOptions) (
 }
 
 func normalizeUpdateAnswers(answers map[string]any, manifest *config.Manifest, opts UpdateOptions) {
+	_ = opts
 	normalizeAnswersWithManifest(answers, manifest)
-	if manifest != nil && opts.Defaults {
-		for key, def := range manifest.Prompts {
-			if _, ok := answers[key]; ok {
-				continue
-			}
-			if def.Default == nil {
-				continue
-			}
-			answers[key] = manifestDefaultCopy(def.Default)
-		}
-		normalizeAnswersWithManifest(answers, manifest)
-	}
+	seedMissingDefaults(answers, manifest)
+	normalizeAnswersWithManifest(answers, manifest)
 }
 
-func dirtyFiles(projectDir string, lock *config.Lock) ([]string, error) {
+func dirtyFiles(projectDir string, lock *config.Lock, manifest *config.Manifest, answers map[string]any) ([]string, error) {
 	var dirty []string
 	for _, entry := range lock.Files {
+		if customOwned(manifest, answers, entry.Path) {
+			continue
+		}
 		data, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -819,7 +865,7 @@ func (m *merger) mergeAdded(path string, fresh, local []byte, localExists, prese
 	if bytes.Equal(local, fresh) {
 		return false, false, nil
 	}
-	if preserved {
+	if preserved || m.customOwned(path) {
 		return false, false, nil
 	}
 	if isBinary(local) || isBinary(fresh) {
@@ -921,6 +967,12 @@ func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte,
 	if !localExists {
 		return false, false, nil
 	}
+	if m.customOwned(path) {
+		if _, err := fmt.Fprintf(m.stderr, "turutan: keeping custom-owned %q dropped by the template\n", path); err != nil {
+			return false, false, err
+		}
+		return false, false, nil
+	}
 	if config.FileEntry(path, local).SHA256 == locked.SHA256 {
 		if err := filter.RemoveWithinRoot(m.projectDir, path); err != nil && !os.IsNotExist(err) {
 			return false, false, fmt.Errorf("update: removing dropped file %q: %w", path, err)
@@ -958,6 +1010,9 @@ func (m *merger) mergeBoth(
 	fresh, local []byte,
 	localExists, preserved bool,
 ) (bool, bool, error) {
+	if preserved || m.customOwned(path) {
+		return false, false, nil
+	}
 	if !localExists {
 		return m.mergeRestored(path, locked, fresh)
 	}
@@ -1329,7 +1384,8 @@ func refreshStateLock(
 	state.RequestedRef = wantRef
 	state.ResolvedCommit = fresh
 	state.Answers = answers
-	state.Template = src.String()
+	stored := relativizeForStore(projectDir, src)
+	state.Template = stored.String()
 	if err := config.SaveState(projectDir, state); err != nil {
 		return fmt.Errorf("update: %w", err)
 	}

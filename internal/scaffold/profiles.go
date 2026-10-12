@@ -45,7 +45,7 @@ func ListProfiles(
 	if err != nil {
 		return nil, fmt.Errorf("profiles: %w", err)
 	}
-	src, err := template.ParseSource(state.Template)
+	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
 		return nil, fmt.Errorf("profiles: %w", err)
 	}

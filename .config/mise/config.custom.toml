@@ -1,0 +1,70 @@
+[settings]
+npm.package_manager = "bun"
+minimum_release_age_excludes = [
+  "github:Goldziher/ai-rulez",
+  "npm:@opencode/cli",
+  "npm:t3",
+  "npm:@earendil-works/pi-coding-agent",
+]
+
+[env]
+TURUTAN_BIN = "go run ./cmd/turutan"
+PROTON_PASS_KEY_PROVIDER = "{{ exec(command='sh scripts/proton-pass-detect-key-provider.sh') | trim }}"
+
+[tools]
+bun = "1"
+node = "24"
+"npm:@opencode/cli" = { version = "2", bun_args = "--trust" }
+"github:protonpass/pass-cli" = "2"
+"npm:@earendil-works/pi-coding-agent" = "1.1.0"
+"npm:t3" = { prefix = "0.0.46-nightly", prerelease = 1 }
+
+[daemons.opencode]
+run = "exec fnox x -- opencode serve --port $PORT"
+port = 4096
+
+[daemons.t3code]
+run = "exec fnox x -- t3 serve --port $PORT --dev-url {{ env.PROXY_URI | replace(from='{{port}}', to=env.PORT) }}"
+port = 3773
+
+[daemons.basemind-comms]
+run = "exec basemind comms daemon"
+
+[tasks."dev-setup:ai-rulez"]
+depends = "dev-setup:fnox"
+secrets = ["KEENABLE_API_KEY", "FNOX_GITHUB_TOKEN"]
+env = { "AI_RULEZ_GIT_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
+run = "ai-rulez generate"
+
+[tasks."dev-setup:basemind"]
+run = "basemind scan"
+
+[tasks."dev-setup:basemind-comms"]
+depends = "dev-setup:basemind"
+daemons = "basemind-comms"
+run = "echo 'basemind comms is running '"
+
+[tasks."dev:opencode:start"]
+daemons = "opencode"
+run = "echo 'OpenCode Web UI is running on {{ env.PROXY_URI | replace(from='{{port}}', to=env.OPENCODE_PORT) }}'"
+
+[tasks."dev:opencode:pair"]
+depends = "dev:opencode:start"
+run = "opencode pair --url {{ env.PROXY_URI | replace(from='{{port}}', to=env.OPENCODE_PORT) }}"
+
+[tasks."dev:t3code:start"]
+daemons = "t3code"
+run = "t3 browser setup && echo 'T3 Code Web UI is running on {{ env.PROXY_URI | replace(from='{{port}}', to=env.T3CODE_PORT) }}'"
+
+[tasks."dev:t3code:pair"]
+depends = "dev:t3code:start"
+run = "t3 pair"
+
+[tasks."dev-setup:fnox-provider"]
+secrets = ["PROTON_PASS_PERSONAL_ACCESS_TOKEN"]
+run = '''
+if ! pass-cli info; then
+    pass-cli logout
+    pass-cli login
+fi
+'''

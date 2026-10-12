@@ -1,0 +1,73 @@
+amends "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Builtins.pkl"
+
+import "./ai.pkl" as ai
+import "./core.pkl" as core
+import "./custom.pkl" as custom
+import "./github.pkl" as github
+import "./go.pkl" as go
+
+hooks {
+  ["check"] {
+    steps {
+      ...core.pre_commit
+      ...ai.pre_commit
+      ...go.pre_commit
+      ...github.pre_commit
+      ...custom.pre_commit
+      ...ai.pre_push_ci
+      ...go.pre_push_ci
+      ...custom.pre_push_ci
+    }
+  }
+  ["fix"] {
+    steps {
+      ...core.pre_commit
+      ...ai.pre_commit
+      ...go.pre_commit
+      ...github.pre_commit
+      ...custom.pre_commit
+      ...ai.pre_push_ci
+      ...go.pre_push_ci
+      ...custom.pre_push_ci
+    }
+  }
+  ["commit-msg"] {
+    steps {
+      ["conventional-commit"] = Builtins.check_conventional_commit
+    }
+  }
+  ["pre-commit"] {
+    fix = true
+    stage = true
+    stash = "git"
+    steps {
+      ...core.pre_commit
+      ...ai.pre_commit
+      ...go.pre_commit
+      ...github.pre_commit
+      ...custom.pre_commit
+    }
+  }
+  ["pre-push"] {
+    steps {
+      ...core.pre_push
+      ...ai.pre_push
+      ...go.pre_push
+      ...custom.pre_push
+    }
+  }
+  ["post-checkout"] {
+    steps {
+      ["install-deps"] {
+        step_condition = "is_branch_checkout"
+        check = "mise install"
+      }
+      ["dev-setup"] {
+        step_condition = "is_branch_checkout"
+        check = "mise run dev-setup:**"
+      }
+    }
+  }
+}

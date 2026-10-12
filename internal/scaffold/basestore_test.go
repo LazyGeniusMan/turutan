@@ -29,7 +29,7 @@ func TestBasePath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("BasePath error: %v", err)
 		}
-		want := filepath.Join(dir, ".turutan", "templates", "abc123")
+		want := filepath.Join(dir, ".config", "turutan", "templates", "abc123")
 		if got != want {
 			t.Errorf("BasePath = %q, want %q", got, want)
 		}
@@ -62,11 +62,13 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 	})
 	t.Run("skips metadata symlinks and special files", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"a.txt": "x\n"})
-		if err := os.MkdirAll(filepath.Join(src, ".turutan"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(src, ".config", "turutan"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(src, ".turutan", "junk"), []byte("j"), 0o600); err != nil {
-			t.Fatal(err)
+		for _, name := range []string{"state.json", "lock.json", "LICENSE"} {
+			if err := os.WriteFile(filepath.Join(src, ".config", "turutan", name), []byte("m"), 0o600); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if err := os.MkdirAll(filepath.Join(src, ".git"), 0o755); err != nil {
 			t.Fatal(err)
@@ -86,10 +88,13 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, absent := range []string{".turutan/junk", ".git", "evil.txt"} {
+		for _, absent := range []string{".config/turutan/state.json", ".config/turutan/lock.json", ".git", "evil.txt"} {
 			if _, err := os.Lstat(filepath.Join(base, filepath.FromSlash(absent))); err == nil {
 				t.Errorf("base store contains %q, want it skipped", absent)
 			}
+		}
+		if _, err := os.Lstat(filepath.Join(base, ".config", "turutan", "LICENSE")); err != nil {
+			t.Errorf("base store lacks planted .config/turutan/LICENSE: %v", err)
 		}
 	})
 }
@@ -196,7 +201,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 			"line1\nline2\n",
 			"line1\nLOCAL2\n",
 			"line1\nTEMPLATE2\n")
-		if err := os.RemoveAll(filepath.Join(projectDir, ".turutan", "templates")); err != nil {
+		if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder

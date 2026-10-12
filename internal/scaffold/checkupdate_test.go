@@ -17,7 +17,6 @@ import (
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/git"
-	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
 func writeFiles(t *testing.T, dir string, files map[string]string) {
@@ -300,12 +299,11 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		stored, err := template.ParseSource(state.Template)
-		if err != nil {
-			t.Fatal(err)
+		if filepath.IsAbs(state.Template) {
+			t.Errorf("stored template = %q, want project-relative so checkouts stay portable", state.Template)
 		}
-		if !filepath.IsAbs(stored.Repo) {
-			t.Errorf("stored repo = %q, want absolute so it re-resolves from the project", stored.Repo)
+		if state.Template != "../tpl" {
+			t.Errorf("stored template = %q, want %q", state.Template, "../tpl")
 		}
 		t.Chdir(projectDir)
 		result, err := CheckUpdate(context.Background(), ".", checkUpdateOptions(&stdout))

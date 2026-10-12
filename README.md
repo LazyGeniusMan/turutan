@@ -44,5 +44,5 @@ disables it with a loud warning (never in production).
 
 Dual-licensed: the CLI and all engine code is Apache-2.0 (root `LICENSE`);
 the default template and files generated from it are MIT-0
-(`templates/default/TEMPLATE_LICENSE`; generated `.turutan.json` records
+(`templates/default/LICENSE`; generated `.config/turutan/state.json` records
 `templateLicense: "MIT-0"`).

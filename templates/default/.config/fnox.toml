@@ -1,10 +1,11 @@
 [daemon]
 enabled = true
 
-[providers.protonpass]
-type = "proton-pass"
-vault = "dev"
-
-[secrets]
-"KEENABLE_API_KEY" = { provider = "protonpass", value = "turutan/keenable-api-key" }
-"FNOX_GITHUB_TOKEN" = { provider = "protonpass", value = "turutan/github-pat" }
+# Configure a secret provider here. This file is custom-owned: `turutan
+# update` seeds it once and never overwrites it, so put real vault mappings
+# below freely. Generic provider example:
+# [providers.myprovider]
+# type = "my-provider-type"
+#
+# [secrets]
+# "MY_TOKEN" = { provider = "myprovider", value = "path/to/secret" }

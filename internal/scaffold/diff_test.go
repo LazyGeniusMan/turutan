@@ -191,10 +191,10 @@ func TestComputeDiff(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(afterState) != string(beforeState) {
-			t.Error("ComputeDiff mutated .turutan.json")
+			t.Error("ComputeDiff mutated state.json")
 		}
 		if string(afterLock) != string(beforeLock) {
-			t.Error("ComputeDiff mutated .turutan.lock")
+			t.Error("ComputeDiff mutated lock.json")
 		}
 	})
 	t.Run("drift sorted by path", func(t *testing.T) {
@@ -357,7 +357,7 @@ func TestComputeDiffNoBase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
 			projectDir := bootstrapProject(t, src)
-			if err := os.RemoveAll(filepath.Join(projectDir, ".turutan", "templates")); err != nil {
+			if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 				t.Fatal(err)
 			}
 			opts := diffOptions()
@@ -374,7 +374,7 @@ func TestComputeDiffNoBase(t *testing.T) {
 	t.Run("full review survives missing base", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
 		projectDir := bootstrapProject(t, src)
-		if err := os.RemoveAll(filepath.Join(projectDir, ".turutan", "templates")); err != nil {
+		if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := ComputeDiff(context.Background(), projectDir, diffOptions()); err != nil {

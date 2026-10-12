@@ -1,0 +1,426 @@
+{
+  "source": "templates/default",
+  "resolved_sha": "e6268a587ce3d42cf2e7b0b708f523be7e0663ed3232189f9eb67ea776b5b7f4",
+  "manifest_hash": "sha256:b5ef0496383ca1b18d2cd9e8b8f7164749ba200f6b13cf7914deaf908bedd2cf",
+  "files": [
+    {
+      "path": ".config/ai-rulez/config.toml",
+      "sha256": "e5a45859042b1315d61a5ced9c0bc14e12fa47b74a6b3019643336f36cc8af34",
+      "bytes": 5503,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/context/index.md",
+      "sha256": "43bcf62d9cae527036fd9a33d7d1ff649514104eca09387702befd77f71ca09f",
+      "bytes": 58,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/context/project-toolchains.md",
+      "sha256": "a45e43e799ebfec7d1117212bcd82c39d85091bf8fc36d6f06227c8362a3aa87",
+      "bytes": 577,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/ai/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/core/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/custom/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/github/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai,github"
+    },
+    {
+      "path": ".config/ai-rulez/domains/github/index.md",
+      "sha256": "92cc9825aedab82636f7a3300f459f93e201289590ae9b8ca75508051cf2115d",
+      "bytes": 73,
+      "profile": "ai,github"
+    },
+    {
+      "path": ".config/ai-rulez/domains/github/rules/github-skill-usage.md",
+      "sha256": "7222b2b5f74c5cd85296ad87c616eef5b0b8f18020c79f24478d6f4a800a916f",
+      "bytes": 359,
+      "profile": "ai,github"
+    },
+    {
+      "path": ".config/ai-rulez/domains/github/rules/github-toolchains.md",
+      "sha256": "bcc417f888fa34c4e7c0630a11a523000c3c89e6ea02f73ca09358ea4916218d",
+      "bytes": 604,
+      "profile": "ai,github"
+    },
+    {
+      "path": ".config/ai-rulez/domains/github/rules/index.md",
+      "sha256": "09a78c9eb5958934cc7bbfa4d731c10460061679c5958b601e079ce24c2a16e3",
+      "bytes": 102,
+      "profile": "ai,github"
+    },
+    {
+      "path": ".config/ai-rulez/domains/go/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai,go"
+    },
+    {
+      "path": ".config/ai-rulez/domains/go/index.md",
+      "sha256": "05e781cfeb354c4ac9af388d05c9c9a15494042ff17b1d266229475e066d8b8a",
+      "bytes": 69,
+      "profile": "ai,go"
+    },
+    {
+      "path": ".config/ai-rulez/domains/go/rules/go-skill-usage.md",
+      "sha256": "485463ab0b8da6a226a7f1f9d67cf6715159ed0b5703ed70f3d5425855126993",
+      "bytes": 373,
+      "profile": "ai,go"
+    },
+    {
+      "path": ".config/ai-rulez/domains/go/rules/go-toolchains.md",
+      "sha256": "3ae4f7fbc6de8b9840567337c3bae931fcbad876bb589bcb7a67a33de8e3878b",
+      "bytes": 732,
+      "profile": "ai,go"
+    },
+    {
+      "path": ".config/ai-rulez/domains/go/rules/index.md",
+      "sha256": "c65753b48944714f2a1907b56dc57b23c199b0dc9209db0ed77c0810fcfba2a0",
+      "bytes": 86,
+      "profile": "ai,go"
+    },
+    {
+      "path": ".config/ai-rulez/domains/index.md",
+      "sha256": "f455e59ca059c72102dfa8850bc1daa875ed94b7fb8cceab299ecd7c20cc449f",
+      "bytes": 124,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/pkl/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/typst/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/yml/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/index.md",
+      "sha256": "60423bd8e15054189ec42723c3a5c629346fe1fc9273ea082834b937fdc02c19",
+      "bytes": 286,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/basemind-usage.md",
+      "sha256": "06d6f5b80a3f7b00b095fee636ec10732e4adba2a8f0cf7ec88da7251cfff8cc",
+      "bytes": 1676,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/dev-ci-environment.md",
+      "sha256": "62c9627c63bdd4203c544469d5c8bb46de617631d119adde0dbcdd0bdf866d1f",
+      "bytes": 1520,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/docs-target-reader.md",
+      "sha256": "b24d67607061da2d5d7bf0f0cd0b277350b88042a8580db29bd0042456f83c9c",
+      "bytes": 582,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/hk-usage.md",
+      "sha256": "522a3121c4aa4f44fd714accc3811e4abb907b0eb5c882a63e6497ca9360a7b7",
+      "bytes": 1351,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/index.md",
+      "sha256": "994b3f428228e165e7efe0fd26c10a8f32881ec2fc25c0c45471e27d29079f17",
+      "bytes": 396,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/skill-usage.md",
+      "sha256": "0321234072cf30345fe10c6029ec0cbe5ed2532fc88d8efb5281cf67ad9adee4",
+      "bytes": 248,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/toolchains-config.md",
+      "sha256": "b1367a057ba799f048c31a28126aae816b580618fc9a065da47a187af5415b8f",
+      "bytes": 537,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/toolchains-usage.md",
+      "sha256": "cb3932a3468f24687b59a5cae3c64aff19b65b6762f424c9d4c031bc1f6d2f38",
+      "bytes": 1513,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/uncomment-usage.md",
+      "sha256": "fbf0f2b95c97b72a731f2154241dae16a4b5a1bdd6d1fcc32cc4ec71cafa003e",
+      "bytes": 336,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/updatecli-usage.md",
+      "sha256": "4fcc35ab31dc899839dfb23e659d6629e52b9883112c0205bc972e09e6044808",
+      "bytes": 239,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/rules/web-access.md",
+      "sha256": "bfca0b0c4a1fd9ccc5d318baac37aab48f5a7158b96576c420fdc5906b78f8d6",
+      "bytes": 198,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/skills/index.md",
+      "sha256": "95e002bd834b597abcf50838a0ad2ef1b450f755e206ce32ba1e72a36cc16cb1",
+      "bytes": 68,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/skills/orchestrate-agent/SKILL.md",
+      "sha256": "bd705f36581cc2e0ec705d96be8a10cf9d178b9af8d8508d76cd48294b7dc599",
+      "bytes": 12843,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/skills/orchestrate-agent/index.md",
+      "sha256": "b13ad4415719c24c00c47baf842908acb82eeae1579f9a62eccc45e6180d511b",
+      "bytes": 140,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/basemind/config.toml",
+      "sha256": "f022f32b991f26c91493e4076b92460de635dde825e61d158c9af0d4fc297659",
+      "bytes": 862,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/fnox.toml",
+      "sha256": "085e6e9aa8f7b0b4f652616086477c1654e3915441c9bafbb4c30035fa78e445",
+      "bytes": 259,
+      "profile": "custom"
+    },
+    {
+      "path": ".config/golangci-lint/.golangci.yml",
+      "sha256": "f6406a9ed77ae8a49b0ffff5424b88329dcbd182bd002f4045d0da9c918933d1",
+      "bytes": 316,
+      "profile": "go"
+    },
+    {
+      "path": ".config/goreleaser.yml",
+      "sha256": "2b17f6d080baa1aae8daa3c05a142e41b87c41e13c9678750d4f88817286d668",
+      "bytes": 918,
+      "profile": "go"
+    },
+    {
+      "path": ".config/hk/ai.pkl",
+      "sha256": "33dbf9c91cf62a1e4dd7bdd6a4457405c9c2412b8ae0dbdff53d0fe5b32f355f",
+      "bytes": 815,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/hk/core.pkl",
+      "sha256": "be9f12fa25204a89cc5ac78fe386c9bcdcbd23f7c1f06ebf0487d1532107cb24",
+      "bytes": 1787
+    },
+    {
+      "path": ".config/hk/custom.pkl",
+      "sha256": "a03324f550a1f9ee32fb035d4948b589d77d84f42853197eabbe1230d9be6507",
+      "bytes": 576,
+      "profile": "custom"
+    },
+    {
+      "path": ".config/hk/github.pkl",
+      "sha256": "42610f9349757ea0feda3d0f758d803b9e2043cedfed8e7c195c671d5aa1f51f",
+      "bytes": 628,
+      "profile": "github"
+    },
+    {
+      "path": ".config/hk/go.pkl",
+      "sha256": "84c9efb8a339ea431b2003ba674780964b1196a7422c2d9e153695c38cc6a210",
+      "bytes": 2977,
+      "profile": "go"
+    },
+    {
+      "path": ".config/hk/index.pkl",
+      "sha256": "12e6b38ba8a36fc492b274b5791bb6bb1575361377fe4b08ec4737ce1faf4dd5",
+      "bytes": 1516
+    },
+    {
+      "path": ".config/mise/config.ai.toml",
+      "sha256": "8805208665b8f39d629e1edf1b92468f75e9fa56732f8121e8d1e43092f7d5f9",
+      "bytes": 546,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/mise/config.custom.toml",
+      "sha256": "518339b17968cc03415c29a9e567416ac61203359c0e2bb7ae7cbc904fb4689c",
+      "bytes": 1977,
+      "profile": "custom"
+    },
+    {
+      "path": ".config/mise/config.github.toml",
+      "sha256": "cde2da180561c4c5afb779166454916c6631986c926ebe7e824da223427aff13",
+      "bytes": 220,
+      "profile": "github"
+    },
+    {
+      "path": ".config/mise/config.go.toml",
+      "sha256": "84acf855c7c2fcd84655a936d8fc098ea21ad6c8bd562b014858897ba61e925d",
+      "bytes": 658,
+      "profile": "go"
+    },
+    {
+      "path": ".config/mise/config.linux.toml",
+      "sha256": "6e600d66b8a916ec84e8f65ddad7010c7ed6513758d73a2c4a6f3c070566b8d8",
+      "bytes": 6
+    },
+    {
+      "path": ".config/mise/config.toml",
+      "sha256": "322b51ae83ad6f11eddf0fb766715e6f6c4a7f5a3dbd13d9eaa29ca88dbdf4ac",
+      "bytes": 2506
+    },
+    {
+      "path": ".config/miserc.toml",
+      "sha256": "96255770bc0632e32adc6615edf5239f0d4ad23711bbeb46f57e700e5ebc35c3",
+      "bytes": 233
+    },
+    {
+      "path": ".config/ryl.toml",
+      "sha256": "d49ec72e95e38ec09009e52705a477d205c3d850b8a3735c24db1b401a1fe434",
+      "bytes": 668,
+      "profile": "github"
+    },
+    {
+      "path": ".config/tombi.toml",
+      "sha256": "ece562085ea885aec31bf2e3e9943adc4ddc199f481604b5c7335279dbf0e2e1",
+      "bytes": 902
+    },
+    {
+      "path": ".config/turutan/LICENSE",
+      "sha256": "91785783c96eb27c6b824be2cd1091287df34a96989dc089971feb2cb2735799",
+      "bytes": 918
+    },
+    {
+      "path": ".config/turutan/README.md",
+      "sha256": "6de6db4fd629ee05c65ce8abe9085e3955f4ea3f316d6703551bf8d50c8c1efe",
+      "bytes": 3139
+    },
+    {
+      "path": ".config/updatecli/github-actions.yaml",
+      "sha256": "d5a61cd59bca0a7649e32392658d1a8f1c15b1255986f2a66ca9ce6a63b9c553",
+      "bytes": 1656,
+      "profile": "github"
+    },
+    {
+      "path": ".config/updatecli/go-version.yaml",
+      "sha256": "ef860585bdd1f580a6446f1249bec09803b84e0d3db8fa8b746efbe6d83b07fb",
+      "bytes": 236,
+      "profile": "go"
+    },
+    {
+      "path": ".config/updatecli/mise-ai.yaml",
+      "sha256": "5dfd720344642f0f9bf4b5b4d0c109b12a0252da67f380cb8ae3aa48d20d791b",
+      "bytes": 1115,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/updatecli/mise-core.yaml",
+      "sha256": "583f66d74b39cdf8e0c75efcedaf5aab805a3b7c639967203acdf8345175d755",
+      "bytes": 1539
+    },
+    {
+      "path": ".config/updatecli/mise-github.yaml",
+      "sha256": "7e3643e2e02fe6e66299806371f69b0f455fdc3c281df5d4a2010d66c8a223d3",
+      "bytes": 712,
+      "profile": "github"
+    },
+    {
+      "path": ".config/updatecli/mise-go.yaml",
+      "sha256": "c91a63dab685bae8c5c65b4c09ac998356b52516af9641342e2353f2c7a6c3eb",
+      "bytes": 1069,
+      "profile": "go"
+    },
+    {
+      "path": ".github/jactionlint.yaml",
+      "sha256": "f9151d63ba198d4fec22a35e2c44c5ba751d80ad49be97c9ccdb3ca8f0e84695",
+      "bytes": 126,
+      "profile": "github"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "760db4484057e5d4e811c5ea2e84b57d272cc0974237591f6c00c6d642e10ae9",
+      "bytes": 1289,
+      "profile": "github"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha256": "b0f00de132f581fcf2dda87abef3e9ebac60d7d9ed99ea4cdc60a2e6d6586867",
+      "bytes": 1732,
+      "profile": "github"
+    },
+    {
+      "path": ".github/workflows/scheduled.yml",
+      "sha256": "214da9a02e63c63e28c610964b60546bc699b79b13da329661ea9aa7107d4eac",
+      "bytes": 725,
+      "profile": "github"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "8023da7d953073009714bc68efd76888631dbb148407063e5f83b3c6df2fd9b5",
+      "bytes": 340
+    },
+    {
+      "path": ".golangci.yml",
+      "sha256": "f6406a9ed77ae8a49b0ffff5424b88329dcbd182bd002f4045d0da9c918933d1",
+      "bytes": 316,
+      "profile": "go"
+    },
+    {
+      "path": ".uncomment.toml",
+      "sha256": "32599d3a275e9c87eea907829d7ebb13f319bbc6927265a18b2c8b8676c30b3c",
+      "bytes": 1045,
+      "profile": "ai"
+    },
+    {
+      "path": ".vscode/extensions.json",
+      "sha256": "aaa87917842fd86b4dc72be1f73ae92f09475783b7b5bad324ff1b5b888f165c",
+      "bytes": 114
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha256": "2138c595e3a0a6d3fd29316c6ffefca48444c735994fffde8e6a79d3d04e36d2",
+      "bytes": 212
+    },
+    {
+      "path": "hooks/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

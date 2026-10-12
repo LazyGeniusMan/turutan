@@ -48,7 +48,11 @@ func writeProjectState(t *testing.T, dir, template string) {
 	t.Helper()
 	state := fmt.Sprintf(`{"version":1,"template":%q,"sourceKind":"filesystem","resolvedCommit":%q,"engine":"0.1.0","templateLicense":"MIT-0"}`,
 		template, strings.Repeat("ab", 32))
-	if err := os.WriteFile(filepath.Join(dir, config.StateFileName), []byte(state), 0o600); err != nil {
+	path := filepath.Join(dir, config.StateFileName)
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(state), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

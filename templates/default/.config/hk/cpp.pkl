@@ -1,0 +1,12 @@
+module hk.Cpp
+
+import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.5.0/hk@2.5.0#/Config.pkl" as Config
+
+// Fill with cpp steps as needed; empty mappings merge into every hook automatically.
+// Keep `profiles = List("cpp")` gates on steps.
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

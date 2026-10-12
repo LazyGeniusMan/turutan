@@ -1,72 +1,15 @@
 version = "5.0"
-name = "turutan"
+name = "{{.project_name}}"
 gitignore = true
 compact = true
 
-presets = [
-  # ~keep "claude",
-  # ~keep "cursor",
-  # ~keep "gemini",
-  # ~keep "copilot",
-  # ~keep "devin",
-  # ~keep "cline",
-  # ~keep "codex",
-  # ~keep "amp",
-  # ~keep "junie",
-  "opencode",
-  # ~keep "hermes",
-  # ~keep "antigravity",
-  # ~keep "xum",
-  "pi",
-  # ~keep "baz",
-  # ~keep "mcp",
-  # ~keep "aiassistant",
-  # ~keep "augment",
-  # ~keep "bob",
-  # ~keep # ~keep "codebuddy",
-  # ~keep "codebuff",
-  # ~keep "codewhale",
-  # ~keep "commandcode",
-  # ~keep "copilot-cli",
-  # ~keep "cortex",
-  # ~keep "crush",
-  # ~keep "deepagents",
-  # ~keep "dsh",
-  # ~keep "factory",
-  # ~keep "gitlab-duo",
-  # ~keep "goose",
-  # ~keep "grok",
-  # ~keep "kilo",
-  # ~keep "kimi",
-  # ~keep "kiro",
-  # ~keep "letta",
-  # ~keep "mimocode",
-  # ~keep "muse",
-  # ~keep "omp",
-  # ~keep "openclaw",
-  # ~keep "poolside",
-  # ~keep # ~keep "qoder",
-  # ~keep "qwen",
-  # ~keep "reasonix",
-  # ~keep "replit",
-  # ~keep "rovodev",
-  # ~keep "takt",
-  # ~keep "trae",
-  # ~keep "vibe",
-  # ~keep "warp",
-  # ~keep "zcode",
-  # ~keep "zed",
-  # ~keep "zoocode",
-  # ~keep "okf",
-  # ~keep "llms-txt"
-]
+presets = [{{ range $i, $p := .enabled_ai_agents }}{{ if $i }}, {{ end }}"{{ $p }}"{{ end }}]
 
 agents_md = true
 
-# "builtin:security",
-
 [profiles]
 core = ["core"]
+custom = ["custom"]
 ai = [
   "ai",
   "builtin:agent-delegation",
@@ -287,7 +230,7 @@ name = "keenable"
 transport = "http"
 url = "https://api.keenable.ai/mcp"
 headers = { "X-API-Key" = "${KEENABLE_API_KEY}" }
-domain = "ai"
+domain = "custom"
 
 [[mcp_servers]]
 name = "cloudflare-docs"

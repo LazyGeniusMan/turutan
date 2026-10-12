@@ -3,6 +3,7 @@
 .tmp/
 dist/
 /turutan
+.config/turutan/templates/
 ai-rulez.bak*
 
 # BEGIN ai-rulez (DO NOT EDIT - managed by ai-rulez)

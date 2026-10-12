@@ -121,6 +121,11 @@ func normalizeAnswersWithManifest(answers map[string]any, manifest *config.Manif
 		}
 		answers[key] = normalizeArrayValue(val)
 	}
+	if val, ok := answers["enabled_profiles"]; ok && val != nil {
+		if list, ok := val.([]string); ok {
+			answers["enabled_profiles"] = config.NormalizeProfiles(list)
+		}
+	}
 }
 
 func isArrayPrompt(def config.ManifestPrompt) bool {
@@ -146,6 +151,21 @@ func manifestDefaultCopy(def any) any {
 		return out
 	default:
 		return def
+	}
+}
+
+func seedMissingDefaults(answers map[string]any, manifest *config.Manifest) {
+	if manifest == nil {
+		return
+	}
+	for key, def := range manifest.Prompts {
+		if _, ok := answers[key]; ok {
+			continue
+		}
+		if def.Default == nil {
+			continue
+		}
+		answers[key] = manifestDefaultCopy(def.Default)
 	}
 }
 

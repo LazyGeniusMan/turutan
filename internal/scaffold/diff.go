@@ -110,7 +110,7 @@ func computeFullDiff(
 	if err != nil {
 		return nil, err
 	}
-	diffs, err := collectDiffs(projectDir, rendered, lock, manifest)
+	diffs, err := collectDiffs(projectDir, rendered, lock, manifest, state)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func loadDiffInputs(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("diff: %w", err)
 	}
-	src, err := template.ParseSource(state.Template)
+	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("diff: %w", err)
 	}
@@ -341,8 +341,15 @@ func renderDiffTemplate(
 	defer func() { _ = os.RemoveAll(stage) }()
 	answers := map[string]any{}
 	maps.Copy(answers, state.Answers)
+	seedMissingDefaults(answers, manifest)
 	normalizeAnswersWithManifest(answers, manifest)
 	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
+		return nil, nil, fmt.Errorf("diff: %w", err)
+	}
+	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
+		return nil, nil, fmt.Errorf("diff: %w", err)
+	}
+	if err := plantDocFiles(stage, manifest); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	rendered, err := walkRendered(stage, manifest)
@@ -357,10 +364,11 @@ func collectDiffs(
 	rendered map[string]renderedEntry,
 	lock *config.Lock,
 	manifest *config.Manifest,
+	state *config.State,
 ) ([]FileDiff, error) {
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
-		diff, changed, err := diffRenderedOne(projectDir, rendered[path])
+		diff, changed, err := diffRenderedOne(projectDir, rendered[path], manifest, state)
 		if err != nil {
 			return nil, err
 		}
@@ -383,6 +391,8 @@ func collectDiffs(
 func diffRenderedOne(
 	projectDir string,
 	entry renderedEntry,
+	manifest *config.Manifest,
+	state *config.State,
 ) (FileDiff, bool, error) {
 	local, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 	if err != nil {
@@ -395,6 +405,9 @@ func diffRenderedOne(
 			return FileDiff{}, false, err
 		}
 		return diff, true, nil
+	}
+	if state != nil && customOwned(manifest, state.Answers, entry.Path) {
+		return FileDiff{}, false, nil
 	}
 	diff, changed, err := newFileDiff(entry.Path, local, entry.Data, false, false)
 	if err != nil {
