@@ -21,7 +21,6 @@ local pre_commit = new Mapping<String, Step> {
     profiles = List("core")
     depends = "uncomment"
   }
-
   ["pkl"] = (Builtins.pkl) {
     profiles = List("core")
     depends = "pkl-format"
@@ -41,22 +40,16 @@ local pre_commit = new Mapping<String, Step> {
   ["golangci-lint-fmt"] = (Builtins.golangci_lint_fmt) {
     profiles = List("go")
     depends = "uncomment"
+    check_diff = "golangci-lint fmt --config .config/golangci-lint/.golangci.yml --diff {{files}}"
+    fix = "golangci-lint fmt --config .config/golangci-lint/.golangci.yml {{files}}"
   }
   ["golangci-lint"] = (Builtins.golangci_lint) {
     profiles = List("go")
     depends = "golangci-lint-fmt"
-  }
-  ["go-unit-test"] {
-    profiles = List("go")
-    batch = true
-    check = "go test -short ./..."
-    depends = "golangci-lint"
-  }
-  ["go-integration-test"] {
-    profiles = List("go")
-    batch = true
-    check = "go test -tags=integration -count=1 ./internal/scaffold/"
-    depends = "go-unit-test"
+    check =
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false --enable-only govet,errcheck,staticcheck --new-from-rev HEAD --whole-files ./..."
+    fix =
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix --enable-only govet,errcheck,staticcheck --new-from-rev HEAD --whole-files ./..."
   }
   ["betterleaks"] = (Builtins.betterleaks) {
     profiles = List("core")
@@ -99,36 +92,48 @@ local pre_commit = new Mapping<String, Step> {
 }
 
 local pre_push = new Mapping<String, Step> {
+  ["no-commit-to-branch"] = (Builtins.no_commit_to_branch) {
+    profiles = List("core")
+  }
   ["ai-rulez"] {
     profiles = List("ai")
     glob = ".config/ai-rulez/**"
     check = "ai-rulez validate --config-only"
-    depends = "tombi"
+    depends = "no-commit-to-branch"
+  }
+  ["golangci-lint-full"] = (Builtins.golangci_lint) {
+    profiles = List("go")
+    depends = "ai-rulez"
+    check =
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false --new-from-merge-base main --whole-files ./..."
+    fix =
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix --new-from-merge-base main --whole-files ./..."
   }
   ["gomod-tidy"] = (Builtins.gomod_tidy) {
     profiles = List("go")
-    depends = "uncomment"
-  }
-  ["go-vuln-check"] = (Builtins.go_vuln_check) {
-    profiles = List("go")
-    depends = "gomod-tidy"
-  }
-  ["go-sec"] = (Builtins.go_sec) {
-    profiles = List("go")
-    check = "gosec ./cmd/... ./internal/..."
-    depends = "go-vuln-check"
+    depends = "golangci-lint-full"
   }
   ["go-build"] {
     profiles = List("go")
     batch = true
     check = "go build ./..."
-    depends = "go-sec"
+    depends = "gomod-tidy"
   }
-  ["go-e2e"] {
+  ["go-unit-test"] {
     profiles = List("go")
-    batch = true
-    check = "go test -tags=integration -count=1 ./..."
+    glob = "**/*.go"
+    check = "go test -short -count=1 ./..."
     depends = "go-build"
+  }
+  ["go-sec"] = (Builtins.go_sec) {
+    profiles = List("go")
+    check = "gosec ./cmd/... ./internal/..."
+    depends = "go-unit-test"
+  }
+  ["go-vuln-check"] = (Builtins.go_vuln_check) {
+    profiles = List("go")
+    depends = "go-sec"
+    allow_failure = true
   }
 }
 

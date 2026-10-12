@@ -8,4 +8,10 @@ x-ai-rulez:
     priority: critical
 ---
 
-Always use `hk` builtins in the step if it's available, use custom step if not available. Separate `hk` steps into pre-commit and pre-push. Formatter, linter, unit test, integration test and secret leaks check must be configured at pre-commit. Security check, conformance check, build, and e2e test must be configured for pre push.
+Always use `hk` builtins in the step if it's available, use custom step if not available. Prefer builtin, custom only when builtin can't express scope. Gates binary, check-only in CI.
+
+Pre-commit (<3s, staged only): formatter staged write, fast linter staged subset, staged secret scan blocking redacted. Never build/test/network/integration/E2E.
+
+Pre-push (30s-2min, changed files): heavier lint full-file, incremental type-check, affected hermetic unit <=60s, build fast-fail, branch-protection refusal, opt-in fast vuln max. Never integration/E2E/full-history/networked scans.
+
+Commit-msg: hygiene only (format, length, prefix).

@@ -35,6 +35,8 @@ archives:
       - README.md
 checksum:
   name_template: checksums.txt
+sboms:
+  - artifacts: archive
 snapshot:
   version_template: "{{ .Tag }}-next"
 release:
