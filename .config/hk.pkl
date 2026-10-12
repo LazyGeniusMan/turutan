@@ -47,9 +47,9 @@ local pre_commit = new Mapping<String, Step> {
     profiles = List("go")
     depends = "golangci-lint-fmt"
     check =
-      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false --enable-only govet,errcheck,staticcheck {{files}}"
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false --enable-only govet,errcheck,staticcheck ./..."
     fix =
-      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix --enable-only govet,errcheck,staticcheck {{files}}"
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix --enable-only govet,errcheck,staticcheck ./..."
   }
   ["betterleaks"] = (Builtins.betterleaks) {
     profiles = List("core")
@@ -104,8 +104,8 @@ local pre_push = new Mapping<String, Step> {
   ["golangci-lint-full"] = (Builtins.golangci_lint) {
     profiles = List("go")
     depends = "ai-rulez"
-    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false {{files}}"
-    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix {{files}}"
+    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false ./..."
+    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix ./..."
   }
   ["gomod-tidy"] = (Builtins.gomod_tidy) {
     profiles = List("go")
@@ -144,8 +144,8 @@ local pre_push_ci = new Mapping<String, Step> {
   ["golangci-lint-full"] = (Builtins.golangci_lint) {
     profiles = List("go")
     depends = "ai-rulez"
-    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false {{files}}"
-    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix {{files}}"
+    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false ./..."
+    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix ./..."
   }
   ["gomod-tidy"] = (Builtins.gomod_tidy) {
     profiles = List("go")
