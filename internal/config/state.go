@@ -76,14 +76,31 @@ type ManifestMigration struct {
 	Run  []string `yaml:"run"`
 }
 
+// ManifestPrompt declares a user-visible template variable and its input rules. ~keep
+type ManifestPrompt struct {
+	Prompt  string   `yaml:"prompt"`
+	Default any      `yaml:"default"`
+	Type    string   `yaml:"type"`
+	Options []string `yaml:"options"`
+	Help    string   `yaml:"help"`
+}
+
+// ManifestConditional skips template paths when its If expression renders truthy. ~keep
+type ManifestConditional struct {
+	If   string   `yaml:"if"`
+	Skip []string `yaml:"skip"`
+}
+
 type Manifest struct {
-	Source     string              `yaml:"source"`
-	MinEngine  string              `yaml:"min-engine"`
-	Ignore     []string            `yaml:"ignore"`
-	Preserve   []string            `yaml:"preserve"`
-	Conflict   string              `yaml:"conflict"`
-	Hooks      ManifestHooks       `yaml:"hooks"`
-	Migrations []ManifestMigration `yaml:"migrations"`
+	Source       string                    `yaml:"source"`
+	MinEngine    string                    `yaml:"min-engine"`
+	Ignore       []string                  `yaml:"ignore"`
+	Preserve     []string                  `yaml:"preserve"`
+	Conflict     string                    `yaml:"conflict"`
+	Hooks        ManifestHooks             `yaml:"hooks"`
+	Migrations   []ManifestMigration       `yaml:"migrations"`
+	Prompts      map[string]ManifestPrompt `yaml:"prompts"`
+	Conditionals []ManifestConditional     `yaml:"conditionals"`
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
@@ -208,7 +225,7 @@ func ComputeManifestHash(files []LockFile) string {
 	slices.SortFunc(sorted, func(a, b LockFile) int { return cmp.Compare(a.Path, b.Path) })
 	sum := sha256.New()
 	for _, file := range sorted {
-		fmt.Fprintf(sum, "%s:%s:%d\n", file.Path, file.SHA256, file.Bytes)
+		_, _ = fmt.Fprintf(sum, "%s:%s:%d\n", file.Path, file.SHA256, file.Bytes)
 	}
 	return "sha256:" + hex.EncodeToString(sum.Sum(nil))
 }
@@ -245,6 +262,12 @@ func ValidateManifest(manifest *Manifest) error {
 	if err := filter.ValidateGlobs(manifest.Preserve); err != nil {
 		return fmt.Errorf("invalid manifest: bad preserve pattern: %w", err)
 	}
+	if err := validateManifestPrompts(manifest.Prompts); err != nil {
+		return err
+	}
+	if err := validateManifestConditionals(manifest.Conditionals); err != nil {
+		return err
+	}
 	if manifest.MinEngine != "" {
 		if _, err := semver.NewConstraint(manifest.MinEngine); err != nil {
 			return fmt.Errorf("invalid manifest: bad min-engine %q: %w", manifest.MinEngine, err)
@@ -259,6 +282,40 @@ func ValidateManifest(manifest *Manifest) error {
 		}
 		if err := validateMigrationFrom(migration.From); err != nil {
 			return fmt.Errorf("invalid manifest: migrations[%d]: %w", i, err)
+		}
+	}
+	return nil
+}
+
+func validateManifestPrompts(prompts map[string]ManifestPrompt) error {
+	for key, prompt := range prompts {
+		if key == "" {
+			return fmt.Errorf("invalid manifest: prompt with empty key")
+		}
+		switch prompt.Type {
+		case "", "string", "array", "bool":
+		default:
+			return fmt.Errorf("invalid manifest: prompt %q has unknown type %q", key, prompt.Type)
+		}
+		for _, opt := range prompt.Options {
+			if opt == "" {
+				return fmt.Errorf("invalid manifest: prompt %q has an empty option", key)
+			}
+		}
+		if len(prompt.Options) > 0 && prompt.Type == "bool" {
+			return fmt.Errorf("invalid manifest: prompt %q options not meaningful for bool type", key)
+		}
+	}
+	return nil
+}
+
+func validateManifestConditionals(conds []ManifestConditional) error {
+	for i, cond := range conds {
+		if len(cond.Skip) > 0 && cond.If == "" {
+			return fmt.Errorf("invalid manifest: conditionals[%d] has skip without if", i)
+		}
+		if err := filter.ValidateGlobs(cond.Skip); err != nil {
+			return fmt.Errorf("invalid manifest: bad conditional skip pattern: %w", err)
 		}
 	}
 	return nil

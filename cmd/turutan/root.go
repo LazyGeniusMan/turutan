@@ -72,8 +72,7 @@ template updates back into them (bootstrap, check-update, diff, update).`,
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if appCfg.showVersion {
-				printVersion(cmd.OutOrStdout())
-				return nil
+				return printVersion(cmd.OutOrStdout())
 			}
 			return cmd.Help()
 		},

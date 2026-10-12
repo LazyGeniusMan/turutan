@@ -59,9 +59,13 @@ func CheckUpdate(
 	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
 	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
 	if changed {
-		fmt.Fprintf(stdout, "turutan: update available: %s -> %s\n", shortSHA(state.ResolvedCommit), shortSHA(fresh))
+		if _, err := fmt.Fprintf(stdout, "turutan: update available: %s -> %s\n", shortSHA(state.ResolvedCommit), shortSHA(fresh)); err != nil {
+			return nil, err
+		}
 	} else {
-		fmt.Fprintf(stdout, "turutan: template up to date @ %s\n", shortSHA(state.ResolvedCommit))
+		if _, err := fmt.Fprintf(stdout, "turutan: template up to date @ %s\n", shortSHA(state.ResolvedCommit)); err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }
@@ -119,7 +123,7 @@ func reresolveFilesystem(
 	if err != nil {
 		return "", false, err
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	return compareFilesystemHashes(stage, manifest, state, lock)
 }
 
@@ -157,7 +161,12 @@ func prepareFilesystemReresolve(
 		return nil, nil, nil, "", fmt.Errorf(
 			"check-update: creating staging dir: %w", err)
 	}
-	if err := template.RenderDir(fetched.Dir, stage, state.Answers); err != nil {
+	answers := map[string]any{}
+	for key, val := range state.Answers {
+		answers[key] = val
+	}
+	normalizeAnswersWithManifest(answers, manifest)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}

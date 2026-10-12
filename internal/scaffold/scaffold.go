@@ -48,5 +48,5 @@ func vlogf(stderr io.Writer, verbose bool, format string, args ...any) {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	fmt.Fprintf(stderr, "turutan: "+format+"\n", args...)
+	_, _ = fmt.Fprintf(stderr, "turutan: "+format+"\n", args...)
 }

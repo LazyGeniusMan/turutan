@@ -75,7 +75,7 @@ func Update(
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	updated, conflicts, err := merger.merge(rendered, lock)
 	if err != nil {
 		return nil, err
@@ -118,8 +118,10 @@ func finishUpdate(
 		Old: old, New: fresh,
 		Updated: updated, Conflicts: conflicts, Migrations: migrated,
 	}
-	fmt.Fprintf(stdout, "updated %s -> %s (%d files, %d conflicts)\n",
-		shortSHA(old), shortSHA(fresh), len(updated), len(conflicts))
+	if _, err := fmt.Fprintf(stdout, "updated %s -> %s (%d files, %d conflicts)\n",
+		shortSHA(old), shortSHA(fresh), len(updated), len(conflicts)); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -257,8 +259,9 @@ func renderStaged(
 	stdout io.Writer,
 	stdin io.Reader,
 ) (map[string]renderedEntry, error) {
+	normalizeUpdateAnswers(answers, manifest, opts)
 	if err := renderUpdateWithAnswers(
-		fetched.Dir, stage, answers, opts, stdout, stdin); err != nil {
+		fetched.Dir, stage, answers, manifest, opts, stdout, stdin); err != nil {
 		return nil, err
 	}
 	rendered, err := walkRendered(stage, manifest)
@@ -332,7 +335,26 @@ func updateAnswers(projectDir string, state *config.State, opts UpdateOptions) (
 		}
 		maps.Copy(answers, overlay)
 	}
+	if s, ok := answers["enabled_profiles"].(string); ok {
+		answers["enabled_profiles"] = splitDedupeList(s)
+	}
 	return answers, nil
+}
+
+func normalizeUpdateAnswers(answers map[string]any, manifest *config.Manifest, opts UpdateOptions) {
+	normalizeAnswersWithManifest(answers, manifest)
+	if manifest != nil && opts.Defaults {
+		for key, def := range manifest.Prompts {
+			if _, ok := answers[key]; ok {
+				continue
+			}
+			if def.Default == nil {
+				continue
+			}
+			answers[key] = manifestDefaultCopy(def.Default)
+		}
+		normalizeAnswersWithManifest(answers, manifest)
+	}
 }
 
 func dirtyFiles(projectDir string, lock *config.Lock) ([]string, error) {
@@ -516,9 +538,11 @@ func (m *merger) mergeAdded(path string, fresh, local []byte, localExists, prese
 		if err := m.write(path+".new", fresh); err != nil {
 			return false, false, err
 		}
-		fmt.Fprintf(m.stderr,
+		if _, err := fmt.Fprintf(m.stderr,
 			"turutan: binary %q is new in the template but exists "+"locally; keeping local, wrote %q\n",
-			path, path+".new")
+			path, path+".new"); err != nil {
+			return false, false, err
+		}
 		return false, true, nil
 	}
 	return m.conflictBoth(path, local, fresh)
@@ -532,10 +556,34 @@ func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte,
 		if err := filter.RemoveWithinRoot(m.projectDir, path); err != nil && !os.IsNotExist(err) {
 			return false, false, fmt.Errorf("update: removing dropped file %q: %w", path, err)
 		}
+		m.pruneEmptyParents(path)
 		return true, false, nil
 	}
-	fmt.Fprintf(m.stderr, "turutan: keeping locally modified %q dropped by the template\n", path)
+	if _, err := fmt.Fprintf(m.stderr, "turutan: keeping locally modified %q dropped by the template\n", path); err != nil {
+		return false, false, err
+	}
 	return false, false, nil
+}
+
+// pruneEmptyParents removes directories left empty by a dropped file,
+// walking up toward the project root. os.Remove only succeeds on empty
+// directories, so paths holding user content stop the walk. ~keep
+func (m *merger) pruneEmptyParents(path string) {
+	dir := filepath.Dir(filepath.FromSlash(path))
+	for dir != "." && dir != "" {
+		abs, err := filter.SafeJoin(m.projectDir, dir)
+		if err != nil {
+			return
+		}
+		info, err := os.Lstat(abs)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return
+		}
+		if err := os.Remove(abs); err != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
 
 func (m *merger) mergeBoth(
@@ -574,10 +622,12 @@ func (m *merger) mergeRestored(
 	if err := m.write(path, fresh); err != nil {
 		return false, false, err
 	}
-	fmt.Fprintf(m.stderr,
+	if _, err := fmt.Fprintf(m.stderr,
 		"turutan: restoring %q changed in the template "+
 			"but deleted locally\n",
-		path)
+		path); err != nil {
+		return false, false, err
+	}
 	return true, false, nil
 }
 
@@ -607,8 +657,10 @@ func (m *merger) mergeBothChanged(
 		if handled {
 			return wrote, conflicted, nil
 		}
-		fmt.Fprintf(m.stderr,
-			"turutan: no base copy for %q; using overlay merge\n", path)
+		if _, err := fmt.Fprintf(m.stderr,
+			"turutan: no base copy for %q; using overlay merge\n", path); err != nil {
+			return false, false, err
+		}
 	}
 	return m.conflictBoth(path, local, fresh)
 }
@@ -620,10 +672,12 @@ func (m *merger) mergeBinaryBoth(
 	if err := m.write(path+".new", fresh); err != nil {
 		return false, false, err
 	}
-	fmt.Fprintf(m.stderr,
+	if _, err := fmt.Fprintf(m.stderr,
 		"turutan: binary %q changed both locally and "+
 			"in the template; keeping local, wrote %q\n",
-		path, path+".new")
+		path, path+".new"); err != nil {
+		return false, true, err
+	}
 	return false, true, nil
 }
 
@@ -679,13 +733,17 @@ func (m *merger) conflictBothAs(
 		if err := m.write(path+".rej", []byte(diff.Unified)); err != nil {
 			return false, false, handled, err
 		}
-		fmt.Fprintf(m.stderr, "turutan: conflict in %q; keeping local, wrote %q\n", path, path+".rej")
+		if _, err := fmt.Fprintf(m.stderr, "turutan: conflict in %q; keeping local, wrote %q\n", path, path+".rej"); err != nil {
+			return false, true, handled, err
+		}
 		return false, true, handled, nil
 	}
 	if err := m.write(path, inlineConflict(local, fresh, shortSHA(m.newSHA))); err != nil {
 		return false, false, handled, err
 	}
-	fmt.Fprintf(m.stderr, "turutan: conflict in %q; wrote inline markers\n", path)
+	if _, err := fmt.Fprintf(m.stderr, "turutan: conflict in %q; wrote inline markers\n", path); err != nil {
+		return true, true, handled, err
+	}
 	return true, true, handled, nil
 }
 
@@ -722,18 +780,23 @@ func (m *merger) write(rel string, data []byte) error {
 func renderUpdateWithAnswers(
 	fetchedDir, stage string,
 	answers map[string]any,
+	manifest *config.Manifest,
 	opts UpdateOptions,
 	stdout io.Writer,
 	stdin io.Reader,
 ) error {
 	for range maxPromptAttempts {
+		if err := ensurePromptAnswers(answers, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "update"); err != nil {
+			return err
+		}
+		normalizeAnswersWithManifest(answers, manifest)
 		if err := os.RemoveAll(stage); err != nil {
 			return fmt.Errorf("update: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return fmt.Errorf("update: creating staging dir: %w", err)
 		}
-		err := template.RenderDir(fetchedDir, stage, answers)
+		err := template.RenderDirWithConditionals(fetchedDir, stage, answers, manifestConditionals(manifest))
 		if err == nil {
 			return nil
 		}
@@ -744,11 +807,9 @@ func renderUpdateWithAnswers(
 		if opts.NonInteractive {
 			return fmt.Errorf("update: missing answer for key %q (use --answers-file or --defaults): %w", key, err)
 		}
-		value, promptErr := promptValue(stdout, stdin, key)
-		if promptErr != nil {
-			return promptErr
+		if err := promptMissingKey(answers, manifest, stdout, stdin, key); err != nil {
+			return err
 		}
-		answers[key] = value
 	}
 	return fmt.Errorf("update: too many missing answers (over %d prompts)", maxPromptAttempts)
 }
@@ -780,8 +841,14 @@ func gateMigrations(
 		return false, fmt.Errorf(
 			"update: template declares migrations: refusing in " + "--non-interactive mode without --allow-hooks")
 	}
-	if !promptConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending)) {
-		fmt.Fprintf(stdout, "turutan: template migrations %q skipped (consent declined)\n", pending)
+	allow, err := promptConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending))
+	if err != nil {
+		return false, err
+	}
+	if !allow {
+		if _, err := fmt.Fprintf(stdout, "turutan: template migrations %q skipped (consent declined)\n", pending); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
 	return false, nil
@@ -851,7 +918,9 @@ func runMigrationCmd(projectDir, cmd, old, fresh string, stderr io.Writer) error
 	executed.Env = hookEnv("TURUTAN_OLD="+old, "TURUTAN_NEW="+fresh)
 	output, err := executed.CombinedOutput()
 	if len(output) > 0 {
-		fmt.Fprintf(stderr, "turutan: migration %q output:\n%s", cmd, output)
+		if _, err := fmt.Fprintf(stderr, "turutan: migration %q output:\n%s", cmd, output); err != nil {
+			return err
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("update: migration %q failed: %w", cmd, err)

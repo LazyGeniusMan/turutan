@@ -18,4 +18,4 @@ formatters:
     gofumpt:
       extra-rules: false
 issues:
-  new-from-merge-base: main
+  new-from-merge-base: origin/main

@@ -344,3 +344,61 @@ func TestValidateManifestFrom(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateManifestPrompts(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		prompts map[string]ManifestPrompt
+		wantErr bool
+	}{
+		{name: "empty prompts accepted", prompts: map[string]ManifestPrompt{}, wantErr: false},
+		{name: "string type accepted", prompts: map[string]ManifestPrompt{"project_name": {Type: "string"}}, wantErr: false},
+		{name: "empty type defaults to string", prompts: map[string]ManifestPrompt{"project_name": {}}, wantErr: false},
+		{name: "array type accepted", prompts: map[string]ManifestPrompt{"enabled_profiles": {Type: "array"}}, wantErr: false},
+		{name: "bool type accepted", prompts: map[string]ManifestPrompt{"flag": {Type: "bool"}}, wantErr: false},
+		{name: "unknown type rejected", prompts: map[string]ManifestPrompt{"x": {Type: "number"}}, wantErr: true},
+		{name: "empty option rejected", prompts: map[string]ManifestPrompt{"x": {Type: "array", Options: []string{"a", ""}}}, wantErr: true},
+		{name: "bool with options rejected", prompts: map[string]ManifestPrompt{"x": {Type: "bool", Options: []string{"a"}}}, wantErr: true},
+		{name: "string with options accepted", prompts: map[string]ManifestPrompt{"x": {Type: "string", Options: []string{"a", "b"}}}, wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateManifest(&Manifest{Prompts: tt.prompts})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+	t.Run("empty prompt key rejected", func(t *testing.T) {
+		t.Parallel()
+		if err := ValidateManifest(&Manifest{Prompts: map[string]ManifestPrompt{"": {Type: "string"}}}); err == nil {
+			t.Error("ValidateManifest with empty prompt key succeeded, want error")
+		}
+	})
+}
+
+func TestValidateManifestConditionals(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		conds   []ManifestConditional
+		wantErr bool
+	}{
+		{name: "empty accepted", conds: nil, wantErr: false},
+		{name: "valid if skip accepted", conds: []ManifestConditional{{If: `{{ contains .enabled_profiles "go" }}`, Skip: []string{"go.mod"}}}, wantErr: false},
+		{name: "skip without if rejected", conds: []ManifestConditional{{Skip: []string{"a.txt"}}}, wantErr: true},
+		{name: "bad glob rejected", conds: []ManifestConditional{{If: "true", Skip: []string{"/abs"}}}, wantErr: true},
+		{name: "dotdot glob rejected", conds: []ManifestConditional{{If: "true", Skip: []string{"../escape"}}}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateManifest(&Manifest{Conditionals: tt.conds})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
