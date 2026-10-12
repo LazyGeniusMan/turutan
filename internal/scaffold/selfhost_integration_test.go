@@ -316,6 +316,8 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 		t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 	}
 	proj := filepath.Join(work, "proj")
+	e2eAssertMisercEnv(t, proj, `env = ["core"]`)
+	e2eAssertReadmeProject(t, proj, "demoe2e")
 	if out, code := e2eRun(t, bin, proj, "update",
 		"--answers-file", coreGoAnswers, "--force", "--non-interactive"); code != 0 {
 		t.Fatalf("update (add go) exit = %d, want 0:\n%s", code, out)
@@ -332,6 +334,8 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[1] != "go" {
 		t.Errorf("stored enabled_profiles = %v, want [core go]", profiles)
 	}
+	e2eAssertMisercEnv(t, proj, `env = ["core", "go"]`)
+	e2eAssertReadmeProject(t, proj, "demoe2e")
 	if out, code := e2eRun(t, bin, proj, "update",
 		"--answers-file", coreAnswers, "--force", "--non-interactive"); code != 0 {
 		t.Fatalf("update (remove go) exit = %d, want 0:\n%s", code, out)
@@ -343,6 +347,217 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 	}
 	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
 		t.Errorf("stored enabled_profiles = %v, want [core]", profiles)
+	}
+	e2eAssertMisercEnv(t, proj, `env = ["core"]`)
+	e2eAssertReadmeProject(t, proj, "demoe2e")
+}
+
+func TestDefaultBinarySyncE2E(t *testing.T) {
+	root := e2eModuleRoot(t)
+	fixture := filepath.Join(root, "templates", "default")
+	if _, err := os.Stat(filepath.Join(fixture, ".turutan.yml")); err != nil {
+		t.Skipf("default template fixture not found: %v", err)
+	}
+	bin := e2eBuildTurutan(t, root)
+
+	t.Run("diff what matrix", func(t *testing.T) {
+		t.Parallel()
+		tmpl := filepath.Join(t.TempDir(), "tpl")
+		if err := e2eCopyDir(fixture, tmpl); err != nil {
+			t.Fatal(err)
+		}
+		work := t.TempDir()
+		answers := e2eWriteProfilesAnswers(t, "core")
+		if out, code := e2eRun(t, bin, work, "bootstrap", tmpl, "proj",
+			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+		}
+		proj := filepath.Join(work, "proj")
+		for _, what := range []string{"all", "upstream", "local"} {
+			if out, code := e2eRun(t, bin, proj, "diff", "--what", what, "--non-interactive"); code != 0 {
+				t.Errorf("diff --what %s exit = %d, want 0 on clean checkout:\n%s", what, code, out)
+			} else if !strings.Contains(out, "no drift") {
+				t.Errorf("diff --what %s output missing no-drift line:\n%s", what, out)
+			}
+		}
+		if out, code := e2eRun(t, bin, proj, "diff", "--what", "bogus", "--non-interactive"); code == 0 {
+			t.Errorf("diff --what bogus exit = 0, want non-zero:\n%s", out)
+		} else if code != 1 {
+			t.Errorf("diff --what bogus exit = %d, want 1", code)
+		}
+		readme := filepath.Join(proj, "README.md")
+		original, err := os.ReadFile(readme)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(readme, append(append([]byte{}, original...), []byte("\n// local edit\n")...), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, code := e2eRun(t, bin, proj, "diff", "--non-interactive"); code != 2 {
+			t.Errorf("diff exit = %d after local edit, want 2:\n%s", code, out)
+		}
+		if out, code := e2eRun(t, bin, proj, "diff", "--what", "local", "--non-interactive"); code != 2 {
+			t.Errorf("diff --what local exit = %d after local edit, want 2:\n%s", code, out)
+		} else if !strings.Contains(out, "README.md") {
+			t.Errorf("diff --what local output missing README.md:\n%s", out)
+		}
+		if out, code := e2eRun(t, bin, proj, "diff", "--what", "upstream", "--non-interactive"); code != 0 {
+			t.Errorf("diff --what upstream exit = %d with only local edits, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "no drift") {
+			t.Errorf("diff --what upstream output missing no-drift line:\n%s", out)
+		}
+		if err := os.WriteFile(readme, original, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		tmplReadme := filepath.Join(tmpl, "README.md.tmpl")
+		tmplOriginal, err := os.ReadFile(tmplReadme)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(tmplReadme, append(append([]byte{}, tmplOriginal...), []byte("\nupstream change\n")...), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out, code := e2eRun(t, bin, proj, "diff", "--what", "upstream", "--non-interactive"); code != 2 {
+			t.Errorf("diff --what upstream exit = %d after template change, want 2:\n%s", code, out)
+		} else if !strings.Contains(out, "README.md") {
+			t.Errorf("diff --what upstream output missing README.md:\n%s", out)
+		}
+		if out, code := e2eRun(t, bin, proj, "diff", "--what", "local", "--non-interactive"); code != 0 {
+			t.Errorf("diff --what local exit = %d with only template changes, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "no drift") {
+			t.Errorf("diff --what local output missing no-drift line:\n%s", out)
+		}
+		if _, code := e2eRun(t, bin, proj, "diff", "--non-interactive"); code != 2 {
+			t.Errorf("diff exit = %d after template change, want 2", code)
+		}
+	})
+
+	t.Run("update enable disable preview flags", func(t *testing.T) {
+		t.Parallel()
+		work := t.TempDir()
+		answers := e2eWriteProfilesAnswers(t, "core")
+		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
+			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+		}
+		proj := filepath.Join(work, "proj")
+		if out, code := e2eRun(t, bin, proj, "update", "--enable", "go", "--preview", "--non-interactive"); code != 0 {
+			t.Fatalf("update --preview exit = %d, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "preview") || !strings.Contains(out, "go.mod") {
+			t.Errorf("update --preview output missing plan for go.mod:\n%s", out)
+		}
+		if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
+			t.Error("go.mod exists after --preview, want preview to write nothing")
+		}
+		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
+			t.Errorf("stored enabled_profiles = %v after --preview, want [core]", profiles)
+		}
+		if out, code := e2eRun(t, bin, proj, "update", "--enable", "go", "--force", "--non-interactive"); code != 0 {
+			t.Fatalf("update --enable go exit = %d, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "updated") {
+			t.Errorf("update --enable go output missing summary:\n%s", out)
+		}
+		if got, err := os.ReadFile(filepath.Join(proj, "go.mod")); err != nil {
+			t.Errorf("go.mod missing after --enable go: %v", err)
+		} else if !strings.Contains(string(got), "module demoe2e") {
+			t.Errorf("go.mod = %q, want demoe2e module", got)
+		}
+		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[1] != "go" {
+			t.Errorf("stored enabled_profiles = %v, want [core go]", profiles)
+		}
+		e2eAssertMisercEnv(t, proj, `env = ["core", "go"]`)
+		if out, code := e2eRun(t, bin, proj, "update", "--disable", "go", "--preview", "--non-interactive"); code != 0 {
+			t.Fatalf("update --disable go --preview exit = %d, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "preview") || !strings.Contains(out, "go.mod") {
+			t.Errorf("update --disable preview output missing plan for go.mod:\n%s", out)
+		}
+		if _, err := os.Stat(filepath.Join(proj, "go.mod")); err != nil {
+			t.Errorf("go.mod missing after --disable preview, want preview to write nothing: %v", err)
+		}
+		if out, code := e2eRun(t, bin, proj, "update", "--disable", "go", "--force", "--non-interactive"); code != 0 {
+			t.Fatalf("update --disable go exit = %d, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "updated") {
+			t.Errorf("update --disable go output missing summary:\n%s", out)
+		}
+		if _, err := os.Stat(filepath.Join(proj, "go.mod")); !os.IsNotExist(err) {
+			t.Error("go.mod exists after --disable go, want it gone")
+		}
+		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 1 || profiles[0] != "core" {
+			t.Errorf("stored enabled_profiles = %v, want [core]", profiles)
+		}
+		if _, code := e2eRun(t, bin, proj, "update", "--enable", "nope", "--force", "--non-interactive"); code == 0 {
+			t.Error("update --enable nope exit = 0, want non-zero for unknown profile")
+		}
+	})
+
+	t.Run("profiles list", func(t *testing.T) {
+		t.Parallel()
+		work := t.TempDir()
+		answers := e2eWriteProfilesAnswers(t, "core")
+		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
+			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+		}
+		proj := filepath.Join(work, "proj")
+		if out, code := e2eRun(t, bin, proj, "profiles", "--non-interactive"); code != 0 {
+			t.Fatalf("profiles exit = %d, want 0:\n%s", code, out)
+		} else {
+			for _, want := range []string{"offered profiles:", "enabled profiles: core", "go"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("profiles output missing %q:\n%s", want, out)
+				}
+			}
+		}
+		if out, code := e2eRun(t, bin, proj, "update", "--enable", "go", "--force", "--non-interactive"); code != 0 {
+			t.Fatalf("update --enable go exit = %d, want 0:\n%s", code, out)
+		}
+		if out, code := e2eRun(t, bin, proj, "profiles", "--non-interactive"); code != 0 {
+			t.Fatalf("profiles exit = %d, want 0:\n%s", code, out)
+		} else if !strings.Contains(out, "enabled profiles: core, go") {
+			t.Errorf("profiles output missing enabled core, go:\n%s", out)
+		}
+	})
+
+	t.Run("check-update offers", func(t *testing.T) {
+		t.Parallel()
+		work := t.TempDir()
+		answers := e2eWriteProfilesAnswers(t, "core")
+		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
+			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+		}
+		proj := filepath.Join(work, "proj")
+		if out, code := e2eRun(t, bin, proj, "check-update", "--non-interactive"); code != 0 {
+			t.Fatalf("check-update exit = %d, want 0 when up to date:\n%s", code, out)
+		} else {
+			for _, want := range []string{"up to date", "turutan: template offers new profiles:", "go"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("check-update output missing %q:\n%s", want, out)
+				}
+			}
+		}
+	})
+}
+
+func e2eAssertMisercEnv(t *testing.T, proj, want string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(proj, ".config", "miserc.toml"))
+	if err != nil {
+		t.Fatalf("reading miserc.toml: %v", err)
+	}
+	if !strings.Contains(string(data), want) {
+		t.Errorf("miserc.toml = %q, want it to contain %q", data, want)
+	}
+}
+
+func e2eAssertReadmeProject(t *testing.T, proj, want string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(proj, "README.md"))
+	if err != nil {
+		t.Fatalf("reading README.md: %v", err)
+	}
+	if !strings.Contains(string(data), want) {
+		t.Errorf("README.md missing %q", want)
 	}
 }
 
