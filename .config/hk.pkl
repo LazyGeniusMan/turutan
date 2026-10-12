@@ -135,17 +135,57 @@ local pre_push = new Mapping<String, Step> {
   }
 }
 
+local pre_push_ci = new Mapping<String, Step> {
+  ["ai-rulez"] {
+    profiles = List("ai")
+    glob = ".config/ai-rulez/**"
+    check = "ai-rulez validate --config-only"
+  }
+  ["golangci-lint-full"] = (Builtins.golangci_lint) {
+    profiles = List("go")
+    depends = "ai-rulez"
+    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false {{files}}"
+    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix {{files}}"
+  }
+  ["gomod-tidy"] = (Builtins.gomod_tidy) {
+    profiles = List("go")
+    depends = "golangci-lint-full"
+  }
+  ["go-build"] {
+    profiles = List("go")
+    batch = true
+    check = "go build ./..."
+    depends = "gomod-tidy"
+  }
+  ["go-unit-test"] {
+    profiles = List("go")
+    glob = "**/*.go"
+    check = "go test -short -count=1 ./..."
+    depends = "go-build"
+  }
+  ["go-sec"] = (Builtins.go_sec) {
+    profiles = List("go")
+    check = "gosec ./cmd/... ./internal/..."
+    depends = "go-unit-test"
+  }
+  ["go-vuln-check"] = (Builtins.go_vuln_check) {
+    profiles = List("go")
+    depends = "go-sec"
+    allow_failure = true
+  }
+}
+
 hooks {
   ["check"] {
     steps {
       ...pre_commit
-      ...pre_push
+      ...pre_push_ci
     }
   }
   ["fix"] {
     steps {
       ...pre_commit
-      ...pre_push
+      ...pre_push_ci
     }
   }
   ["commit-msg"] {

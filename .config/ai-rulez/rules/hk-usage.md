@@ -15,3 +15,5 @@ Pre-commit (<3s, staged only): formatter staged write, fast linter staged subset
 Pre-push (30s-2min, changed files): heavier lint full-file, incremental type-check, affected hermetic unit <=60s, build fast-fail, branch-protection refusal, opt-in fast vuln max. Never integration/E2E/full-history/networked scans.
 
 Commit-msg: hygiene only (format, length, prefix).
+
+CI-safe vs local-only: `no-commit-to-branch` (branch-protection refusal) is `pre-push` hook ONLY, MUST NEVER appear in `check`/`fix` hooks used by CI. Pattern is `pre_push_ci` subset (same as `pre_push` minus `no-commit-to-branch`) for `check`/`fix`, full `pre_push` for `pre-push` hook.
