@@ -8,6 +8,9 @@ x-ai-rulez:
     priority: critical
 ---
 
+This project use `turutan` default template. Only edit `hk` files in these paths to avoid update conflict unless the user explicitly requests a different one:
+- `.config/hk/custom.pkl`
+
 Always use `hk` builtins in the step if it's available, use custom step if not available. Prefer builtin, custom only when builtin can't express scope. Gates binary, check-only in CI.
 
 Pre-commit (<3s, staged only): formatter staged write, fast linter staged subset, staged secret scan blocking redacted. Never build/test/network/integration/E2E.

@@ -3,6 +3,7 @@ go = [
   "go",
   "builtin:go",
 ]
+
 [[installed_skills]]
 name = "golang"
 source = "https://github.com/samber/cc-skills-golang"

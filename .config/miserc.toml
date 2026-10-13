@@ -1,5 +1,2 @@
-# Active profiles from enabled_profiles prompt.
-# Per-profile toolchains in .config/mise/config.<profile>.toml;
-# core in config.toml plus core-always config.linux.toml.
 env = ["core", "ai", "github", "go", "custom"]
 auto_env = true

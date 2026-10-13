@@ -1,5 +1,5 @@
 [profiles]
-gitlab = ["gitlab","yml"]
+gitlab = ["gitlab", "yml"]
 
 [[installed_skills]]
 name = "gitlab"

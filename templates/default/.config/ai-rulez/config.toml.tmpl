@@ -11,34 +11,29 @@ agents_md = true
 core = ["core"]
 
 [header]
-style = "detailed"
 text = """
-AI-RULEZ :: GENERATED FILE — DO NOT EDIT DIRECTLY
-Source: .config/ai-rulez/config.toml
+AI-RULEZ GENERATED FILE — DO NOT EDIT DIRECTLY
 
-WHAT IS AI-RULEZ
-AI-Rulez is a directory-based AI governance tool. All configuration lives in
-the .config/ai-rulez/ directory. This file is auto-generated from source files.
+ai-rulez is a standards-compliant lifecycle tool for agent knowledge and capabilities. You keep rules, context, skills, agents, commands, hooks, permissions and MCP servers in one source of truth then ai-rulez takes them through the whole lifecycle: author -> generate -> bundle -> lint/validate -> govern -> publish
 
-.AI-RULEZ FOLDER ORGANIZATION
-Root content (always included):
-  .config/ai-rulez/config.toml                               Main configuration (presets, profiles)
-  .config/ai-rulez/rules/                                    Mandatory rules for AI assistants
-  .config/ai-rulez/context/                                  Reference documentation
-  .config/ai-rulez/skills/                                   Specialized AI prompts
-  .config/ai-rulez/agents/                                   Agent definitions
-  .config/ai-rulez/domains/{name}/{rules,context,skills}/    Domain-specific
+Folder Structure:
+.config/ai-rulez/config*.toml
+.config/ai-rulez/domains/{domain-name}/{agents,context,rules,skills}
 
-Profiles in config.toml control which domains are included.
+agents: Agent definitions
+context: References documentation
+rules: Mandatory rules for AI assistants
+skills: Agent Skills definitions
 
 INSTRUCTIONS FOR AI AGENTS
 1. NEVER edit this file - it is auto-generated
-2. ALWAYS edit files in .config/ai-rulez/ instead:
-3. PREFER using the MCP Server, it provides safe CRUD tools for reading and modifying .config/ai-rulez/ content
+2. ALWAYS edit files in .config/ai-rulez/ instead
+3. PREFER using `ai-rulez` MCP Server, it provides safe CRUD tools for reading and modifying ai-rulez content
 4. After making changes: mise run dev-setup:ai-rulez
 
 Documentation: https://github.com/Goldziher/ai-rulez
 """
+style = "detailed"
 hashes = "content"
 timestamp = false
 
@@ -54,5 +49,10 @@ omit_agent_fields = ["model", "effort", "tools"]
 [rules]
 mode = "split"
 
+[skills]
+delivery = "served"
+
 [mcp]
 self_server = false
+#~keep self_server_command = ["ai-rulez", "mcp"]
+skills_instructions = false

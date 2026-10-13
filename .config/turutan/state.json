@@ -2,7 +2,7 @@
   "version": 1,
   "template": "templates/default",
   "sourceKind": "filesystem",
-  "resolvedCommit": "1762eec1e4e8c420b289e196dfd4920808909c6e5bf3fcede4db0c8f456dbf2c",
+  "resolvedCommit": "fe2c7a695c45cd599c044101072caec2efb17afdfa1d9c8cc5d0c5114a202a72",
   "answers": {
     "enabled_ai_agents": [
       "pi",
