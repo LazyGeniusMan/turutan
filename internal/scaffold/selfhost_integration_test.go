@@ -140,7 +140,10 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 			t.Errorf("identity = %q -> %q, want %q -> %q", result.Old, result.New, sha1, sha1)
 		}
 
-		anchorPath := filepath.Join(proj, ".gitignore")
+		// .gitignore is custom-owned (seed-once, never overwritten) since the
+		// custom-profile guard, so full diff intentionally skips it. Anchor
+		// drift checks on a core-owned file that full diff still reports.
+		anchorPath := filepath.Join(proj, ".config", "mise", "config.toml")
 		original, err := os.ReadFile(anchorPath)
 		if err != nil {
 			t.Fatal(err)
@@ -389,7 +392,11 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		} else if code != 1 {
 			t.Errorf("diff --what bogus exit = %d, want 1", code)
 		}
-		anchor := filepath.Join(proj, ".gitignore")
+		// .gitignore is custom-owned (seed-once, never overwritten), so full
+		// diff intentionally skips it. Anchor on a core-owned file that
+		// every diff --what scope still reports.
+		anchorRel := filepath.ToSlash(filepath.Join(".config", "mise", "config.toml"))
+		anchor := filepath.Join(proj, filepath.FromSlash(anchorRel))
 		original, err := os.ReadFile(anchor)
 		if err != nil {
 			t.Fatal(err)
@@ -402,8 +409,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "local", "--non-interactive"); code != 2 {
 			t.Errorf("diff --what local exit = %d after local edit, want 2:\n%s", code, out)
-		} else if !strings.Contains(out, ".gitignore") {
-			t.Errorf("diff --what local output missing .gitignore:\n%s", out)
+		} else if !strings.Contains(out, anchorRel) {
+			t.Errorf("diff --what local output missing %s:\n%s", anchorRel, out)
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "upstream", "--non-interactive"); code != 0 {
 			t.Errorf("diff --what upstream exit = %d with only local edits, want 0:\n%s", code, out)
@@ -413,7 +420,7 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		if err := os.WriteFile(anchor, original, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		tmplAnchor := filepath.Join(tmpl, ".gitignore")
+		tmplAnchor := filepath.Join(tmpl, filepath.FromSlash(anchorRel))
 		tmplOriginal, err := os.ReadFile(tmplAnchor)
 		if err != nil {
 			t.Fatal(err)
@@ -423,8 +430,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "upstream", "--non-interactive"); code != 2 {
 			t.Errorf("diff --what upstream exit = %d after template change, want 2:\n%s", code, out)
-		} else if !strings.Contains(out, ".gitignore") {
-			t.Errorf("diff --what upstream output missing .gitignore:\n%s", out)
+		} else if !strings.Contains(out, anchorRel) {
+			t.Errorf("diff --what upstream output missing %s:\n%s", anchorRel, out)
 		}
 		if out, code := e2eRun(t, bin, proj, "diff", "--what", "local", "--non-interactive"); code != 0 {
 			t.Errorf("diff --what local exit = %d with only template changes, want 0:\n%s", code, out)
