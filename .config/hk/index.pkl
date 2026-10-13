@@ -61,10 +61,12 @@ hooks {
   ["post-checkout"] {
     steps {
       ["install-deps"] {
+        dir = "."
         step_condition = "is_branch_checkout"
         check = "mise install"
       }
       ["dev-setup"] {
+        dir = "."
         step_condition = "is_branch_checkout"
         check = "mise run dev-setup:**"
       }
