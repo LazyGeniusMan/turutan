@@ -1,7 +1,7 @@
 {
   "source": "templates/default",
-  "resolved_sha": "fe2c7a695c45cd599c044101072caec2efb17afdfa1d9c8cc5d0c5114a202a72",
-  "manifest_hash": "sha256:1b68d5deb37885742e6367174293fb146c2c8ea5fe5c469edbac83438e1ecd2e",
+  "resolved_sha": "f46b7bc2ce6d6ed82a31c6af204a9cf28c6e693de407d8e88e44a4933b15ef7b",
+  "manifest_hash": "sha256:15a4da2f2f78b0ba8436be2b8d13a2ed443e57c085d62ba3c8864a8660bf957e",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -367,11 +367,6 @@
       "path": ".config/mise/config.toml",
       "sha256": "b265ba6fb11902ca33fe5b9c2eb0927098214f13ab3159e1b6dc26c30a1d9b1d",
       "bytes": 2473
-    },
-    {
-      "path": ".config/mise/config.typscript.toml",
-      "sha256": "fcb28ce710c4fe4637e45b3a1e7b4f7f0631b4b9ee90df64cea71b5d0f785375",
-      "bytes": 39
     },
     {
       "path": ".config/miserc.toml",

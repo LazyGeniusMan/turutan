@@ -951,8 +951,6 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 			".config/ai-rulez/domains/index.md",
 			".config/ai-rulez/domains/pkl/.gitkeep",
 			".config/hk.pkl.tmpl",
-			// config.typscript.toml keeps its upstream typo; do not rename.
-			".config/mise/config.typscript.toml",
 		}
 		isCore := func(rel string) bool {
 			for _, pattern := range coreGlobs {
@@ -985,9 +983,6 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 				t.Errorf("%s in core set, want custom-owned only", rel)
 			}
 		}
-		// sharedOwned allows intentional multi-profile ownership: docker,
-		// github and kubernetes all plant domains/yml/**, so the placeholder
-		// stays owned by all three.
 		sharedOwned := []string{
 			".config/ai-rulez/domains/yml/.gitkeep",
 		}

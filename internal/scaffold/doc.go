@@ -11,12 +11,6 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
-// plantDocFiles moves manifest doc-files from their rendered stage location
-// into stage/.config/turutan, preserving relative structure. Unlike
-// plantLicenseFiles the source is the rendered stage (docs render like any
-// other template file), and a missing entry is skipped silently so
-// profile-gated docs vanish cleanly when their profile is off. Runs after
-// rendering and after plantLicenseFiles, before publish or walk.
 func plantDocFiles(stage string, manifest *config.Manifest) error {
 	if manifest == nil || len(manifest.DocFiles) == 0 {
 		return nil

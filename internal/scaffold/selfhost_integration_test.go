@@ -140,9 +140,6 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 			t.Errorf("identity = %q -> %q, want %q -> %q", result.Old, result.New, sha1, sha1)
 		}
 
-		// .gitignore is custom-owned (seed-once, never overwritten) since the
-		// custom-profile guard, so full diff intentionally skips it. Anchor
-		// drift checks on a core-owned file that full diff still reports.
 		anchorPath := filepath.Join(proj, ".config", "mise", "config.toml")
 		original, err := os.ReadFile(anchorPath)
 		if err != nil {
@@ -392,9 +389,6 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		} else if code != 1 {
 			t.Errorf("diff --what bogus exit = %d, want 1", code)
 		}
-		// .gitignore is custom-owned (seed-once, never overwritten), so full
-		// diff intentionally skips it. Anchor on a core-owned file that
-		// every diff --what scope still reports.
 		anchorRel := filepath.ToSlash(filepath.Join(".config", "mise", "config.toml"))
 		anchor := filepath.Join(proj, filepath.FromSlash(anchorRel))
 		original, err := os.ReadFile(anchor)

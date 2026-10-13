@@ -17,6 +17,9 @@ import "./cpp.pkl" as cpp
 {{- if contains .enabled_profiles "csharp" }}
 import "./csharp.pkl" as csharp
 {{- end }}
+{{- if contains .enabled_profiles "custom" }}
+import "./custom.pkl" as custom
+{{- end }}
 {{- if contains .enabled_profiles "docker" }}
 import "./docker.pkl" as docker
 {{- end }}
@@ -61,9 +64,6 @@ import "./typescript.pkl" as typescript
 {{- end }}
 {{- if contains .enabled_profiles "typst" }}
 import "./typst.pkl" as typst
-{{- end }}
-{{- if contains .enabled_profiles "custom" }}
-import "./custom.pkl" as custom
 {{- end }}
 
 hooks {
