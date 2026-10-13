@@ -7,7 +7,7 @@ experimental = true
 [env]
 PROXY_URI = "{{ env?.VSCODE_PROXY_URI or 'http://localhost:{{port}}' }}"
 HK_MISE = 1
-HK_FILE = ".config/hk/index.pkl"
+HK_FILE = ".config/hk.pkl"
 HK_PROFILE = "{{ mise_env | default(value=[]) | join(sep=',') }}"
 PITCHFORK_WEB_PORT = 3120
 
