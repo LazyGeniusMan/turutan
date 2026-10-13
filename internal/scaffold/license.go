@@ -43,11 +43,6 @@ func detectSPDX(text string) string {
 	}
 }
 
-// plantLicenseFiles copies manifest license-files verbatim from the fetched
-// template dir into stage/.config/turutan, preserving relative structure.
-// Legal text must not be template-rendered, so bytes move unmodified, and the
-// template-root copy is removed from the stage so it is not also published
-// at its source location. Runs after rendering, before publish or walk.
 func plantLicenseFiles(fetchedDir, stage string, manifest *config.Manifest) error {
 	if manifest == nil || len(manifest.LicenseFiles) == 0 {
 		return nil

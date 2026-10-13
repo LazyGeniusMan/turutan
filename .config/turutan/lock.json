@@ -1,7 +1,7 @@
 {
   "source": "templates/default",
-  "resolved_sha": "1762eec1e4e8c420b289e196dfd4920808909c6e5bf3fcede4db0c8f456dbf2c",
-  "manifest_hash": "sha256:f5ffa6c9060529317d182c62e7c61254453384f84cb721d78944e7c277451445",
+  "resolved_sha": "a54ff724106d364e00de36d6e00b48f5b1cb37127aa84a109ea5e5bfa9c7b34d",
+  "manifest_hash": "sha256:e4a1d72ba1a7cfc20d779268823b1ff6b512b51a6c4a98e9d7ce701e96dac9fe",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -17,26 +17,32 @@
     },
     {
       "path": ".config/ai-rulez/config.github.toml",
-      "sha256": "914c5c8865f5f222bd1aa627ac0d3bed4aaf83721d8566e9ce599b1dd4e0cd0d",
-      "bytes": 310,
+      "sha256": "27a46ede606988f424c38cd5a6cbe30fd7c1fce42e2ba38e7fcaccbabe0b9b15",
+      "bytes": 311,
       "profile": "github"
     },
     {
       "path": ".config/ai-rulez/config.go.toml",
-      "sha256": "4e93f51ba45aa174693331bbabefe7542af1362baa83ed88dc8c00106958dc3d",
-      "bytes": 187,
+      "sha256": "81336f2f337e70bb1a2e6e749cf9e0d3eecb08c6c563ea460985330e4a13349b",
+      "bytes": 188,
       "profile": "go"
     },
     {
       "path": ".config/ai-rulez/config.toml",
-      "sha256": "196bbff51565ef40331a2a19e869aee4134bbdb682f8038b71e147cf60f88326",
-      "bytes": 1852,
+      "sha256": "7917195f49bdbe9491b118a73b31267579ce30eef5eb6ac85be2245440ef696f",
+      "bytes": 1669,
       "profile": "ai"
     },
     {
       "path": ".config/ai-rulez/domains/ai/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/ai/rules/ai-rulez-usage.md",
+      "sha256": "c336dea8662c283872a0d3ab803f4548478088ca1cab39893fd161b2066e5253",
+      "bytes": 371,
       "profile": "ai"
     },
     {
@@ -53,14 +59,20 @@
     },
     {
       "path": ".config/ai-rulez/domains/ai/rules/index.md",
-      "sha256": "8d35ea4a3eb13ae4b2a8b8715d488a75be86673f91f60627a523a2db92f16488",
-      "bytes": 198,
+      "sha256": "961c1fb2c87d31f7d30a3a1762dfe01dae609c5d09d7e04fd7b6e8acb9b3187b",
+      "bytes": 290,
       "profile": "ai"
     },
     {
       "path": ".config/ai-rulez/domains/ai/rules/skill-usage.md",
-      "sha256": "0321234072cf30345fe10c6029ec0cbe5ed2532fc88d8efb5281cf67ad9adee4",
-      "bytes": 248,
+      "sha256": "93c18c564aef0b6454f5dc91fda83c4e48354f82df57175b4396ab5b8f61621d",
+      "bytes": 539,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/ai/rules/subagent-spawn.md",
+      "sha256": "1abcd998536c702abf15db5a9f1b20f159ce619da77e8c14f4405f5ffcc06d41",
+      "bytes": 439,
       "profile": "ai"
     },
     {
@@ -119,14 +131,20 @@
     },
     {
       "path": ".config/ai-rulez/domains/core/rules/hk-usage.md",
-      "sha256": "522a3121c4aa4f44fd714accc3811e4abb907b0eb5c882a63e6497ca9360a7b7",
-      "bytes": 1351,
+      "sha256": "1758371fe754dfdfba9040e6e5c36c618397cc0273cd882645d9eb00c019cc5a",
+      "bytes": 1537,
       "profile": "ai"
     },
     {
       "path": ".config/ai-rulez/domains/core/rules/index.md",
-      "sha256": "7aef83c5317f0e4ea5a536c76713ec87e2fefd0f6f12ac098e8f722443ce8103",
-      "bytes": 210,
+      "sha256": "29c7ba4dce8a445dad2591c006b9a7a2f4b20936769a625b1d0ccf158762d6ca",
+      "bytes": 240,
+      "profile": "ai"
+    },
+    {
+      "path": ".config/ai-rulez/domains/core/rules/mise-usage.md",
+      "sha256": "3096a6211a026d0403d04848d08cf1c112e93e58d4c09356f1afb39b146696cc",
+      "bytes": 316,
       "profile": "ai"
     },
     {
@@ -137,8 +155,8 @@
     },
     {
       "path": ".config/ai-rulez/domains/core/rules/toolchains-usage.md",
-      "sha256": "cb3932a3468f24687b59a5cae3c64aff19b65b6762f424c9d4c031bc1f6d2f38",
-      "bytes": 1513,
+      "sha256": "9788458d7f72b25bb022dd376897152d143e8179d9f78b3822463ba2de22397a",
+      "bytes": 420,
       "profile": "ai"
     },
     {
@@ -272,6 +290,11 @@
       "profile": "go"
     },
     {
+      "path": ".config/hk.pkl",
+      "sha256": "03cd6be261b14d87c629cee77085b186cf9ef8c66133dae04a18d7e0eb18862b",
+      "bytes": 24
+    },
+    {
       "path": ".config/hk/ai.pkl",
       "sha256": "23cfc74f79e00c37cd75c204c27c176118a067697002c01479b7e86b16c96ba3",
       "bytes": 815,
@@ -302,8 +325,8 @@
     },
     {
       "path": ".config/hk/index.pkl",
-      "sha256": "7791e9a05283008ca86e3a0cd4d96c7b924cd7b697556a9cbb4a973fc7024695",
-      "bytes": 1516
+      "sha256": "cf316044982da02439da9d409402d9a2c1c3e2df585c105ab9488b37116be5ee",
+      "bytes": 1554
     },
     {
       "path": ".config/mise/config.ai.toml",
@@ -336,18 +359,13 @@
     },
     {
       "path": ".config/mise/config.toml",
-      "sha256": "322b51ae83ad6f11eddf0fb766715e6f6c4a7f5a3dbd13d9eaa29ca88dbdf4ac",
-      "bytes": 2506
-    },
-    {
-      "path": ".config/mise/config.typscript.toml",
-      "sha256": "117379c64f6e1e0faf8cad9bd7af8b637dbd55b09c22a8e6255784e4a8aba748",
-      "bytes": 42
+      "sha256": "b265ba6fb11902ca33fe5b9c2eb0927098214f13ab3159e1b6dc26c30a1d9b1d",
+      "bytes": 2473
     },
     {
       "path": ".config/miserc.toml",
-      "sha256": "96255770bc0632e32adc6615edf5239f0d4ad23711bbeb46f57e700e5ebc35c3",
-      "bytes": 233
+      "sha256": "745638332b8b2ac8d31845ace1a513ea3307333478bf402a07ede024d238c005",
+      "bytes": 63
     },
     {
       "path": ".config/ryl.toml",
@@ -431,8 +449,8 @@
     },
     {
       "path": ".gitignore",
-      "sha256": "ee357b6d9b7b26718a21266b978dfc92afb39c756a00c621f8cbfe6bb8e9af0f",
-      "bytes": 80,
+      "sha256": "8023da7d953073009714bc68efd76888631dbb148407063e5f83b3c6df2fd9b5",
+      "bytes": 340,
       "profile": "custom"
     },
     {

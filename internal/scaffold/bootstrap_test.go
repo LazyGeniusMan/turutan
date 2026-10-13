@@ -574,7 +574,7 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
-		enabled := []string{"core", "ai", "github", "custom"}
+		enabled := turutanconfig.NormalizeProfiles(turutanconfig.GetProfiles(map[string]any{"enabled_profiles": manifest.Prompts["enabled_profiles"].Default}))
 		enabledSet := map[string]bool{}
 		for _, id := range enabled {
 			enabledSet[id] = true

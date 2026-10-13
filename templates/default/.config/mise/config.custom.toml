@@ -24,7 +24,7 @@
 # Pin an extra tool just for this checkout:
 # [tools]
 # my-tool = "1"
-# 
+#
 
 [tasks."dev-setup:fnox-provider"]
 run = "echo 'fnox provider is not configured yet'"

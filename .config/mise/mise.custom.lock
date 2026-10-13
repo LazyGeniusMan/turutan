@@ -161,12 +161,9 @@ checksum = "sha256:158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e
 url = "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip"
 
 [[tools."npm:@earendil-works/pi-coding-agent"]]
-version = "1.1.0"
+version = "1.2.0"
 backend = "npm:@earendil-works/pi-coding-agent"
-specifiers = [
-    "1",
-    "1.1.0",
-]
+specifiers = ["1"]
 
 [[tools."npm:@opencode/cli"]]
 version = "2.0.27"
@@ -177,6 +174,6 @@ specifiers = ["2"]
 bun_args = "--trust"
 
 [[tools."npm:t3"]]
-version = "0.0.46-nightly.20261012.3035"
+version = "0.0.46-nightly.20261013.3042"
 backend = "npm:t3"
 specifiers = ["prefix:0.0.46-nightly"]

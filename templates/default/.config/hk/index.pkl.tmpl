@@ -17,6 +17,9 @@ import "./cpp.pkl" as cpp
 {{- if contains .enabled_profiles "csharp" }}
 import "./csharp.pkl" as csharp
 {{- end }}
+{{- if contains .enabled_profiles "custom" }}
+import "./custom.pkl" as custom
+{{- end }}
 {{- if contains .enabled_profiles "docker" }}
 import "./docker.pkl" as docker
 {{- end }}
@@ -59,8 +62,8 @@ import "./rust.pkl" as rust
 {{- if contains .enabled_profiles "typescript" }}
 import "./typescript.pkl" as typescript
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
-import "./custom.pkl" as custom
+{{- if contains .enabled_profiles "typst" }}
+import "./typst.pkl" as typst
 {{- end }}
 
 hooks {
@@ -124,6 +127,9 @@ hooks {
 {{- if contains .enabled_profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .enabled_profiles "typst" }}
+      ...typst.pre_commit
+{{- end }}
 {{- if contains .enabled_profiles "custom" }}
       ...custom.pre_commit
 {{- end }}
@@ -180,6 +186,9 @@ hooks {
 {{- end }}
 {{- if contains .enabled_profiles "typescript" }}
       ...typescript.pre_push_ci
+{{- end }}
+{{- if contains .enabled_profiles "typst" }}
+      ...typst.pre_push_ci
 {{- end }}
 {{- if contains .enabled_profiles "custom" }}
       ...custom.pre_push_ci
@@ -246,6 +255,9 @@ hooks {
 {{- if contains .enabled_profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .enabled_profiles "typst" }}
+      ...typst.pre_commit
+{{- end }}
 {{- if contains .enabled_profiles "custom" }}
       ...custom.pre_commit
 {{- end }}
@@ -302,6 +314,9 @@ hooks {
 {{- end }}
 {{- if contains .enabled_profiles "typescript" }}
       ...typescript.pre_push_ci
+{{- end }}
+{{- if contains .enabled_profiles "typst" }}
+      ...typst.pre_push_ci
 {{- end }}
 {{- if contains .enabled_profiles "custom" }}
       ...custom.pre_push_ci
@@ -376,6 +391,9 @@ hooks {
 {{- if contains .enabled_profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .enabled_profiles "typst" }}
+      ...typst.pre_commit
+{{- end }}
 {{- if contains .enabled_profiles "custom" }}
       ...custom.pre_commit
 {{- end }}
@@ -438,6 +456,9 @@ hooks {
 {{- if contains .enabled_profiles "typescript" }}
       ...typescript.pre_push
 {{- end }}
+{{- if contains .enabled_profiles "typst" }}
+      ...typst.pre_push
+{{- end }}
 {{- if contains .enabled_profiles "custom" }}
       ...custom.pre_push
 {{- end }}
@@ -445,11 +466,12 @@ hooks {
   }
   ["post-checkout"] {
     steps {
-      ["install-deps"] {
+      ["mise-install"] {
         step_condition = "is_branch_checkout"
         check = "mise install"
       }
-      ["dev-setup"] {
+      ["mise-dev-setup"] {
+        depends = "mise-install"
         step_condition = "is_branch_checkout"
         check = "mise run dev-setup:**"
       }

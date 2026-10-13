@@ -2,6 +2,7 @@
 
 * [Dev Ci Environment](dev-ci-environment.md)
 * [Hk Usage](hk-usage.md)
+* [Mise Usage](mise-usage.md)
 * [Toolchains Config](toolchains-config.md)
 * [Toolchains Usage](toolchains-usage.md)
 * [Updatecli Usage](updatecli-usage.md)

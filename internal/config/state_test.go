@@ -863,8 +863,8 @@ func TestDefaultTemplateProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest error: %v", err)
 	}
-	if len(got.Profiles) != 20 {
-		t.Errorf("profiles = %d, want 20 (core implicit)", len(got.Profiles))
+	if len(got.Profiles) != 21 {
+		t.Errorf("profiles = %d, want 21 (core implicit)", len(got.Profiles))
 	}
 	if _, ok := got.Profiles["core"]; ok {
 		t.Error("profiles has core, want core implicit only")
@@ -944,10 +944,13 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 			".config/mise/config.toml",
 			".config/tombi.toml",
 			".config/updatecli/mise-core.yaml",
-			".gitignore",
 			".vscode/**",
 			"hooks/**",
 			".config/miserc.toml.tmpl",
+			".config/ai-rulez/config.toml.tmpl",
+			".config/ai-rulez/domains/index.md",
+			".config/ai-rulez/domains/pkl/.gitkeep",
+			".config/hk.pkl.tmpl",
 		}
 		isCore := func(rel string) bool {
 			for _, pattern := range coreGlobs {
@@ -971,6 +974,7 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 			".config/mise/config.custom.toml",
 			".config/fnox.toml",
 			".config/hk/custom.pkl",
+			".gitignore",
 		} {
 			if owners := ProfilesForPath(manifest, nil, rel); !slices.Equal(owners, []string{"custom"}) {
 				t.Errorf("%s owners = %v, want [custom]", rel, owners)
@@ -978,6 +982,9 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 			if isCore(rel) {
 				t.Errorf("%s in core set, want custom-owned only", rel)
 			}
+		}
+		sharedOwned := []string{
+			".config/ai-rulez/domains/yml/.gitkeep",
 		}
 		root := filepath.Join("..", "..", "templates", "default")
 		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -1007,7 +1014,7 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 				t.Errorf("orphan file %q unowned and not in core set", rel)
 				return nil
 			}
-			if len(owners) > 2 || (len(owners) == 2 && !slices.Contains(owners, "ai")) {
+			if !slices.Contains(sharedOwned, rel) && (len(owners) > 2 || (len(owners) == 2 && !slices.Contains(owners, "ai"))) {
 				t.Errorf("file %q owned by %v, want at most one plus ai co-ownership", rel, owners)
 			}
 			return nil

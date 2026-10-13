@@ -1,5 +1,2 @@
-# Active profiles from enabled_profiles prompt.
-# Per-profile toolchains in .config/mise/config.<profile>.toml;
-# core in config.toml plus core-always config.linux.toml.
 env = [{{ range $i, $p := .enabled_profiles }}{{ if $i }}, {{ end }}"{{ $p }}"{{ end }}]
 auto_env = true
