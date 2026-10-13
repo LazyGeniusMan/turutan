@@ -1,7 +1,7 @@
 {
   "source": "templates/default",
-  "resolved_sha": "f46b7bc2ce6d6ed82a31c6af204a9cf28c6e693de407d8e88e44a4933b15ef7b",
-  "manifest_hash": "sha256:15a4da2f2f78b0ba8436be2b8d13a2ed443e57c085d62ba3c8864a8660bf957e",
+  "resolved_sha": "a54ff724106d364e00de36d6e00b48f5b1cb37127aa84a109ea5e5bfa9c7b34d",
+  "manifest_hash": "sha256:e4a1d72ba1a7cfc20d779268823b1ff6b512b51a6c4a98e9d7ce701e96dac9fe",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -137,20 +137,14 @@
     },
     {
       "path": ".config/ai-rulez/domains/core/rules/index.md",
-      "sha256": "5e9506d25d6456412e651b2a4f10cb1bdabea90428cc4bd51af5065ed6b909c4",
-      "bytes": 294,
+      "sha256": "29c7ba4dce8a445dad2591c006b9a7a2f4b20936769a625b1d0ccf158762d6ca",
+      "bytes": 240,
       "profile": "ai"
     },
     {
       "path": ".config/ai-rulez/domains/core/rules/mise-usage.md",
       "sha256": "3096a6211a026d0403d04848d08cf1c112e93e58d4c09356f1afb39b146696cc",
       "bytes": 316,
-      "profile": "ai"
-    },
-    {
-      "path": ".config/ai-rulez/domains/core/rules/subagent-model-pinning.md",
-      "sha256": "3ebd05164ecbfa33310600754ebc8c89eefa547d305086aea2c558387a02aa7d",
-      "bytes": 571,
       "profile": "ai"
     },
     {
