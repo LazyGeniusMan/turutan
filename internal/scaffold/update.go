@@ -1223,7 +1223,7 @@ func renderUpdateWithData(
 	stdin io.Reader,
 ) error {
 	for range maxInputAttempts {
-		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "update"); err != nil {
+		if err := ensureInputValues(data, manifest, profiles, opts.NonInteractive, opts.Defaults, stdout, stdin, "update"); err != nil {
 			return err
 		}
 		normalizeDataWithManifest(data, manifest)
@@ -1248,7 +1248,7 @@ func renderUpdateWithData(
 			}
 			return fmt.Errorf("update: missing data for key %q (use --data-file or --defaults): %w", key, err)
 		}
-		if err := inputMissingKey(data, manifest, stdout, stdin, key); err != nil {
+		if err := inputMissingKey(data, manifest, profiles, stdout, stdin, key); err != nil {
 			return err
 		}
 	}

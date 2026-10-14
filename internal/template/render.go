@@ -11,36 +11,20 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
-
+	"github.com/LazyGeniusMan/turutan/internal/condition"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
 const tmplSuffix = ".tmpl"
 
-type MissingKeyError struct {
-	Key string
-	Err error
-}
-
-func (e *MissingKeyError) Error() string {
-	return e.Err.Error()
-}
-
-func (e *MissingKeyError) Unwrap() error { return e.Err }
+// MissingKeyError reports the data key absent when a render or predicate
+// executed. It aliases condition.MissingKeyError so config can share the
+// same retry-path type without an import cycle.
+// ~keep
+type MissingKeyError = condition.MissingKeyError
 
 func parseMissingKey(err error) string {
-	const marker = `no entry for key "`
-	msg := err.Error()
-	_, after, ok := strings.Cut(msg, marker)
-	if !ok {
-		return ""
-	}
-	key, _, ok := strings.Cut(after, `"`)
-	if !ok {
-		return ""
-	}
-	return key
+	return condition.ParseMissingKey(err)
 }
 
 type Conditional struct {
@@ -71,50 +55,25 @@ func isSkippedPath(slash string) bool {
 }
 
 func containsFunc(a, b any) bool {
-	if needle, ok := a.(string); ok {
-		if haystack, ok := b.(string); ok {
-			return strings.Contains(haystack, needle)
-		}
-		return sliceContains(b, needle)
-	}
-	if needle, ok := b.(string); ok {
-		return sliceContains(a, needle)
-	}
-	return false
-}
-
-func sliceContains(haystack any, needle string) bool {
-	switch v := haystack.(type) {
-	case nil:
-		return false
-	case string:
-		return strings.Contains(v, needle)
-	case []string:
-		return slices.Contains(v, needle)
-	case []any:
-		for _, el := range v {
-			if s, ok := el.(string); ok {
-				if s == needle {
-					return true
-				}
-				continue
-			}
-			if fmt.Sprint(el) == needle {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
+	return condition.Contains(a, b)
 }
 
 func templateFuncMap() map[string]any {
-	funcs := sprig.TxtFuncMap()
-	delete(funcs, "env")
-	delete(funcs, "expandenv")
-	funcs["contains"] = containsFunc
-	return funcs
+	return condition.TemplateFuncMap()
+}
+
+// EvaluatePredicate evaluates one `if` predicate against view with the same
+// funcs and missingkey=error option as EvaluateSkip. Empty predicates
+// report true so callers ask rather than silently skip.
+// ~keep
+func EvaluatePredicate(ifExpr string, view map[string]any) (bool, error) {
+	return condition.EvaluatePredicate(ifExpr, view)
+}
+
+// ParseConditionalBool reports the boolean meaning of a rendered predicate.
+// ~keep
+func ParseConditionalBool(s string) (bool, error) {
+	return condition.ParseConditionalBool(s)
 }
 
 // EvaluateSkip evaluates conditional skip globs against data.

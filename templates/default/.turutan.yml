@@ -27,6 +27,7 @@ inputs:
     default: ""
   enabled_ai_agents:
     question: "Enabled AI Agents (comma-separated)"
+    if: '{{contains .profiles "ai"}}'
     type: array
     default: ["opencode", "pi"]
     options:

@@ -19,6 +19,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"gopkg.in/yaml.v3"
 
+	"github.com/LazyGeniusMan/turutan/internal/condition"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
@@ -94,6 +95,7 @@ type ManifestInput struct {
 	Type     string   `yaml:"type"`
 	Options  []string `yaml:"options"`
 	Help     string   `yaml:"help"`
+	If       string   `yaml:"if,omitempty"`
 }
 
 type ManifestConditional struct {
@@ -701,17 +703,46 @@ func DiffProfiles(oldProfiles []string, oldData map[string]any, newManifest *Man
 	}
 	slices.Sort(diff.Added)
 	slices.Sort(diff.Removed)
-	for key := range newManifest.Inputs {
-		if oldData == nil {
-			diff.NewInputs = append(diff.NewInputs, key)
-			continue
+	view := inputPredicateView(oldData, oldProfiles)
+	for key, def := range newManifest.Inputs {
+		if oldData != nil {
+			if _, ok := oldData[key]; ok {
+				continue
+			}
 		}
-		if _, ok := oldData[key]; !ok {
-			diff.NewInputs = append(diff.NewInputs, key)
+		if strings.TrimSpace(def.If) != "" {
+			ask, err := condition.EvaluatePredicate(def.If, view)
+			if err == nil && !ask {
+				continue
+			}
 		}
+		diff.NewInputs = append(diff.NewInputs, key)
 	}
 	slices.Sort(diff.NewInputs)
 	return diff
+}
+
+func inputPredicateView(data map[string]any, profiles []string) map[string]any {
+	view := make(map[string]any, len(data)+1)
+	for key, val := range data {
+		view[key] = val
+	}
+	view["profiles"] = NormalizeProfiles(splitProfileIDs(profiles))
+	return view
+}
+
+func splitProfileIDs(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		for _, part := range strings.Split(id, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func writeJSON(dir, name string, value any) error {

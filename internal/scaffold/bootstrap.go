@@ -307,7 +307,7 @@ func renderWithData(
 	}
 	cleanup := func() { _ = os.RemoveAll(stage) }
 	for range maxInputAttempts {
-		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, profiles, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
 			return "", cleanup, err
 		}
 		normalizeDataWithManifest(data, manifest)
@@ -336,7 +336,7 @@ func renderWithData(
 				"bootstrap: missing data for key %q "+"(use --data-file or --defaults): %w",
 				key, err)
 		}
-		if err := inputMissingKey(data, manifest, stdout, stdin, key); err != nil {
+		if err := inputMissingKey(data, manifest, profiles, stdout, stdin, key); err != nil {
 			return "", cleanup, err
 		}
 	}
@@ -346,6 +346,7 @@ func renderWithData(
 func ensureInputValues(
 	data map[string]any,
 	manifest *config.Manifest,
+	profiles []string,
 	nonInteractive, defaults bool,
 	stdout io.Writer,
 	stdin io.Reader,
@@ -354,38 +355,114 @@ func ensureInputValues(
 	if manifest == nil {
 		return nil
 	}
-	for _, key := range inputOrder(manifest) {
-		if _, ok := data[key]; ok {
-			continue
+	order := inputOrder(manifest)
+	force := false
+	for range maxInputAttempts {
+		deferred := 0
+		progressed := false
+		for _, key := range order {
+			if _, ok := data[key]; ok {
+				continue
+			}
+			def := manifest.Inputs[key]
+			ask, err := ShouldAskInput(manifest, key, renderDataView(data, profiles))
+			if err != nil {
+				if _, ok := AsMissingKey(err); ok {
+					if !force {
+						deferred++
+						continue
+					}
+				} else {
+					return err
+				}
+			} else if !ask {
+				if def.Default != nil {
+					data[key] = manifestDefaultCopy(def.Default)
+					progressed = true
+				}
+				continue
+			}
+			if defaults && def.Default != nil {
+				data[key] = manifestDefaultCopy(def.Default)
+				progressed = true
+				continue
+			}
+			if nonInteractive {
+				return fmt.Errorf(
+					"%s: missing value for key %q (use --data-file or --defaults)",
+					op, key)
+			}
+			value, err := inputForKey(stdout, stdin, key, def)
+			if err != nil {
+				return err
+			}
+			data[key] = value
+			progressed = true
 		}
-		def := manifest.Inputs[key]
-		if defaults && def.Default != nil {
-			data[key] = manifestDefaultCopy(def.Default)
-			continue
+		if deferred == 0 {
+			return nil
 		}
-		if nonInteractive {
-			return fmt.Errorf(
-				"%s: missing value for key %q (use --data-file or --defaults)",
-				op, key)
+		if !progressed {
+			if force {
+				return fmt.Errorf("%s: too many missing values (over %d inputs)", op, maxInputAttempts)
+			}
+			force = true
 		}
-		value, err := inputForKey(stdout, stdin, key, def)
-		if err != nil {
-			return err
-		}
-		data[key] = value
 	}
-	return nil
+	return fmt.Errorf("%s: too many missing values (over %d inputs)", op, maxInputAttempts)
 }
 
 func inputMissingKey(
 	data map[string]any,
 	manifest *config.Manifest,
+	profiles []string,
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
 ) error {
+	return inputMissingKeySeen(data, manifest, profiles, stdout, stdin, key, map[string]bool{})
+}
+
+func inputMissingKeySeen(
+	data map[string]any,
+	manifest *config.Manifest,
+	profiles []string,
+	stdout io.Writer,
+	stdin io.Reader,
+	key string,
+	seen map[string]bool,
+) error {
 	if manifest != nil {
 		if def, ok := manifest.Inputs[key]; ok {
+			if seen[key] {
+				return fmt.Errorf("circular input condition involving %q", key)
+			}
+			seen[key] = true
+			ask, err := ShouldAskInput(manifest, key, renderDataView(data, profiles))
+			if err != nil {
+				if missing, ok := AsMissingKey(err); ok {
+					if _, present := data[missing]; !present {
+						if _, isInput := manifest.Inputs[missing]; isInput {
+							if err := inputMissingKeySeen(data, manifest, profiles, stdout, stdin, missing, seen); err != nil {
+								return err
+							}
+							ask, err = ShouldAskInput(manifest, key, renderDataView(data, profiles))
+							if err != nil {
+								return err
+							}
+						}
+					}
+				} else {
+					return err
+				}
+			}
+			if err == nil && !ask {
+				if def.Default != nil {
+					data[key] = manifestDefaultCopy(def.Default)
+					return nil
+				}
+				return fmt.Errorf("template needs %q but it is skipped by its `if` condition and has no default", key)
+			}
 			value, err := inputForKey(stdout, stdin, key, def)
 			if err != nil {
 				return err

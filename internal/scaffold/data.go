@@ -518,3 +518,29 @@ func renderDataView(data map[string]any, profiles []string) map[string]any {
 	view["profiles"] = config.NormalizeProfiles(splitProfilesValue(profiles))
 	return view
 }
+
+// ShouldAskInput reports whether input key must be prompted, evaluating its
+// `if` predicate against dataView (built by renderDataView, so `.profiles`
+// plus answered inputs are visible) with the same funcs and
+// missingkey=error option as file conditionals. Empty `if` means always
+// ask. Unknown keys ask. Missing keys in the predicate return the
+// input-missing retry error, never a silent skip.
+//
+// Skipped inputs take the author default with no prompt, even when
+// interactive; a skipped input with no default stays absent, so a later
+// `{{.key}}` render reference missingkey-errors and re-asks only when the
+// predicate holds by then.
+// ~keep
+func ShouldAskInput(manifest *config.Manifest, key string, dataView map[string]any) (bool, error) {
+	if manifest == nil {
+		return true, nil
+	}
+	def, ok := manifest.Inputs[key]
+	if !ok {
+		return true, nil
+	}
+	if strings.TrimSpace(def.If) == "" {
+		return true, nil
+	}
+	return template.EvaluatePredicate(def.If, dataView)
+}
