@@ -1,0 +1,161 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      t3:
+        specifier: 0.0.46-nightly.20261013.3080
+        version: 0.0.46-nightly.20261013.3080
+
+packages:
+
+  '@t3code/t3-darwin-arm64@0.0.46-nightly.20261013.3080':
+    resolution: {integrity: sha512-uZOjXNOwU5GPa56A/Wn2FuHhgZM/v2Y43mSHxhBTl5rv5loKOQtU4A/jpDk6zBCFltX5LA1FO59xgGKGZl8TWA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@t3code/t3-linux-arm64@0.0.46-nightly.20261013.3080':
+    resolution: {integrity: sha512-90alr3aL6O66Cwho+O/loGxevqoAUXaHeBzYG5rJB9T9ttZQrQBDTOQCezVMacgICJuXHR/3EDPxcv0sLac3gQ==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@t3code/t3-linux-x64@0.0.46-nightly.20261013.3080':
+    resolution: {integrity: sha512-MDySNm6nYCFhCC7LvywafztmoLWmN0w3VB0e5BKoHfx0K8xjkzryCcQyjAGgvWlk8lcasyc7d2fbl/p7KWACVw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@t3code/t3-win32-arm64@0.0.46-nightly.20261013.3080':
+    resolution: {integrity: sha512-hFwkDFdHyTXXi3BQCXVSmyrBUOC5JCFTVzA32L5dap5tZDPcwg0zOE+CTQmXTc/4tv336ltsTRAM6fW3N0HnXg==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@t3code/t3-win32-x64@0.0.46-nightly.20261013.3080':
+    resolution: {integrity: sha512-K1r4/xLpXkFlBYidmFWDBNdhOj1oMCzbkl5NpT6zsKniMfA0cLpZbsY/a8hhQgvvwTKkpdMPnHFC2kKr98x5IA==}
+    cpu: [x64]
+    os: [win32]
+
+  t3@0.0.46-nightly.20261013.3080:
+    resolution: {integrity: sha512-VJlRmN3juHMesdf3zfTfRk1c/F0srWdnJ06oqQBmkxd0ghZCD7Z9249U36I8utB9PaW3oQfQvCGiyPpynR+u1w==}
+    hasBin: true
+
+snapshots:
+
+  '@t3code/t3-darwin-arm64@0.0.46-nightly.20261013.3080':
+    optional: true
+    bundledDependencies:
+      - '@bufbuild/protobuf'
+      - '@connectrpc/connect'
+      - '@connectrpc/connect-web'
+      - '@cursor/sdk'
+      - '@cursor/sdk-darwin-arm64'
+      - '@ff-labs/fff-bin-darwin-arm64'
+      - '@ff-labs/fff-node'
+      - '@napi-rs/keyring'
+      - '@napi-rs/keyring-darwin-arm64'
+      - '@statsig/client-core'
+      - '@statsig/js-client'
+      - '@yuuang/ffi-rs-darwin-arm64'
+      - ffi-rs
+      - node-addon-api
+      - node-pty
+      - playwright-core
+      - zod
+
+  '@t3code/t3-linux-arm64@0.0.46-nightly.20261013.3080':
+    optional: true
+    bundledDependencies:
+      - '@bufbuild/protobuf'
+      - '@connectrpc/connect'
+      - '@connectrpc/connect-web'
+      - '@cursor/sdk'
+      - '@cursor/sdk-linux-arm64'
+      - '@ff-labs/fff-bin-linux-arm64-gnu'
+      - '@ff-labs/fff-bin-linux-arm64-musl'
+      - '@ff-labs/fff-node'
+      - '@napi-rs/keyring'
+      - '@napi-rs/keyring-linux-arm64-gnu'
+      - '@statsig/client-core'
+      - '@statsig/js-client'
+      - '@yuuang/ffi-rs-linux-arm64-gnu'
+      - ffi-rs
+      - node-addon-api
+      - node-pty
+      - playwright-core
+      - zod
+
+  '@t3code/t3-linux-x64@0.0.46-nightly.20261013.3080':
+    optional: true
+    bundledDependencies:
+      - '@bufbuild/protobuf'
+      - '@connectrpc/connect'
+      - '@connectrpc/connect-web'
+      - '@cursor/sdk'
+      - '@cursor/sdk-linux-x64'
+      - '@ff-labs/fff-bin-linux-x64-gnu'
+      - '@ff-labs/fff-bin-linux-x64-musl'
+      - '@ff-labs/fff-node'
+      - '@napi-rs/keyring'
+      - '@napi-rs/keyring-linux-x64-gnu'
+      - '@statsig/client-core'
+      - '@statsig/js-client'
+      - '@yuuang/ffi-rs-linux-x64-gnu'
+      - ffi-rs
+      - node-addon-api
+      - node-pty
+      - playwright-core
+      - zod
+
+  '@t3code/t3-win32-arm64@0.0.46-nightly.20261013.3080':
+    optional: true
+    bundledDependencies:
+      - '@bufbuild/protobuf'
+      - '@connectrpc/connect'
+      - '@connectrpc/connect-web'
+      - '@cursor/sdk'
+      - '@ff-labs/fff-bin-win32-arm64'
+      - '@ff-labs/fff-node'
+      - '@napi-rs/keyring'
+      - '@napi-rs/keyring-win32-arm64-msvc'
+      - '@statsig/client-core'
+      - '@statsig/js-client'
+      - '@yuuang/ffi-rs-win32-arm64-msvc'
+      - ffi-rs
+      - node-addon-api
+      - node-pty
+      - playwright-core
+      - zod
+
+  '@t3code/t3-win32-x64@0.0.46-nightly.20261013.3080':
+    optional: true
+    bundledDependencies:
+      - '@bufbuild/protobuf'
+      - '@connectrpc/connect'
+      - '@connectrpc/connect-web'
+      - '@cursor/sdk'
+      - '@cursor/sdk-win32-x64'
+      - '@ff-labs/fff-bin-win32-x64'
+      - '@ff-labs/fff-node'
+      - '@napi-rs/keyring'
+      - '@napi-rs/keyring-win32-x64-msvc'
+      - '@statsig/client-core'
+      - '@statsig/js-client'
+      - '@yuuang/ffi-rs-win32-ia32-msvc'
+      - '@yuuang/ffi-rs-win32-x64-msvc'
+      - ffi-rs
+      - node-addon-api
+      - node-pty
+      - playwright-core
+      - zod
+
+  t3@0.0.46-nightly.20261013.3080:
+    optionalDependencies:
+      '@t3code/t3-darwin-arm64': 0.0.46-nightly.20261013.3080
+      '@t3code/t3-linux-arm64': 0.0.46-nightly.20261013.3080
+      '@t3code/t3-linux-x64': 0.0.46-nightly.20261013.3080
+      '@t3code/t3-win32-arm64': 0.0.46-nightly.20261013.3080
+      '@t3code/t3-win32-x64': 0.0.46-nightly.20261013.3080

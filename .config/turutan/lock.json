@@ -1,7 +1,7 @@
 {
   "source": "templates/default",
   "resolved_sha": "5671e1e9d59da0181991d69352fa04e3a5bfd439b3b0fbe47843625080889180",
-  "manifest_hash": "sha256:eeca3e8182e2e95355b40466a8cf6dc3f8cd24fc9a83118b8e76b0e9b376db9e",
+  "manifest_hash": "sha256:a9c44960aa19f38426514821f1d7d1470e2dd949b502535bffda341749dfb51e",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -265,8 +265,8 @@
     },
     {
       "path": ".config/mise/config.custom.toml",
-      "sha256": "fc8a37b3d8c3afae00e2426e4a1b4753594045f04070db09b37d374cf620662c",
-      "bytes": 2101,
+      "sha256": "d99e741248b2a709b45d1aa340582105c876ce88ca91e1b5ff191b999f3522a8",
+      "bytes": 2065,
       "profile": "custom"
     },
     {
