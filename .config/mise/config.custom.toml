@@ -28,22 +28,11 @@ init = "mise run dev-setup:fnox"
 run = "exec fnox x -- t3 serve --port $PORT --dev-url {{ env.PROXY_URI | replace(from='{{port}}', to=env.PORT) }}"
 port = 3773
 
-[daemons.basemind-comms]
-run = "exec basemind comms daemon"
-
 [tasks."dev-setup:ai-rulez"]
 depends = "dev-setup:fnox"
 secrets = ["KEENABLE_API_KEY", "FNOX_GITHUB_TOKEN"]
 env = { "AI_RULEZ_GIT_TOKEN" = "{{ secrets.FNOX_GITHUB_TOKEN }}" }
 run = "ai-rulez migrate okf && ai-rulez generate"
-
-[tasks."dev-setup:basemind"]
-run = "basemind scan"
-
-[tasks."dev-setup:basemind-comms"]
-depends = "dev-setup:basemind"
-daemons = "basemind-comms"
-run = "echo 'basemind comms is running '"
 
 [tasks."dev:opencode:start"]
 depends = "dev-setup:fnox"
