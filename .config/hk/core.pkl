@@ -17,6 +17,7 @@ pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   }
   ["pkl"] = (Builtins.pkl) {
     profiles = List("core")
+    exclude = List("templates/**/hk.pkl")
     depends = "pkl-format"
   }
   ["tombi-format"] = (Builtins.tombi_format) {

@@ -1,7 +1,7 @@
 {
   "source": "templates/default",
-  "resolved_sha": "1bd0b4c2ab26a0487bb36751456a661ca62e5bab97c3289d8a6a4a787e9177e4",
-  "manifest_hash": "sha256:cf958074901a30ed1f24fed58857adfce50098f344f759075620d07d624cceb3",
+  "resolved_sha": "a4514373b90fa03bd953723c87742789dc870e0db5d4ebdee0f150f0ee537565",
+  "manifest_hash": "sha256:beb9bf562aad01f5667cfa49481713586d9326ca4fcff516347f63c057697fdf",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -225,8 +225,8 @@
     },
     {
       "path": ".config/hk/core.pkl",
-      "sha256": "7b9022bab49fe3a5fd481b9fd1c2586d23eebcb6773a97ad6b1d94e687fb3f23",
-      "bytes": 1787
+      "sha256": "7f006c7b822b8a0292ab4b36b665e8f736be25b16709febfb1a93d4c534daffb",
+      "bytes": 1829
     },
     {
       "path": ".config/hk/custom.pkl",
@@ -236,8 +236,8 @@
     },
     {
       "path": ".config/hk/github.pkl",
-      "sha256": "4afeabb5b6fab2c49ade05469fa004416b32cec73d6ce06f00b1e7210ae83e53",
-      "bytes": 658,
+      "sha256": "87e439b2c20ea3db96986e846374c9ff0ff8d2de0d8218849f28f8180e90fda1",
+      "bytes": 702,
       "profile": "github"
     },
     {
