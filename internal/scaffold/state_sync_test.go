@@ -67,7 +67,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
 		projectDir := initProject(t, src)
 		old := storedCommit(t, projectDir)
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi proj\n" {
 			t.Fatalf("greet.txt = %q, want defaulted init render", got)
 		}
@@ -78,7 +78,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StateSync error: %v", err)
 		}
-		got, _ = os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ = os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi edited\n" {
 			t.Errorf("greet.txt = %q, want hand-edited re-render", got)
 		}
@@ -117,7 +117,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StateSync error: %v", err)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "changed proj\n" {
 			t.Errorf("greet.txt = %q, want the live stored-path render", got)
 		}
@@ -163,7 +163,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		if result.Old != old || result.New != old {
 			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, old)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi proj\n" {
 			t.Errorf("greet.txt = %q, want preview to leave the tree alone", got)
 		}
@@ -189,7 +189,7 @@ func TestStateSyncLocalGitPinned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StateSync error: %v", err)
 	}
-	got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+	got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 	if string(got) != "hi proj\n" {
 		t.Errorf("greet.txt = %q, want pinned render without upstream drift", got)
 	}
@@ -206,7 +206,7 @@ func TestStateSyncRemoteGitCacheHit(t *testing.T) {
 	cacheHome := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	cached := filepath.Join(cacheHome, "turutan", "default", sha, "templates", "default")
-	if err := os.MkdirAll(cached, 0o755); err != nil {
+	if err := os.MkdirAll(cached, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	writeFiles(t, cached, map[string]string{
@@ -243,7 +243,7 @@ func TestStateSyncRemoteGitCacheHit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StateSync cache-hit error: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+	got, err := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 	if err != nil || string(got) != "hey cached\n" {
 		t.Errorf("greet.txt = %q, want cached pinned render", got)
 	}
@@ -305,7 +305,7 @@ func TestStateInput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StateInput error: %v", err)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi newproj\n" {
 			t.Errorf("greet.txt = %q, want re-answered render", got)
 		}
@@ -332,7 +332,7 @@ func TestStateInput(t *testing.T) {
 		if _, err := StateInput(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("StateInput error: %v", err)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi proj\n" {
 			t.Errorf("greet.txt = %q, want unchanged render", got)
 		}
@@ -369,7 +369,7 @@ func TestStateInput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StateInput error: %v", err)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi overlaid\n" {
 			t.Errorf("greet.txt = %q, want overlaid re-render", got)
 		}
@@ -400,7 +400,7 @@ func TestStateInput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("StateInput error: %v", err)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "changed proj\n" {
 			t.Errorf("greet.txt = %q, want the live stored-path render", got)
 		}

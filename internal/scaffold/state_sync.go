@@ -23,6 +23,8 @@ import (
 
 var pinnedSHARe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
+// SyncOptions tunes the StateSync re-render at the pinned commit.
+// ~keep
 type SyncOptions struct {
 	Conflict       ConflictMode
 	Force          bool
@@ -36,6 +38,8 @@ type SyncOptions struct {
 	Stdin          io.Reader
 }
 
+// InputOptions tunes the StateInput re-prompt before re-rendering.
+// ~keep
 type InputOptions struct {
 	Conflict       ConflictMode
 	Force          bool
@@ -51,6 +55,8 @@ type InputOptions struct {
 	Stdin          io.Reader
 }
 
+// StateSync re-renders the project at its pinned commit after hand-edited state data.
+// ~keep
 func StateSync(
 	ctx context.Context,
 	projectDir string,
@@ -88,6 +94,8 @@ func StateSync(
 		uopts, stdout, stderr, stdin, "")
 }
 
+// StateInput re-prompts template inputs, then re-renders at the pinned commit.
+// ~keep
 func StateInput(
 	ctx context.Context,
 	projectDir string,
@@ -219,7 +227,7 @@ func runStateSync(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	src *template.Source,
+	_ *template.Source,
 	fetched *template.Fetched,
 	manifest *config.Manifest,
 	data map[string]any,

@@ -19,6 +19,8 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
+// Init initializes a new project at target from the given template source.
+// ~keep
 func Init(
 	ctx context.Context,
 	source, target string,

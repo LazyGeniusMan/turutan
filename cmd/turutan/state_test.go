@@ -132,7 +132,7 @@ func TestStateSyncCmd(t *testing.T) {
 		if !strings.Contains(stdout.String(), "synced") {
 			t.Errorf("stdout = %q, want the synced summary", stdout.String())
 		}
-		got, err := os.ReadFile(filepath.Join(dst, "greet.txt"))
+		got, err := os.ReadFile(filepath.Join(dst, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil || string(got) != "hi edited\n" {
 			t.Errorf("greet.txt = %q, want hand-edited re-render", got)
 		}

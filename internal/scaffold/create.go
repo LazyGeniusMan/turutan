@@ -21,6 +21,8 @@ const createRoot = "createdata"
 
 const createHookScript = "hooks/post-setup.sh"
 
+// CreateOptions tunes the Create template-authoring scaffold.
+// ~keep
 type CreateOptions struct {
 	Force   bool
 	Verbose bool
@@ -28,6 +30,8 @@ type CreateOptions struct {
 	Stderr  io.Writer
 }
 
+// Create scaffolds a new template-authoring project at dir.
+// ~keep
 func Create(dir string, opts CreateOptions) error {
 	stdout, stderr, _ := resolveStreams(opts.Stdout, opts.Stderr, nil)
 	abs, err := filepath.Abs(dir)

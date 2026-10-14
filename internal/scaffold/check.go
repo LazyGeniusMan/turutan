@@ -19,6 +19,8 @@ import (
 
 const shortSHALen = 12
 
+// CheckOptions tunes the Check update-availability probe.
+// ~keep
 type CheckOptions struct {
 	Ref     string
 	Engine  string
@@ -27,12 +29,16 @@ type CheckOptions struct {
 	Stderr  io.Writer
 }
 
+// CheckResult reports whether a newer template revision is available.
+// ~keep
 type CheckResult struct {
 	Available bool
 	Old       string
 	New       string
 }
 
+// Check reports whether the project's pinned template has an update available.
+// ~keep
 func Check(
 	ctx context.Context,
 	projectDir string,

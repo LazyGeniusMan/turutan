@@ -140,7 +140,7 @@ func renderCreated(t *testing.T, src string, data map[string]any) string {
 
 func readRendered(t *testing.T, dst, name string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dst, filepath.FromSlash(name)))
+	data, err := os.ReadFile(filepath.Join(dst, filepath.FromSlash(name))) // #nosec G304 -- test-only rendered path under t.TempDir(), not external input
 	if err != nil {
 		t.Fatalf("reading rendered %q: %v", name, err)
 	}

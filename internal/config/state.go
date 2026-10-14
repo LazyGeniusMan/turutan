@@ -22,6 +22,8 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
+// State and lock artifact file names shared by the CLI and scaffold engine.
+// ~keep
 const (
 	StateFileName       = ".config/turutan/state.yml"
 	LockFileName        = ".config/turutan/lock.json"
