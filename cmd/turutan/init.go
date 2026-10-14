@@ -13,7 +13,7 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-type bootstrapFlags struct {
+type initFlags struct {
 	ref        string
 	subpath    string
 	dataFile   string
@@ -25,10 +25,10 @@ type bootstrapFlags struct {
 	template   string
 }
 
-func newBootstrapCmd() *cobra.Command {
-	flags := &bootstrapFlags{}
+func newInitCmd() *cobra.Command {
+	flags := &initFlags{}
 	cmd := &cobra.Command{
-		Use:   "bootstrap [source] [dir]",
+		Use:   "init [source] [dir]",
 		Short: "Scaffold a new project from a template source",
 		Args:  cobra.RangeArgs(0, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -43,24 +43,24 @@ func newBootstrapCmd() *cobra.Command {
 					dir = args[1]
 				}
 			}
-			return runBootstrap(cmd, source, dir, flags)
+			return runInit(cmd, source, dir, flags)
 		},
 	}
 	cmd.Flags().StringVar(&flags.ref, "ref", "", "override the requested template ref for this run")
-	cmd.Flags().StringVar(&flags.subpath, "subpath", "", "override the URI //subpath at bootstrap")
+	cmd.Flags().StringVar(&flags.subpath, "subpath", "", "override the URI //subpath at init")
 	cmd.Flags().StringVar(&flags.dataFile, "data-file", "", "load template data from a YAML/JSON file (see go doc text/template for data/dot terms)")
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false,
 		"seed project_name from target basename; data-file overlay wins")
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "",
-		"conflict record mode for future updates (inline|rej; stored in .config/turutan/state.json)")
+		"conflict record mode for future updates (inline|rej; stored in .config/turutan/state.yml)")
 	cmd.Flags().StringVar(&flags.skip, "skip", "", "comma-separated template paths kept as-is")
-	cmd.Flags().BoolVar(&flags.force, "force", false, "bootstrap into a non-empty directory")
+	cmd.Flags().BoolVar(&flags.force, "force", false, "init into a non-empty directory")
 	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared hooks")
 	cmd.Flags().StringVar(&flags.template, "template", "", "default template source (used when no source arg is given)")
 	return cmd
 }
 
-func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags) error {
+func runInit(cmd *cobra.Command, source, dir string, flags *initFlags) error {
 	var skip []string
 	for entry := range strings.SplitSeq(flags.skip, ",") {
 		if trimmed := strings.TrimSpace(entry); trimmed != "" {
@@ -71,8 +71,8 @@ func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags)
 	if err := conflict.Validate(); err != nil {
 		return err
 	}
-	source = resolveBootstrapSource(source, flags.template, dir)
-	return scaffold.Bootstrap(cmd.Context(), source, dir, scaffold.Options{
+	source = resolveInitSource(source, flags.template, dir)
+	return scaffold.Init(cmd.Context(), source, dir, scaffold.Options{
 		NonInteractive: appCfg.nonInteractive,
 		Force:          flags.force,
 		Conflict:       conflict,
@@ -90,11 +90,11 @@ func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags)
 	})
 }
 
-func resolveBootstrapSource(arg, templateFlag, targetDir string) string {
-	return resolveBootstrapSourceWithViper(viper.GetViper(), arg, templateFlag, targetDir)
+func resolveInitSource(arg, templateFlag, targetDir string) string {
+	return resolveInitSourceWithViper(viper.GetViper(), arg, templateFlag, targetDir)
 }
 
-func resolveBootstrapSourceWithViper(v *viper.Viper, arg, templateFlag, targetDir string) string {
+func resolveInitSourceWithViper(v *viper.Viper, arg, templateFlag, targetDir string) string {
 	envVal, _ := os.LookupEnv(config.EnvTemplateOverride)
 	var projectTemplate string
 	if state, err := config.LoadState(os.DirFS(targetDir)); err == nil {

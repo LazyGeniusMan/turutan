@@ -20,12 +20,12 @@ mise run pre-push:all
 mise run pre-push:all   # release-style static binary with version ldflags
 
 # Scaffold from the built-in default (a remote-git source in this repo).
-turutan bootstrap git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=templates-default/v1 ./myapp --defaults
+turutan init git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=main ./myapp --defaults
 # Bare source resolves the same remote default; a local path works offline.
-turutan bootstrap ./templates/default ./myapp --defaults
+turutan init ./templates/default ./myapp --defaults
 
 cd myapp
-turutan check-update   # exit 0 up-to-date, 2 update available
+turutan check   # exit 0 up-to-date, 2 update available
 turutan diff           # exit 0 no drift, 2 drift found
 turutan update         # merge template changes (--conflict rej for .rej files)
 turutan version        # version/commit/date plus license notice
@@ -44,5 +44,5 @@ disables it with a loud warning (never in production).
 
 Dual-licensed: the CLI and all engine code is Apache-2.0 (root `LICENSE`);
 the default template and files generated from it are MIT-0
-(`templates/default/LICENSE`; generated `.config/turutan/state.json` records
+(`templates/default/LICENSE`; generated `.config/turutan/state.yml` records
 `templateLicense: "MIT-0"`).

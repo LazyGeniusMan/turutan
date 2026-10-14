@@ -1,6 +1,6 @@
 # My Template (template-author starter)
 
-This project is a `turutan` template: `turutan bootstrap <source> <dir>`
+This project is a `turutan` template: `turutan init <source> <dir>`
 renders it into a new project, and `turutan update` merges later template
 changes back. It exists to be copied: every engine feature has a live
 example here, commented in `.turutan.yml`.
@@ -54,9 +54,9 @@ File ops: verbatim files copy byte-for-byte, `.tmpl` files render,
 `includes`/`excludes`/`preserves` layer in order (a later layer can
 re-include after an earlier exclude), `renames` forward-maps recorded
 paths across releases, and per-run user content is kept with
-`bootstrap --skip a,b` on top of `preserves`.
+`init --skip a,b` on top of `preserves`.
 
-Hooks, migrations, min-engine: bootstrap runs `hooks.pre/post` after
+Hooks, migrations, min-engine: init runs `hooks.pre/post` after
 publish, update runs `migrations` whose `from` is a semver range or a
 7-64 hex commit prefix (empty matches all). Both need consent:
 interactive prompt or `--allow-hooks`, refused in `--non-interactive`
@@ -68,9 +68,9 @@ see `TURUTAN_OLD` and `TURUTAN_NEW`.
 ```sh
 # Scaffolded by: turutan create ./my-template
 # Render with defaults (hooks skipped without consent):
-turutan bootstrap --defaults ./my-template ./out
+turutan init --defaults ./my-template ./out
 # Render with the example hooks and extra layer:
-turutan bootstrap --defaults --allow-hooks ./my-template ./out
+turutan init --defaults --allow-hooks ./my-template ./out
 # Answer inputs from a file instead of prompts:
-turutan bootstrap --non-interactive --allow-hooks --data-file values.yaml ./my-template ./out
+turutan init --non-interactive --allow-hooks --data-file values.yaml ./my-template ./out
 ```

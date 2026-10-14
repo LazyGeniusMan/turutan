@@ -79,31 +79,31 @@ func updateTemplateFile(t *testing.T, repoDir, name, content string) string {
 	return commitAll(t, repoDir, "update "+name)
 }
 
-func bootstrapProject(t *testing.T, src string) string {
+func initProject(t *testing.T, src string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
-	if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
-		t.Fatalf("Bootstrap error: %v", err)
+	if err := Init(context.Background(), src, target, testOptions(&stdout)); err != nil {
+		t.Fatalf("Init error: %v", err)
 	}
 	return target
 }
 
-func checkUpdateOptions(stdout *strings.Builder) CheckUpdateOptions {
-	return CheckUpdateOptions{Stdout: stdout}
+func checkOptions(stdout *strings.Builder) CheckOptions {
+	return CheckOptions{Stdout: stdout}
 }
 
-func TestCheckUpdateLocalGit(t *testing.T) {
-	t.Run("up to date on clean bootstrap", func(t *testing.T) {
+func TestCheckLocalGit(t *testing.T) {
+	t.Run("up to date on clean init", func(t *testing.T) {
 		repoDir, sha := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
-			t.Error("Available = true, want false on clean bootstrap")
+			t.Error("Available = true, want false on clean init")
 		}
 		if result.Old != sha || result.New != sha {
 			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, sha)
@@ -114,12 +114,12 @@ func TestCheckUpdateLocalGit(t *testing.T) {
 	})
 	t.Run("new commit reports available", func(t *testing.T) {
 		repoDir, old := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		fresh := updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if !result.Available {
 			t.Fatal("Available = false, want true after template commit")
@@ -136,14 +136,14 @@ func TestCheckUpdateLocalGit(t *testing.T) {
 	})
 	t.Run("ref override pins old commit", func(t *testing.T) {
 		repoDir, old := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 		var stdout strings.Builder
-		opts := checkUpdateOptions(&stdout)
+		opts := checkOptions(&stdout)
 		opts.Ref = old
-		result, err := CheckUpdate(context.Background(), projectDir, opts)
+		result, err := Check(context.Background(), projectDir, opts)
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true, want false when --ref pins the stored commit")
@@ -151,17 +151,17 @@ func TestCheckUpdateLocalGit(t *testing.T) {
 	})
 	t.Run("unknown ref errors", func(t *testing.T) {
 		repoDir, _ := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		var stdout strings.Builder
-		opts := checkUpdateOptions(&stdout)
+		opts := checkOptions(&stdout)
 		opts.Ref = "does-not-exist"
-		if _, err := CheckUpdate(context.Background(), projectDir, opts); err == nil {
-			t.Error("CheckUpdate with unknown ref succeeded, want error")
+		if _, err := Check(context.Background(), projectDir, opts); err == nil {
+			t.Error("Check with unknown ref succeeded, want error")
 		}
 	})
 }
 
-func TestCheckUpdateRemoteGitOffline(t *testing.T) {
+func TestCheckRemoteGitOffline(t *testing.T) {
 	saveRemoteState := func(t *testing.T, repoDir, sha string) string {
 		t.Helper()
 		projectDir := t.TempDir()
@@ -183,9 +183,9 @@ func TestCheckUpdateRemoteGitOffline(t *testing.T) {
 		repoDir, sha := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
 		projectDir := saveRemoteState(t, repoDir, sha)
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true, want false")
@@ -199,9 +199,9 @@ func TestCheckUpdateRemoteGitOffline(t *testing.T) {
 		projectDir := saveRemoteState(t, repoDir, old)
 		fresh := updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if !result.Available {
 			t.Fatal("Available = false, want true after template commit")
@@ -212,17 +212,17 @@ func TestCheckUpdateRemoteGitOffline(t *testing.T) {
 	})
 }
 
-func TestCheckUpdateFilesystem(t *testing.T) {
-	t.Run("up to date on clean bootstrap", func(t *testing.T) {
+func TestCheckFilesystem(t *testing.T) {
+	t.Run("up to date on clean init", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
-			t.Error("Available = true, want false on clean bootstrap")
+			t.Error("Available = true, want false on clean init")
 		}
 		if result.New != result.Old {
 			t.Errorf("New = %q, Old = %q, want equal when up to date", result.New, result.Old)
@@ -230,14 +230,14 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 	})
 	t.Run("project-only edit stays up to date", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("local edit\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true, want false: only the project changed, not the template")
@@ -245,14 +245,14 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 	})
 	t.Run("template change reports available", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if !result.Available {
 			t.Fatal("Available = false, want true after template change")
@@ -263,14 +263,14 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 	})
 	t.Run("preserved local edit stays up to date", func(t *testing.T) {
 		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{"keep.txt": "template keep\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true, want false: preserved paths carry local content")
@@ -278,12 +278,12 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 	})
 	t.Run("ref rejected for filesystem", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		var stdout strings.Builder
-		opts := checkUpdateOptions(&stdout)
+		opts := checkOptions(&stdout)
 		opts.Ref = "v1"
-		if _, err := CheckUpdate(context.Background(), projectDir, opts); err == nil {
-			t.Error("CheckUpdate with --ref on filesystem succeeded, want error")
+		if _, err := Check(context.Background(), projectDir, opts); err == nil {
+			t.Error("Check with --ref on filesystem succeeded, want error")
 		}
 	})
 	t.Run("relative source re-resolves from project", func(t *testing.T) {
@@ -292,8 +292,8 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 		t.Chdir(workdir)
 		projectDir := filepath.Join(workdir, "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), "./tpl", projectDir, testOptions(&stdout)); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), "./tpl", projectDir, testOptions(&stdout)); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		state, err := config.LoadState(os.DirFS(projectDir))
 		if err != nil {
@@ -306,9 +306,9 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 			t.Errorf("stored template = %q, want %q", state.Template, "../tpl")
 		}
 		t.Chdir(projectDir)
-		result, err := CheckUpdate(context.Background(), ".", checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), ".", checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true, want false")
@@ -323,28 +323,28 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 	})
 	t.Run("missing state errors", func(t *testing.T) {
 		var stdout strings.Builder
-		if _, err := CheckUpdate(context.Background(), t.TempDir(), checkUpdateOptions(&stdout)); err == nil {
-			t.Error("CheckUpdate without state succeeded, want error")
+		if _, err := Check(context.Background(), t.TempDir(), checkOptions(&stdout)); err == nil {
+			t.Error("Check without state succeeded, want error")
 		}
 	})
 	t.Run("missing lock errors for filesystem", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.Remove(filepath.Join(projectDir, config.LockFileName)); err != nil {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		if _, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout)); err == nil {
-			t.Error("CheckUpdate without lock succeeded, want error")
+		if _, err := Check(context.Background(), projectDir, checkOptions(&stdout)); err == nil {
+			t.Error("Check without lock succeeded, want error")
 		}
 	})
 }
 
-func TestCheckUpdateFilesystemMinEngine(t *testing.T) {
+func TestCheckFilesystemMinEngine(t *testing.T) {
 	setup := func(t *testing.T) (string, string) {
 		t.Helper()
 		src := makeTemplate(t, "min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("min-engine: \">=99.0.0\"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -365,9 +365,9 @@ func TestCheckUpdateFilesystemMinEngine(t *testing.T) {
 			is := assert.New(t)
 			_, projectDir := setup(t)
 			var stdout strings.Builder
-			opts := checkUpdateOptions(&stdout)
+			opts := checkOptions(&stdout)
 			opts.Engine = tt.engine
-			_, err := CheckUpdate(context.Background(), projectDir, opts)
+			_, err := Check(context.Background(), projectDir, opts)
 			if tt.wantErr {
 				if !is.Error(err) {
 					return
@@ -382,7 +382,7 @@ func TestCheckUpdateFilesystemMinEngine(t *testing.T) {
 	}
 }
 
-func TestCheckUpdateRemoteNetwork(t *testing.T) {
+func TestCheckRemoteNetwork(t *testing.T) {
 	if testing.Short() {
 		t.Skip("network test skipped in -short mode")
 	}
@@ -401,7 +401,7 @@ func TestCheckUpdateRemoteNetwork(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
 			t.Skipf("network unavailable: %v", err)
 		}
@@ -414,14 +414,14 @@ func TestCheckUpdateRemoteNetwork(t *testing.T) {
 	})
 }
 
-func TestCheckUpdateGitOffers(t *testing.T) {
+func TestCheckGitOffers(t *testing.T) {
 	t.Run("local-git adding input reports available with new inputs", func(t *testing.T) {
 		files := map[string]string{".turutan.yml": profileCLIManifest}
 		for name, content := range profileCLIFiles {
 			files[name] = content
 		}
 		repoDir, old := initTemplateRepo(t, files)
-		projectDir := bootstrapProfiles(t, repoDir, "core")
+		projectDir := initProfiles(t, repoDir, "core")
 		manifest, err := os.ReadFile(filepath.Join(repoDir, ".turutan.yml")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatal(err)
@@ -440,9 +440,9 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 		}
 		fresh := commitAll(t, repoDir, "add service_name input")
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if !result.Available {
 			t.Fatal("Available = false, want true after template commit")
@@ -466,11 +466,11 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			files[name] = content
 		}
 		repoDir, sha := initTemplateRepo(t, files)
-		projectDir := bootstrapProfiles(t, repoDir, "core")
+		projectDir := initProfiles(t, repoDir, "core")
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true, want false: stored profiles input is not drift on git")
@@ -488,7 +488,7 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			files[name] = content
 		}
 		repoDir, _ := initTemplateRepo(t, files)
-		projectDir := bootstrapProfiles(t, repoDir, "core")
+		projectDir := initProfiles(t, repoDir, "core")
 		if err := os.WriteFile(filepath.Join(repoDir, ".turutan.yml"), []byte(":\n  bad indent\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
 			t.Fatal(err)
 		}
@@ -497,9 +497,9 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 		}
 		commitAll(t, repoDir, "break manifest")
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if !result.Available {
 			t.Error("Available = false, want true: the commit still advanced despite the broken manifest")

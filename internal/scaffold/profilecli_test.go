@@ -46,7 +46,7 @@ func TestComputeDiffWhat(t *testing.T) {
 	setup := func(t *testing.T) string {
 		t.Helper()
 		src := makeTemplate(t, "", map[string]string{"up.txt": "v1\n", "loc.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "up.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +107,7 @@ func TestComputeDiffWhat(t *testing.T) {
 	})
 	t.Run("upstream clean when only local edits", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("local\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -123,7 +123,7 @@ func TestComputeDiffWhat(t *testing.T) {
 	})
 	t.Run("local clean when only template changes", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -142,7 +142,7 @@ func TestComputeDiffWhat(t *testing.T) {
 func TestUpdatePreview(t *testing.T) {
 	t.Run("preview prints plan without writing", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -173,7 +173,7 @@ func TestUpdatePreview(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(afterState) != string(beforeState) {
-			t.Error("preview mutated state.json")
+			t.Error("preview mutated state.yml")
 		}
 		if string(afterLock) != string(beforeLock) {
 			t.Error("preview mutated lock.json")
@@ -192,7 +192,7 @@ func TestUpdatePreview(t *testing.T) {
 	})
 	t.Run("preview groups entries by kind", func(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
-		projectDir := bootstrapProfiles(t, src, "core")
+		projectDir := initProfiles(t, src, "core")
 		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -235,7 +235,7 @@ func TestUpdateRenames(t *testing.T) {
 	}
 	t.Run("unmodified file follows the rename", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"old.txt": "hello\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		evolve(t, src)
 		var stdout, stderr strings.Builder
 		result, err := Update(context.Background(), projectDir, updateCLIOptions(&stdout, &stderr))
@@ -260,7 +260,7 @@ func TestUpdateRenames(t *testing.T) {
 	})
 	t.Run("diverged file conflicts at the new path", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"old.txt": "a\nbase\nc\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "old.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}

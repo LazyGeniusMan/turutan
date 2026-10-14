@@ -19,7 +19,7 @@ import (
 
 const shortSHALen = 12
 
-type CheckUpdateOptions struct {
+type CheckOptions struct {
 	Ref     string
 	Engine  string
 	Verbose bool
@@ -27,30 +27,30 @@ type CheckUpdateOptions struct {
 	Stderr  io.Writer
 }
 
-type CheckUpdateResult struct {
+type CheckResult struct {
 	Available bool
 	Old       string
 	New       string
 }
 
-func CheckUpdate(
+func Check(
 	ctx context.Context,
 	projectDir string,
-	opts CheckUpdateOptions,
-) (*CheckUpdateResult, error) {
+	opts CheckOptions,
+) (*CheckResult, error) {
 	stdout := opts.Stdout
 	if stdout == nil {
 		stdout = os.Stdout
 	}
 	state, err := config.LoadState(os.DirFS(projectDir))
 	if err != nil {
-		return nil, fmt.Errorf("check-update: %w", err)
+		return nil, fmt.Errorf("check: %w", err)
 	}
 	ref := state.RequestedRef
 	if opts.Ref != "" {
 		ref = opts.Ref
 	}
-	vlogf(opts.Stderr, opts.Verbose, "check-update: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
+	vlogf(opts.Stderr, opts.Verbose, "check: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
 	fresh, changed, newInputs, err := reresolve(
 		ctx, state, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
 	if err != nil {
@@ -59,8 +59,8 @@ func CheckUpdate(
 	if changed && len(newInputs) == 0 {
 		newInputs = fetchNewInputs(ctx, projectDir, state, ref, opts.Engine, opts.Stderr, opts.Verbose)
 	}
-	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
-	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
+	vlogf(opts.Stderr, opts.Verbose, "check: fresh commit %s available %v", fresh, changed)
+	result := &CheckResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
 	if changed {
 		if _, err := fmt.Fprintf(stdout, "turutan: update available: %s -> %s\n", shortSHA(state.ResolvedCommit), shortSHA(fresh)); err != nil {
 			return nil, err
@@ -85,27 +85,27 @@ func reresolve(
 	case template.KindRemoteGit:
 		src, err := parseStoredSource(projectDir, state.Template)
 		if err != nil {
-			return "", false, nil, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check: %w", err)
 		}
 		sha, err := git.ResolveRemoteRef(ctx, src.Repo, ref)
 		if err != nil {
-			return "", false, nil, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check: %w", err)
 		}
 		return sha, sha != state.ResolvedCommit, nil, nil
 	case template.KindLocalGit:
 		src, err := parseStoredSource(projectDir, state.Template)
 		if err != nil {
-			return "", false, nil, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check: %w", err)
 		}
 		sha, err := git.ResolveLocal(src.Repo, ref)
 		if err != nil {
-			return "", false, nil, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check: %w", err)
 		}
 		return sha, sha != state.ResolvedCommit, nil, nil
 	case template.KindFilesystem:
 		return reresolveFilesystem(ctx, state, ref, projectDir, engine, stderr, verbose)
 	default:
-		return "", false, nil, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
+		return "", false, nil, fmt.Errorf("check: unknown sourceKind %q", state.SourceKind)
 	}
 }
 
@@ -119,7 +119,7 @@ func fetchNewInputs(
 ) []string {
 	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
-		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		vlogf(stderr, verbose, "check: skipping inputs report: %v", err)
 		return nil
 	}
 	if ref != "" {
@@ -127,7 +127,7 @@ func fetchNewInputs(
 	}
 	fetched, err := template.Fetch(ctx, src)
 	if err != nil {
-		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		vlogf(stderr, verbose, "check: skipping inputs report: %v", err)
 		return nil
 	}
 	if fetched.Cleanup != nil {
@@ -135,11 +135,11 @@ func fetchNewInputs(
 	}
 	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
 	if err != nil {
-		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		vlogf(stderr, verbose, "check: skipping inputs report: %v", err)
 		return nil
 	}
 	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
-		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		vlogf(stderr, verbose, "check: skipping inputs report: %v", err)
 		return nil
 	}
 	return config.DiffInputs(state.Data, manifest)
@@ -154,7 +154,7 @@ func reresolveFilesystem(
 ) (string, bool, []string, error) {
 	if ref != "" {
 		return "", false, nil, fmt.Errorf(
-			"check-update: ref %q is not supported "+
+			"check: ref %q is not supported "+
 				"for filesystem sources",
 			ref)
 	}
@@ -181,30 +181,30 @@ func prepareFilesystemReresolve(
 ) (*config.Lock, *template.Source, *config.Manifest, string, error) {
 	lock, err := config.LoadLock(os.DirFS(projectDir))
 	if err != nil {
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	fetched, err := template.Fetch(ctx, src)
 	if err != nil {
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
 	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
 	if err != nil {
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
 		return nil, nil, nil, "", err
 	}
-	stage, err := os.MkdirTemp("", "turutan-check-update-*")
+	stage, err := os.MkdirTemp("", "turutan-check-*")
 	if err != nil {
 		return nil, nil, nil, "", fmt.Errorf(
-			"check-update: creating staging dir: %w", err)
+			"check: creating staging dir: %w", err)
 	}
 	data := map[string]any{}
 	for key, val := range state.Data {
@@ -215,15 +215,15 @@ func prepareFilesystemReresolve(
 	view := renderDataView(data)
 	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifest.Includes, manifest.Excludes, manifest.Preserves, manifestConditionals(manifest)); err != nil {
 		_ = os.RemoveAll(stage)
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
 		_ = os.RemoveAll(stage)
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	if err := plantDocFiles(stage, manifest); err != nil {
 		_ = os.RemoveAll(stage)
-		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
+		return nil, nil, nil, "", fmt.Errorf("check: %w", err)
 	}
 	return lock, src, manifest, stage, nil
 }
@@ -236,19 +236,19 @@ func compareFilesystemHashes(
 ) (string, bool, error) {
 	preserved, err := preservedGlobs(state.Data, manifest)
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return "", false, fmt.Errorf("check: %w", err)
 	}
 	rendered, err := renderedEntries(stage, manifest, state, preserved, false)
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return "", false, fmt.Errorf("check: %w", err)
 	}
 	display, err := renderedEntries(stage, manifest, state, preserved, true)
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return "", false, fmt.Errorf("check: %w", err)
 	}
 	locked, err := filterLockEntries(lock.Files, manifest, state, preserved)
 	if err != nil {
-		return "", false, fmt.Errorf("check-update: %w", err)
+		return "", false, fmt.Errorf("check: %w", err)
 	}
 	rendered = withoutPresentPreserved(projectDir, rendered, manifest, state, preserved)
 	locked = withoutPresentPreserved(projectDir, locked, manifest, state, preserved)

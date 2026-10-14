@@ -38,7 +38,7 @@ func TestUpdateDirtyGuard(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-			projectDir := bootstrapProject(t, src)
+			projectDir := initProject(t, src)
 			if tt.makeDirty {
 				if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("local edit\n"), 0o600); err != nil {
 					t.Fatal(err)
@@ -85,7 +85,7 @@ func TestUpdateMerge(t *testing.T) {
 					"stay.txt": "hi\n",
 				})
 				src = repoDir
-				projectDir = bootstrapProject(t, src)
+				projectDir = initProject(t, src)
 				updateRepo = func(name, content string) {
 					updateTemplateFile(t, repoDir, name, content)
 				}
@@ -96,7 +96,7 @@ func TestUpdateMerge(t *testing.T) {
 					"drop.txt": "bye\n",
 					"stay.txt": "hi\n",
 				})
-				projectDir = bootstrapProject(t, src)
+				projectDir = initProject(t, src)
 				updateRepo = func(name, content string) {
 					if err := os.WriteFile(filepath.Join(src, name), []byte(content), 0o600); err != nil {
 						t.Fatal(err)
@@ -158,7 +158,7 @@ func TestUpdateConflicts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			src := makeTemplate(t, "", map[string]string{"conflict.txt": "a\nb\nc\n"})
-			projectDir := bootstrapProject(t, src)
+			projectDir := initProject(t, src)
 			if err := os.WriteFile(filepath.Join(projectDir, "conflict.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -213,7 +213,7 @@ func TestUpdateBinary(t *testing.T) {
 	binaryLocal := "GIF89a\x00local"
 	t.Run("both changed keeps local with .new", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"img.bin": binaryOld})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "img.bin"), []byte(binaryLocal), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -242,7 +242,7 @@ func TestUpdateBinary(t *testing.T) {
 	})
 	t.Run("template only takes new without sidecar", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"img.bin": binaryOld})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "img.bin"), []byte(binaryNew), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -277,7 +277,7 @@ func TestUpdateMergeAddedBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-			projectDir := bootstrapProject(t, src)
+			projectDir := initProject(t, src)
 			if err := os.WriteFile(filepath.Join(src, "img.bin"), []byte(binaryFresh), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -316,7 +316,7 @@ func TestUpdatePreserve(t *testing.T) {
 			"keep.txt":  "template v1\n",
 			"merge.txt": "a\nb\nc\n",
 		})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -351,7 +351,7 @@ func TestUpdatePreserve(t *testing.T) {
 		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt": "template v1\n",
 		})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("template v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -374,7 +374,7 @@ func TestUpdatePreserve(t *testing.T) {
 		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt": "template v1\n",
 		})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.Remove(filepath.Join(projectDir, "keep.txt")); err != nil {
 			t.Fatal(err)
 		}
@@ -400,7 +400,7 @@ func TestUpdatePreserve(t *testing.T) {
 func TestUpdateMigrations(t *testing.T) {
 	t.Run("migrations run in manifest order", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		manifest := "migrations:\n" +
 			"  - run: [\"echo first >> order.txt\"]\n" +
 			"  - run: [\"echo second >> order.txt\"]\n"
@@ -438,7 +438,7 @@ func TestUpdateMigrations(t *testing.T) {
 	})
 	t.Run("failing migration aborts update", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		manifest := "migrations:\n  - run: [\"exit 3\"]\n"
 		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
 			t.Fatal(err)
@@ -457,7 +457,7 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 	setupMigrationProject := func(t *testing.T) (string, string) {
 		t.Helper()
 		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		manifest := "migrations:\n  - run: [\"echo hi >> marker.txt\"]\n"
 		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
 			t.Fatal(err)
@@ -550,7 +550,7 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 	})
 	t.Run("non-interactive without migrations passes", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "app.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -578,11 +578,11 @@ func TestUpdateLockAdvances(t *testing.T) {
 				repoDir, sha := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
 				src = repoDir
 				old = sha
-				projectDir = bootstrapProject(t, src)
+				projectDir = initProject(t, src)
 				updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 			} else {
 				src = makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-				projectDir = bootstrapProject(t, src)
+				projectDir = initProject(t, src)
 				state, err := config.LoadState(os.DirFS(projectDir))
 				if err != nil {
 					t.Fatal(err)
@@ -626,10 +626,10 @@ func TestUpdateLockAdvances(t *testing.T) {
 func TestUpdateDataOverlay(t *testing.T) {
 	t.Run("data file overlay re-renders", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"greet.txt.tmpl": "hi {{.project_name}}\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
 		if string(got) != "hi proj\n" {
-			t.Fatalf("greet.txt = %q, want defaulted bootstrap render", got)
+			t.Fatalf("greet.txt = %q, want defaulted init render", got)
 		}
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: overlaid\n"), 0o600); err != nil {
@@ -659,7 +659,7 @@ func TestUpdateDataOverlay(t *testing.T) {
 	})
 	t.Run("missing key suggests data file", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"a.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "b.txt.tmpl"), []byte("{{.brand_new_key}}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -677,7 +677,7 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 	setup := func(t *testing.T) (string, string) {
 		t.Helper()
 		src := makeTemplate(t, "", map[string]string{"a.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "b.txt.tmpl"), []byte("{{.brand_new_key}}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -763,7 +763,7 @@ func TestUpdateFailures(t *testing.T) {
 				projectDir = t.TempDir()
 			} else {
 				src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-				projectDir = bootstrapProject(t, src)
+				projectDir = initProject(t, src)
 			}
 			tt.mutate(t, projectDir, &opts)
 			_, err := Update(context.Background(), projectDir, opts)
@@ -790,7 +790,7 @@ func TestEffectiveConflict(t *testing.T) {
 		{name: "flag wins over stored state", flag: ConflictInline, manifest: "", stored: "rej", want: ConflictInline},
 		{name: "manifest default applies", flag: "", manifest: "rej", want: ConflictRej},
 		{name: "manifest wins over stored state", flag: "", manifest: "inline", stored: "rej", want: ConflictInline},
-		{name: "stored bootstrap choice applies when silent", flag: "", manifest: "", stored: "rej", want: ConflictRej},
+		{name: "stored init choice applies when silent", flag: "", manifest: "", stored: "rej", want: ConflictRej},
 		{name: "empty defaults to inline", flag: "", manifest: "", want: ConflictInline},
 	}
 	for _, tt := range tests {
@@ -832,7 +832,7 @@ func TestUpdateConflictModePersists(t *testing.T) {
 				manifest = "conflict: " + tt.manifestConflict + "\n"
 			}
 			src := makeTemplate(t, manifest, map[string]string{"conflict.txt": "a\nb\nc\n"})
-			projectDir := bootstrapProject(t, src)
+			projectDir := initProject(t, src)
 			if err := os.WriteFile(filepath.Join(projectDir, "conflict.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -953,7 +953,7 @@ var profileTestFiles = map[string]string{
 	".github/ci.yml":   "ci\n",
 }
 
-func bootstrapProfiles(t *testing.T, src string, profiles ...string) string {
+func initProfiles(t *testing.T, src string, profiles ...string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
@@ -961,8 +961,8 @@ func bootstrapProfiles(t *testing.T, src string, profiles ...string) string {
 	if len(profiles) > 0 {
 		opts.DataFile = profilesDataFile(t, profiles...)
 	}
-	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
-		t.Fatalf("Bootstrap error: %v", err)
+	if err := Init(context.Background(), src, target, opts); err != nil {
+		t.Fatalf("Init error: %v", err)
 	}
 	return target
 }
@@ -1026,21 +1026,21 @@ func assertProfileAbsent(t *testing.T, projectDir, rel string) {
 	}
 }
 
-func assertCheckUpdateQuiet(t *testing.T, projectDir string) {
+func assertCheckQuiet(t *testing.T, projectDir string) {
 	t.Helper()
 	var stdout strings.Builder
-	result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+	result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 	if err != nil {
-		t.Fatalf("CheckUpdate error: %v", err)
+		t.Fatalf("Check error: %v", err)
 	}
 	if result.Available {
-		t.Error("CheckUpdate reports available after a profiles-input update, want up to date")
+		t.Error("Check reports available after a profiles-input update, want up to date")
 	}
 }
 
 func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
 	src := makeTemplate(t, profileTestManifest, profileTestFiles)
-	projectDir := bootstrapProfiles(t, src, "core")
+	projectDir := initProfiles(t, src, "core")
 	for _, rel := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml"} {
 		assertProfileAbsent(t, projectDir, rel)
 	}
@@ -1064,13 +1064,13 @@ func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
 	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
 		t.Errorf("stored profiles = %v, want [core go]", got)
 	}
-	assertCheckUpdateQuiet(t, projectDir)
+	assertCheckQuiet(t, projectDir)
 }
 
 func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 	t.Run("unmodified dropped files are removed with empty dirs pruned", func(t *testing.T) {
 		src := makeTemplate(t, profileTestManifest, profileTestFiles)
-		projectDir := bootstrapProfiles(t, src, "core", "go")
+		projectDir := initProfiles(t, src, "core", "go")
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 		result := updateProfiles(t, projectDir, "core")
 		assertProfileAbsent(t, projectDir, "go.mod")
@@ -1091,11 +1091,11 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
 			t.Errorf("stored profiles = %v, want [core]", got)
 		}
-		assertCheckUpdateQuiet(t, projectDir)
+		assertCheckQuiet(t, projectDir)
 	})
 	t.Run("locally modified dropped file is kept on disk but untracked", func(t *testing.T) {
 		src := makeTemplate(t, profileTestManifest, profileTestFiles)
-		projectDir := bootstrapProfiles(t, src, "core", "go")
+		projectDir := initProfiles(t, src, "core", "go")
 		mainPath := filepath.Join(projectDir, "cmd", "app", "main.go")
 		if err := os.WriteFile(mainPath, []byte("package main // local\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -1109,13 +1109,13 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 		if info, err := os.Stat(filepath.Join(projectDir, "cmd", "app")); err != nil || !info.IsDir() {
 			t.Error("cmd/app was pruned while it still holds the kept local file")
 		}
-		assertCheckUpdateQuiet(t, projectDir)
+		assertCheckQuiet(t, projectDir)
 	})
 }
 
 func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
 	src := makeTemplate(t, profileTestManifest, profileTestFiles)
-	projectDir := bootstrapProfiles(t, src, "core", "go")
+	projectDir := initProfiles(t, src, "core", "go")
 	var stdout, stderr strings.Builder
 	opts := updateTestOptions(&stdout, &stderr)
 	opts.Force = true
@@ -1141,7 +1141,7 @@ func profileGitFixture(t *testing.T) string {
 
 func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
 	repoDir := profileGitFixture(t)
-	projectDir := bootstrapProfiles(t, repoDir, "core")
+	projectDir := initProfiles(t, repoDir, "core")
 	assertProfileAbsent(t, projectDir, "go.mod")
 	updateTemplateFile(t, repoDir, "keep.txt", "keep v2\n")
 	result := updateProfiles(t, projectDir, "core", "go")
@@ -1162,7 +1162,7 @@ func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
 
 func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 	repoDir := profileGitFixture(t)
-	projectDir := bootstrapProfiles(t, repoDir, "core", "go", "github")
+	projectDir := initProfiles(t, repoDir, "core", "go", "github")
 	ciPath := filepath.Join(projectDir, ".github", "ci.yml")
 	if err := os.WriteFile(ciPath, []byte("ci // local\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -1192,7 +1192,7 @@ func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 
 func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-	projectDir := bootstrapProject(t, src)
+	projectDir := initProject(t, src)
 	writeFiles(t, src, map[string]string{
 		".turutan.yml": "inputs:\n" +
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
@@ -1226,11 +1226,11 @@ func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 			t.Errorf("diffs = %+v, want none after the backfilled update", diffs)
 		}
 	})
-	t.Run("check-update reports up to date", func(t *testing.T) {
+	t.Run("check reports up to date", func(t *testing.T) {
 		var stdout strings.Builder
-		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
-			t.Fatalf("CheckUpdate error: %v", err)
+			t.Fatalf("Check error: %v", err)
 		}
 		if result.Available {
 			t.Error("Available = true after the backfilled update, want up to date")

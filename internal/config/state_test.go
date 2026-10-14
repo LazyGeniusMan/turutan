@@ -573,7 +573,7 @@ func TestValidateManifestLicense(t *testing.T) {
 		{name: "absolute rejected", files: []string{"/LICENSE"}, wantErr: true},
 		{name: "escape rejected", files: []string{"../LICENSE"}, wantErr: true},
 		{name: "template suffix rejected", files: []string{"LICENSE.tmpl"}, wantErr: true},
-		{name: "state collision rejected", files: []string{"state.json"}, wantErr: true},
+		{name: "state collision rejected", files: []string{"state.yml"}, wantErr: true},
 		{name: "lock collision rejected", files: []string{"lock.json"}, wantErr: true},
 		{name: "templates collision rejected", files: []string{"templates/foo"}, wantErr: true},
 		{name: "duplicate rejected", files: []string{"LICENSE", "LICENSE"}, wantErr: true},
@@ -605,7 +605,7 @@ func TestValidateManifestDocFiles(t *testing.T) {
 		{name: "absolute rejected", files: []string{"/README.md"}, wantErr: true},
 		{name: "escape rejected", files: []string{"../README.md"}, wantErr: true},
 		{name: "template suffix rejected", files: []string{"README.md.tmpl"}, wantErr: true},
-		{name: "state collision rejected", files: []string{"state.json"}, wantErr: true},
+		{name: "state collision rejected", files: []string{"state.yml"}, wantErr: true},
 		{name: "lock collision rejected", files: []string{"lock.json"}, wantErr: true},
 		{name: "templates collision rejected", files: []string{"templates/foo"}, wantErr: true},
 		{name: "duplicate rejected", files: []string{"README.md", "README.md"}, wantErr: true},
@@ -944,57 +944,49 @@ func TestStateLockLocations(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("b", 64)
 	stateFile := func(engine string) *fstest.MapFile {
 		return &fstest.MapFile{Data: []byte(
-			`{"version":1,"template":"tpl","sourceKind":"filesystem",` +
-				`"resolvedCommit":"` + commit + `","engine":"` + engine + `",` +
-				`"templateLicense":"MIT-0"}`)}
+			"version: 1\ntemplate: tpl\nsourceKind: filesystem\n" +
+				"resolvedCommit: " + commit + "\nengine: " + engine + "\n" +
+				"templateLicense: MIT-0\n")}
 	}
 	lockFile := &fstest.MapFile{Data: []byte(
 		`{"source":"tpl","resolved_sha":"` + commit + `",` +
 			`"manifest_hash":"` + digest + `","files":[]}`)}
-	t.Run("legacy fallback loads", func(t *testing.T) {
+	t.Run("yaml state loads", func(t *testing.T) {
 		t.Parallel()
 		fsys := fstest.MapFS{
-			legacyStateFileName: stateFile("turutan/legacy"),
-			legacyLockFileName:  lockFile,
+			StateFileName: stateFile("turutan/yaml"),
+			LockFileName:  lockFile,
 		}
 		state, err := LoadState(fsys)
 		if err != nil {
-			t.Fatalf("LoadState legacy error: %v", err)
+			t.Fatalf("LoadState yaml error: %v", err)
 		}
-		if state.Engine != "turutan/legacy" {
-			t.Errorf("Engine = %q, want legacy fallback", state.Engine)
+		if state.Engine != "turutan/yaml" {
+			t.Errorf("Engine = %q, want yaml state", state.Engine)
 		}
 		if _, err := LoadLock(fsys); err != nil {
-			t.Fatalf("LoadLock legacy error: %v", err)
+			t.Fatalf("LoadLock error: %v", err)
 		}
 	})
-	t.Run("new location wins", func(t *testing.T) {
+	t.Run("missing state errors", func(t *testing.T) {
 		t.Parallel()
 		fsys := fstest.MapFS{
-			StateFileName:       stateFile("turutan/new"),
-			LockFileName:        lockFile,
-			legacyStateFileName: stateFile("turutan/legacy"),
-			legacyLockFileName:  lockFile,
-		}
-		state, err := LoadState(fsys)
-		if err != nil {
-			t.Fatalf("LoadState error: %v", err)
-		}
-		if state.Engine != "turutan/new" {
-			t.Errorf("Engine = %q, want new location to win", state.Engine)
-		}
-	})
-	t.Run("corrupt new file does not fall back", func(t *testing.T) {
-		t.Parallel()
-		fsys := fstest.MapFS{
-			StateFileName:       {Data: []byte("{bad json")},
-			legacyStateFileName: stateFile("turutan/legacy"),
+			LockFileName: lockFile,
 		}
 		if _, err := LoadState(fsys); err == nil {
-			t.Error("LoadState with corrupt new file succeeded, want error")
+			t.Error("LoadState without file succeeded, want error")
 		}
 	})
-	t.Run("saves land in new location", func(t *testing.T) {
+	t.Run("corrupt state errors", func(t *testing.T) {
+		t.Parallel()
+		fsys := fstest.MapFS{
+			StateFileName: {Data: []byte(":\n\tbad yaml [unclosed")},
+		}
+		if _, err := LoadState(fsys); err == nil {
+			t.Error("LoadState with corrupt file succeeded, want error")
+		}
+	})
+	t.Run("saves land in yaml location", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		state := &State{
@@ -1008,8 +1000,16 @@ func TestStateLockLocations(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(StateFileName))); err != nil {
 			t.Errorf("new state file missing: %v", err)
 		}
-		if _, err := os.Stat(filepath.Join(dir, legacyStateFileName)); !os.IsNotExist(err) {
-			t.Error("legacy state file written, want new location only")
+		oldJSON := strings.Replace(StateFileName, ".yml", ".json", 1)
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(oldJSON))); !os.IsNotExist(err) {
+			t.Error("json state file written, want yaml location only")
+		}
+		data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(StateFileName))) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if err != nil {
+			t.Fatalf("reading saved state: %v", err)
+		}
+		if !strings.Contains(string(data), "template: tpl") {
+			t.Errorf("saved state = %q, want yaml with template key", data)
 		}
 		if err := SaveLock(dir, &Lock{
 			Source: "tpl", ResolvedSHA: commit, ManifestHash: digest,

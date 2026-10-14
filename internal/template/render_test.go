@@ -106,7 +106,7 @@ func TestRenderFSSkipsNestedMetadataDirs(t *testing.T) {
 		name    string
 		skipped string
 	}{
-		{name: "state dir skipped", skipped: ".config/turutan/state.json"},
+		{name: "state dir skipped", skipped: ".config/turutan/state.yml"},
 		{name: "nested git tree", skipped: "a/.git/config"},
 		{name: "base store skipped", skipped: ".config/turutan/templates/abc/f.txt"},
 	}
@@ -133,7 +133,7 @@ func TestRenderDirSkipsNestedMetadataDirs(t *testing.T) {
 		name    string
 		skipped string
 	}{
-		{name: "state dir skipped", skipped: ".config/turutan/state.json"},
+		{name: "state dir skipped", skipped: ".config/turutan/state.yml"},
 		{name: "nested git tree", skipped: "a/.git/config"},
 		{name: "base store skipped", skipped: ".config/turutan/templates/abc/f.txt"},
 	}

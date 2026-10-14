@@ -66,7 +66,7 @@ func TestProfilesGatesAiAgents(t *testing.T) {
 		data := map[string]any{"project_name": "demo"}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("ai\nmyagent\n")
-		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if got, ok := data["profiles"].([]string); !ok || len(got) != 1 || got[0] != "ai" {
@@ -88,7 +88,7 @@ func TestProfilesGatesAiAgents(t *testing.T) {
 		data := map[string]any{"project_name": "demo"}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("go\n")
-		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
@@ -103,7 +103,7 @@ func TestProfilesGatesAiAgents(t *testing.T) {
 		manifest := profilesGatingManifest()
 		data := map[string]any{"project_name": "demo", "profiles": []string{"ai"}}
 		var stdout bytes.Buffer
-		err := ensureInputValues(data, manifest, true, false, &stdout, strings.NewReader(""), "bootstrap")
+		err := ensureInputValues(data, manifest, true, false, &stdout, strings.NewReader(""), "init")
 		if err == nil || !strings.Contains(err.Error(), "missing value") {
 			t.Errorf("ensureInputValues error = %v, want missing value for ai_agents", err)
 		}
@@ -186,7 +186,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		data := map[string]any{"project_name": "demo", "profiles": []string{"core", "go"}}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("")
-		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 || got[0] != "opencode" || got[1] != "pi" {
@@ -208,7 +208,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		data := map[string]any{"project_name": "demo", "profiles": []string{"core", "ai"}}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("\n\n")
-		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
@@ -226,7 +226,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		data := map[string]any{}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("x\nhello\n")
-		if err := ensureInputValues(data, forwardRefManifest(), false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, forwardRefManifest(), false, false, &stdout, stdin, "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if data["zzz_base"] != "x" || data["aaa_dep"] != "hello" {
@@ -238,7 +238,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		data := map[string]any{}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("y\n")
-		if err := ensureInputValues(data, forwardRefManifest(), false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, forwardRefManifest(), false, false, &stdout, stdin, "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if data["zzz_base"] != "y" {
@@ -252,7 +252,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		t.Parallel()
 		data := map[string]any{"project_name": "demo", "profiles": []string{"core", "go"}}
 		var stdout bytes.Buffer
-		if err := ensureInputValues(data, conditionalInputManifest(), true, false, &stdout, strings.NewReader(""), "bootstrap"); err != nil {
+		if err := ensureInputValues(data, conditionalInputManifest(), true, false, &stdout, strings.NewReader(""), "init"); err != nil {
 			t.Fatalf("ensureInputValues error = %v, want skipped default without missing-value error", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
@@ -263,7 +263,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		t.Parallel()
 		data := map[string]any{"profiles": []string{"core", "ai"}}
 		var stdout bytes.Buffer
-		err := ensureInputValues(data, conditionalInputManifest(), true, false, &stdout, strings.NewReader(""), "bootstrap")
+		err := ensureInputValues(data, conditionalInputManifest(), true, false, &stdout, strings.NewReader(""), "init")
 		if err == nil || !strings.Contains(err.Error(), "missing value") {
 			t.Errorf("ensureInputValues error = %v, want missing value", err)
 		}
@@ -275,7 +275,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		}}
 		data := map[string]any{"project_name": "demo"}
 		var stdout bytes.Buffer
-		if err := ensureInputValues(data, bad, false, false, &stdout, strings.NewReader(""), "bootstrap"); err == nil {
+		if err := ensureInputValues(data, bad, false, false, &stdout, strings.NewReader(""), "init"); err == nil {
 			t.Error("ensureInputValues with non-bool predicate succeeded, want error")
 		}
 	})

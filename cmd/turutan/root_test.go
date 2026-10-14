@@ -46,7 +46,7 @@ func writeIsolatedConfig(t *testing.T, body string) string {
 
 func writeProjectState(t *testing.T, dir, template string) {
 	t.Helper()
-	state := fmt.Sprintf(`{"version":1,"template":%q,"sourceKind":"filesystem","resolvedCommit":%q,"engine":"0.1.0","templateLicense":"MIT-0"}`,
+	state := fmt.Sprintf("version: 1\ntemplate: %q\nsourceKind: filesystem\nresolvedCommit: %q\nengine: \"0.1.0\"\ntemplateLicense: MIT-0\n",
 		template, strings.Repeat("ab", 32))
 	path := filepath.Join(dir, config.StateFileName)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -198,12 +198,12 @@ func TestViperBindsCobraFlags(t *testing.T) {
 		t.Fatalf("subcommand %q not found", name)
 		return nil
 	}
-	t.Run("changed bootstrap template flag visible in viper", func(t *testing.T) {
+	t.Run("changed init template flag visible in viper", func(t *testing.T) {
 		resetRootFlags(t)
 		isolateConfigCandidates(t)
 		v := viper.New()
 		root := newRootCmd(v)
-		if err := findSub(root, "bootstrap").Flags().Set("template", "./from-flag"); err != nil {
+		if err := findSub(root, "init").Flags().Set("template", "./from-flag"); err != nil {
 			t.Fatal(err)
 		}
 		if got := v.GetString(config.TemplateConfigKey); got != "./from-flag" {
@@ -229,7 +229,7 @@ func TestViperBindsCobraFlags(t *testing.T) {
 		cfgPath := writeIsolatedConfig(t, "template: ./from-file\n")
 		v := viper.New()
 		root := newRootCmd(v)
-		if err := findSub(root, "bootstrap").Flags().Set("template", "./from-flag"); err != nil {
+		if err := findSub(root, "init").Flags().Set("template", "./from-flag"); err != nil {
 			t.Fatal(err)
 		}
 		if err := initConfigWithViper(v, cfgPath); err != nil {
@@ -269,7 +269,7 @@ func TestViperBindsCobraFlags(t *testing.T) {
 	})
 }
 
-func TestResolveBootstrapSourceWithViper(t *testing.T) {
+func TestResolveInitSourceWithViper(t *testing.T) {
 	tests := []struct {
 		name        string
 		arg         string
@@ -297,7 +297,7 @@ func TestResolveBootstrapSourceWithViper(t *testing.T) {
 			if tt.withProject {
 				writeProjectState(t, dir, "./from-project")
 			}
-			if got := resolveBootstrapSourceWithViper(v, tt.arg, tt.flag, dir); got != tt.want {
+			if got := resolveInitSourceWithViper(v, tt.arg, tt.flag, dir); got != tt.want {
 				t.Errorf("source = %q, want %q", got, tt.want)
 			}
 		})
@@ -312,60 +312,60 @@ func verboseTemplate(t *testing.T) string {
 	})
 }
 
-func TestVerboseBootstrapLogs(t *testing.T) {
+func TestVerboseInitLogs(t *testing.T) {
 	oldCfg := appCfg
 	appCfg.nonInteractive, appCfg.verbose = true, true
 	defer func() { appCfg = oldCfg }()
 
-	cmd := newBootstrapCmd()
+	cmd := newInitCmd()
 	cmd.SetOut(&bytes.Buffer{})
 	var stderr bytes.Buffer
 	cmd.SetErr(&stderr)
 	cmd.SetArgs([]string{verboseTemplate(t), filepath.Join(t.TempDir(), "proj"), "--defaults"})
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("bootstrap error: %v", err)
+		t.Fatalf("init error: %v", err)
 	}
-	for _, want := range []string{"bootstrap: source", "bootstrap: fetched", "bootstrap: wrote"} {
+	for _, want := range []string{"init: source", "init: fetched", "init: wrote"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("verbose stderr missing %q:\n%s", want, stderr.String())
 		}
 	}
 }
 
-func TestQuietBootstrapSilent(t *testing.T) {
+func TestQuietInitSilent(t *testing.T) {
 	oldCfg := appCfg
 	appCfg.nonInteractive, appCfg.verbose = true, false
 	defer func() { appCfg = oldCfg }()
 
-	cmd := newBootstrapCmd()
+	cmd := newInitCmd()
 	cmd.SetOut(&bytes.Buffer{})
 	var stderr bytes.Buffer
 	cmd.SetErr(&stderr)
 	cmd.SetArgs([]string{verboseTemplate(t), filepath.Join(t.TempDir(), "proj"), "--defaults"})
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("bootstrap error: %v", err)
+		t.Fatalf("init error: %v", err)
 	}
 	if got := strings.TrimSpace(stderr.String()); got != "" {
 		t.Errorf("quiet stderr = %q, want empty", got)
 	}
 }
 
-func TestVerboseCheckUpdateLogs(t *testing.T) {
+func TestVerboseCheckLogs(t *testing.T) {
 	oldCfg := appCfg
 	appCfg.nonInteractive, appCfg.verbose = true, true
 	defer func() { appCfg = oldCfg }()
 
-	_, dst := bootstrapTestProject(t, map[string]string{"hello.txt": "v1\n"})
+	_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 	runInProject(t, dst)
-	cmd := newCheckUpdateCmd()
+	cmd := newCheckCmd()
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	cmd.SetArgs([]string{})
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("check-update error: %v", err)
+		t.Fatalf("check error: %v", err)
 	}
-	for _, want := range []string{"check-update: stored", "check-update: fresh"} {
+	for _, want := range []string{"check: stored", "check: fresh"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("verbose stderr missing %q:\n%s", want, stderr.String())
 		}
@@ -377,7 +377,7 @@ func TestNoColorDiffPlain(t *testing.T) {
 	appCfg.nonInteractive, appCfg.noColor, appCfg.verbose = true, true, false
 	defer func() { appCfg = oldCfg }()
 
-	_, dst := bootstrapTestProject(t, map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
+	_, dst := initTestProject(t, map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
 	if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("aaa\nBBB\nccc\nddd\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -21,20 +21,20 @@ func diffOptions() DiffOptions {
 }
 
 func TestComputeDiff(t *testing.T) {
-	t.Run("no drift on clean bootstrap", func(t *testing.T) {
+	t.Run("no drift on clean init", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
 		if len(diffs) != 0 {
-			t.Errorf("diffs = %+v, want none on clean bootstrap", diffs)
+			t.Errorf("diffs = %+v, want none on clean init", diffs)
 		}
 	})
 	t.Run("local edit shows drift with counts", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("aaa\nBBB\nccc\nddd\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +60,7 @@ func TestComputeDiff(t *testing.T) {
 	})
 	t.Run("new template commit shows drift", func(t *testing.T) {
 		repoDir, _ := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
@@ -82,7 +82,7 @@ func TestComputeDiff(t *testing.T) {
 		if _, err := repo.CreateTag("v1", plumbing.NewHash(old), nil); err != nil {
 			t.Fatal(err)
 		}
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
 		opts := diffOptions()
 		opts.Ref = "v1"
@@ -91,12 +91,12 @@ func TestComputeDiff(t *testing.T) {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
 		if len(diffs) != 0 {
-			t.Errorf("diffs = %+v, want none when --ref selects the bootstrapped tag", diffs)
+			t.Errorf("diffs = %+v, want none when --ref selects the initialized tag", diffs)
 		}
 	})
 	t.Run("deleted project file shows as new", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.Remove(filepath.Join(projectDir, "hello.txt")); err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +116,7 @@ func TestComputeDiff(t *testing.T) {
 	})
 	t.Run("dropped template file shows as deleted", func(t *testing.T) {
 		repoDir, _ := initTemplateRepo(t, map[string]string{"gone.txt": "bye\n", "stay.txt": "hi\n"})
-		projectDir := bootstrapProject(t, repoDir)
+		projectDir := initProject(t, repoDir)
 		if err := os.Remove(filepath.Join(repoDir, "gone.txt")); err != nil {
 			t.Fatal(err)
 		}
@@ -138,7 +138,7 @@ func TestComputeDiff(t *testing.T) {
 	})
 	t.Run("ignored paths are skipped", func(t *testing.T) {
 		src := makeTemplate(t, "excludes:\n  - \"gen/**\"\n", map[string]string{"gen/out.txt": "v1\n", "hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -157,7 +157,7 @@ func TestComputeDiff(t *testing.T) {
 	})
 	t.Run("missing lock errors", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.Remove(filepath.Join(projectDir, config.LockFileName)); err != nil {
 			t.Fatal(err)
 		}
@@ -167,7 +167,7 @@ func TestComputeDiff(t *testing.T) {
 	})
 	t.Run("no state mutation", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +191,7 @@ func TestComputeDiff(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(afterState) != string(beforeState) {
-			t.Error("ComputeDiff mutated state.json")
+			t.Error("ComputeDiff mutated state.yml")
 		}
 		if string(afterLock) != string(beforeLock) {
 			t.Error("ComputeDiff mutated lock.json")
@@ -199,7 +199,7 @@ func TestComputeDiff(t *testing.T) {
 	})
 	t.Run("drift sorted by path", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"b.txt": "1\n", "a.txt": "1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		for _, name := range []string{"a.txt", "b.txt"} {
 			if err := os.WriteFile(filepath.Join(projectDir, name), []byte("2\n"), 0o600); err != nil {
 				t.Fatal(err)
@@ -219,7 +219,7 @@ func TestComputeDiffMinEngine(t *testing.T) {
 	setup := func(t *testing.T) (string, string) {
 		t.Helper()
 		src := makeTemplate(t, "min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("min-engine: \">=99.0.0\"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -356,7 +356,7 @@ func TestComputeDiffNoBase(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-			projectDir := bootstrapProject(t, src)
+			projectDir := initProject(t, src)
 			if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 				t.Fatal(err)
 			}
@@ -373,7 +373,7 @@ func TestComputeDiffNoBase(t *testing.T) {
 	}
 	t.Run("full review survives missing base", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 			t.Fatal(err)
 		}
@@ -386,7 +386,7 @@ func TestComputeDiffNoBase(t *testing.T) {
 func TestComputeDiffRenames(t *testing.T) {
 	t.Run("upstream follows rename to new path", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"old.txt": "hello\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("renames:\n  old.txt: new.txt\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
 			t.Fatal(err)
 		}

@@ -36,8 +36,8 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		t.Parallel()
 		proj := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), fixture, proj, testOptions(&stdout)); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), fixture, proj, testOptions(&stdout)); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(proj))
 		if err != nil {
@@ -92,14 +92,14 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		}
 		local := filepath.Join(t.TempDir(), "local")
 		var localOut strings.Builder
-		if err := Bootstrap(context.Background(), fixture, local, opts(&localOut)); err != nil {
-			t.Fatalf("local bootstrap error: %v", err)
+		if err := Init(context.Background(), fixture, local, opts(&localOut)); err != nil {
+			t.Fatalf("local init error: %v", err)
 		}
 		remoteSrc := "git::" + repo + "//templates/default?ref=" + template.DefaultRef
 		remote := filepath.Join(t.TempDir(), "remote")
 		var remoteOut strings.Builder
-		if err := Bootstrap(context.Background(), remoteSrc, remote, opts(&remoteOut)); err != nil {
-			t.Fatalf("remote bootstrap error: %v", err)
+		if err := Init(context.Background(), remoteSrc, remote, opts(&remoteOut)); err != nil {
+			t.Fatalf("remote init error: %v", err)
 		}
 		e2eCompareTrees(t, local, remote)
 	})
@@ -115,8 +115,8 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 
 		proj := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), tmpl, proj, testOptions(&stdout)); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), tmpl, proj, testOptions(&stdout)); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(proj))
 		if err != nil {
@@ -130,7 +130,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		}
 
 		var updateOut strings.Builder
-		result, err := CheckUpdate(context.Background(), proj, checkUpdateOptions(&updateOut))
+		result, err := Check(context.Background(), proj, checkOptions(&updateOut))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if sha2 == sha1 {
 			t.Fatal("second template commit matches first, want advance")
 		}
-		result, err = CheckUpdate(context.Background(), proj, checkUpdateOptions(&updateOut))
+		result, err = Check(context.Background(), proj, checkOptions(&updateOut))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -230,12 +230,12 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		var stdout strings.Builder
 		old := testOptions(&stdout)
 		old.Engine = "0.0.1"
-		if err := Bootstrap(context.Background(), fixture, filepath.Join(t.TempDir(), "proj"), old); err == nil {
-			t.Error("bootstrap below min-engine succeeded, want error")
+		if err := Init(context.Background(), fixture, filepath.Join(t.TempDir(), "proj"), old); err == nil {
+			t.Error("init below min-engine succeeded, want error")
 		} else if !strings.Contains(err.Error(), "requires engine") {
-			t.Errorf("bootstrap error = %v, want min-engine complaint", err)
+			t.Errorf("init error = %v, want min-engine complaint", err)
 		}
-		proj := bootstrapProject(t, fixture)
+		proj := initProject(t, fixture)
 		var updateStdout, updateStderr strings.Builder
 		updateOpts := updateTestOptions(&updateStdout, &updateStderr)
 		updateOpts.Engine = "0.0.1"
@@ -255,9 +255,9 @@ func TestDefaultProfileChangeOffline(t *testing.T) {
 	}
 	t.Run("profiles input flows to miserc env", func(t *testing.T) {
 		t.Parallel()
-		proj := e2eBootstrapProfiles(t, fixture)
+		proj := e2eInitProfiles(t, fixture)
 		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); err != nil {
-			t.Fatalf("config.go.toml missing after bootstrap, want conditional files to render: %v", err)
+			t.Fatalf("config.go.toml missing after init, want conditional files to render: %v", err)
 		}
 		e2eAssertMisercEnv(t, proj, `env = ["core", "custom"]`)
 		e2eUpdateProfiles(t, proj, "go")
@@ -281,9 +281,9 @@ func TestDefaultProfileChangeOffline(t *testing.T) {
 	})
 	t.Run("go profile content follows the profiles input", func(t *testing.T) {
 		t.Parallel()
-		proj := e2eBootstrapProfiles(t, fixture, "go")
+		proj := e2eInitProfiles(t, fixture, "go")
 		if _, err := os.Stat(filepath.Join(proj, ".config", "mise", "config.go.toml")); err != nil {
-			t.Fatalf("config.go.toml missing after core+go bootstrap: %v", err)
+			t.Fatalf("config.go.toml missing after core+go init: %v", err)
 		}
 		e2eAssertMisercEnv(t, proj, `env = ["core", "go", "custom"]`)
 		e2eUpdateProfiles(t, proj)
@@ -315,9 +315,9 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 	bin := e2eBuildTurutan(t, root)
 	work := t.TempDir()
 	goData := e2eDataFile(t, "profiles:\n  - go\n")
-	if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
+	if out, code := e2eRun(t, bin, work, "init", fixture, "proj",
 		"--data-file", goData, "--defaults", "--non-interactive"); code != 0 {
-		t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+		t.Fatalf("init exit = %d, want 0:\n%s", code, out)
 	}
 	proj := filepath.Join(work, "proj")
 	e2eAssertMisercEnv(t, proj, `env = ["core", "go", "custom"]`)
@@ -364,9 +364,9 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 			t.Fatal(err)
 		}
 		work := t.TempDir()
-		if out, code := e2eRun(t, bin, work, "bootstrap", tmpl, "proj",
+		if out, code := e2eRun(t, bin, work, "init", tmpl, "proj",
 			"--defaults", "--non-interactive"); code != 0 {
-			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+			t.Fatalf("init exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
 		for _, what := range []string{"all", "upstream", "local"} {
@@ -436,9 +436,9 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 			t.Fatal(err)
 		}
 		work := t.TempDir()
-		if out, code := e2eRun(t, bin, work, "bootstrap", tmpl, "proj",
+		if out, code := e2eRun(t, bin, work, "init", tmpl, "proj",
 			"--defaults", "--non-interactive"); code != 0 {
-			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+			t.Fatalf("init exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
 		if out, code := e2eRun(t, bin, proj, "update", "--preview", "--non-interactive"); code != 0 {
@@ -474,29 +474,29 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 		if out, code := e2eRun(t, bin, t.TempDir(), "profiles", "--non-interactive"); code == 0 {
 			t.Errorf("profiles exit = 0, want non-zero for the removed command:\n%s", out)
 		}
-		if out, code := e2eRun(t, bin, t.TempDir(), "bootstrap", "--help"); code != 0 {
-			t.Fatalf("bootstrap --help exit = %d, want 0:\n%s", code, out)
+		if out, code := e2eRun(t, bin, t.TempDir(), "init", "--help"); code != 0 {
+			t.Fatalf("init --help exit = %d, want 0:\n%s", code, out)
 		} else if strings.Contains(out, "--profiles") {
-			t.Errorf("bootstrap --help mentions --profiles, want the flag gone:\n%s", out)
+			t.Errorf("init --help mentions --profiles, want the flag gone:\n%s", out)
 		}
 	})
 
-	t.Run("check-update quiet when up to date", func(t *testing.T) {
+	t.Run("check quiet when up to date", func(t *testing.T) {
 		t.Parallel()
 		work := t.TempDir()
-		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
+		if out, code := e2eRun(t, bin, work, "init", fixture, "proj",
 			"--defaults", "--non-interactive"); code != 0 {
-			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
+			t.Fatalf("init exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
-		if out, code := e2eRun(t, bin, proj, "check-update", "--non-interactive"); code != 0 {
-			t.Fatalf("check-update exit = %d, want 0 when up to date:\n%s", code, out)
+		if out, code := e2eRun(t, bin, proj, "check", "--non-interactive"); code != 0 {
+			t.Fatalf("check exit = %d, want 0 when up to date:\n%s", code, out)
 		} else {
 			if !strings.Contains(out, "up to date") {
-				t.Errorf("check-update output missing up-to-date line:\n%s", out)
+				t.Errorf("check output missing up-to-date line:\n%s", out)
 			}
 			if strings.Contains(out, "offers new profiles") {
-				t.Errorf("check-update output mentions legacy profile offers:\n%s", out)
+				t.Errorf("check output mentions legacy profile offers:\n%s", out)
 			}
 		}
 	})
@@ -524,7 +524,7 @@ func e2eAssertReadmeProject(t *testing.T, proj, want string) {
 	}
 }
 
-func e2eBootstrapProfiles(t *testing.T, fixture string, profiles ...string) string {
+func e2eInitProfiles(t *testing.T, fixture string, profiles ...string) string {
 	t.Helper()
 	proj := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
@@ -532,8 +532,8 @@ func e2eBootstrapProfiles(t *testing.T, fixture string, profiles ...string) stri
 	if len(profiles) > 0 {
 		opts.DataFile = profilesDataFile(t, profiles...)
 	}
-	if err := Bootstrap(context.Background(), fixture, proj, opts); err != nil {
-		t.Fatalf("Bootstrap error: %v", err)
+	if err := Init(context.Background(), fixture, proj, opts); err != nil {
+		t.Fatalf("Init error: %v", err)
 	}
 	return proj
 }

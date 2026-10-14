@@ -76,9 +76,9 @@ run = "goreleaser release --clean"
 description = "Show template drift for this project"
 run = "${TURUTAN_BIN:-turutan} diff"
 
-[tasks."turutan:check-update"]
+[tasks."turutan:check"]
 description = "Check whether the template has updates"
-run = "${TURUTAN_BIN:-turutan} check-update"
+run = "${TURUTAN_BIN:-turutan} check"
 
 [tasks."turutan:update"]
 description = "Merge template updates into this project"

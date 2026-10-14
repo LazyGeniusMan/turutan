@@ -68,7 +68,7 @@ func TestPlantDocFiles(t *testing.T) {
 	})
 }
 
-func TestBootstrapDocFiles(t *testing.T) {
+func TestInitDocFiles(t *testing.T) {
 	t.Parallel()
 	t.Run("rendered template output plants into config dir", func(t *testing.T) {
 		t.Parallel()
@@ -78,8 +78,8 @@ func TestBootstrapDocFiles(t *testing.T) {
 		}
 		src := makeTemplate(t, "doc-files: [README.md]\n", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, ".config", "turutan", "README.md"))
 		if err != nil {
@@ -106,8 +106,8 @@ func TestBootstrapDocFiles(t *testing.T) {
 		}
 		src := makeTemplate(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, ".config", "turutan", "GO.md")); !os.IsNotExist(err) {
 			t.Error("GO.md planted without its profile, want it skipped")

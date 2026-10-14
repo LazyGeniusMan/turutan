@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -24,17 +23,12 @@ import (
 )
 
 const (
-	StateFileName       = ".config/turutan/state.json"
+	StateFileName       = ".config/turutan/state.yml"
 	LockFileName        = ".config/turutan/lock.json"
 	ManifestFileName    = ".turutan.yml"
 	ManifestFileNameAlt = ".turutan.yaml"
 	StateVersion        = 1
 	TemplateLicenseMIT0 = "MIT-0"
-)
-
-const (
-	legacyStateFileName = ".turutan.json"
-	legacyLockFileName  = ".turutan.lock"
 )
 
 var hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -46,18 +40,18 @@ var hexPrefix = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 var manifestHashRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type State struct {
-	Version         int            `json:"version"`
-	Template        string         `json:"template"`
-	SourceKind      string         `json:"sourceKind"`
-	Subpath         string         `json:"subpath,omitempty"`
-	RequestedRef    string         `json:"requestedRef,omitempty"`
-	ResolvedCommit  string         `json:"resolvedCommit"`
-	Data            map[string]any `json:"data,omitempty"`
-	DataSchema      int            `json:"dataSchema,omitempty"`
-	Skip            []string       `json:"skip,omitempty"`
-	Conflict        string         `json:"conflict,omitempty"`
-	Engine          string         `json:"engine"`
-	TemplateLicense string         `json:"templateLicense"`
+	Version         int            `yaml:"version"`
+	Template        string         `yaml:"template"`
+	SourceKind      string         `yaml:"sourceKind"`
+	Subpath         string         `yaml:"subpath,omitempty"`
+	RequestedRef    string         `yaml:"requestedRef,omitempty"`
+	ResolvedCommit  string         `yaml:"resolvedCommit"`
+	Data            map[string]any `yaml:"data,omitempty"`
+	DataSchema      int            `yaml:"dataSchema,omitempty"`
+	Skip            []string       `yaml:"skip,omitempty"`
+	Conflict        string         `yaml:"conflict,omitempty"`
+	Engine          string         `yaml:"engine"`
+	TemplateLicense string         `yaml:"templateLicense"`
 }
 
 type LockFile struct {
@@ -121,12 +115,12 @@ type Manifest struct {
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
-	data, err := readStateFile(fsys, StateFileName, legacyStateFileName)
+	data, err := fs.ReadFile(fsys, StateFileName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading %q: %w", StateFileName, err)
 	}
 	var state State
-	if err := json.Unmarshal(data, &state); err != nil {
+	if err := yaml.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("parsing %q: %w", StateFileName, err)
 	}
 	if err := ValidateState(&state); err != nil {
@@ -140,7 +134,7 @@ func SaveState(dir string, state *State) error {
 	if err := ValidateState(state); err != nil {
 		return err
 	}
-	return writeJSON(dir, StateFileName, state)
+	return writeYAML(dir, StateFileName, state)
 }
 
 func ValidateState(state *State) error {
@@ -177,9 +171,9 @@ func ValidateState(state *State) error {
 }
 
 func LoadLock(fsys fs.FS) (*Lock, error) {
-	data, err := readStateFile(fsys, LockFileName, legacyLockFileName)
+	data, err := fs.ReadFile(fsys, LockFileName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading %q: %w", LockFileName, err)
 	}
 	var lock Lock
 	if err := json.Unmarshal(data, &lock); err != nil {
@@ -367,7 +361,7 @@ func validateManifestPlantedFiles(files []string, key string) error {
 			return fmt.Errorf("invalid manifest: %s[%d] %q must not be a template", key, i, entry)
 		}
 		dest := ".config/turutan/" + slash
-		if dest == ".config/turutan/state.json" ||
+		if dest == ".config/turutan/state.yml" ||
 			dest == ".config/turutan/lock.json" ||
 			dest == ".config/turutan/templates" ||
 			strings.HasPrefix(dest, ".config/turutan/templates/") {
@@ -542,17 +536,20 @@ func writeJSON(dir, name string, value any) error {
 	return nil
 }
 
-func readStateFile(fsys fs.FS, name, legacy string) ([]byte, error) {
-	data, err := fs.ReadFile(fsys, name)
-	if err == nil {
-		return data, nil
+func writeYAML(dir, name string, value any) error {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encoding %q: %w", name, err)
 	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("reading %q: %w", name, err)
+	if len(data) == 0 || data[len(data)-1] != '\n' {
+		data = append(data, '\n')
 	}
-	legacyData, legacyErr := fs.ReadFile(fsys, legacy)
-	if legacyErr != nil {
-		return nil, fmt.Errorf("reading %q: %w", name, err)
+	parent := filepath.Dir(filepath.Join(dir, name))
+	if err := os.MkdirAll(parent, 0o750); err != nil {
+		return err
 	}
-	return legacyData, nil
+	if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+		return fmt.Errorf("writing %q: %w", name, err)
+	}
+	return nil
 }

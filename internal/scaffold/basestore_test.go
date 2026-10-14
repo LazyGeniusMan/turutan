@@ -65,7 +65,7 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(src, ".config", "turutan"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		for _, name := range []string{"state.json", "lock.json", "LICENSE"} {
+		for _, name := range []string{"state.yml", "lock.json", "LICENSE"} {
 			if err := os.WriteFile(filepath.Join(src, ".config", "turutan", name), []byte("m"), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -88,7 +88,7 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, absent := range []string{".config/turutan/state.json", ".config/turutan/lock.json", ".git", "evil.txt"} {
+		for _, absent := range []string{".config/turutan/state.yml", ".config/turutan/lock.json", ".git", "evil.txt"} {
 			if _, err := os.Lstat(filepath.Join(base, filepath.FromSlash(absent))); err == nil {
 				t.Errorf("base store contains %q, want it skipped", absent)
 			}
@@ -99,16 +99,16 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 	})
 }
 
-func TestBootstrapStoresBase(t *testing.T) {
-	t.Run("base exists after bootstrap", func(t *testing.T) {
+func TestInitStoresBase(t *testing.T) {
+	t.Run("base exists after init", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		state, err := config.LoadState(os.DirFS(projectDir))
 		if err != nil {
 			t.Fatalf("LoadState error: %v", err)
 		}
 		if !HasBase(projectDir, state.ResolvedCommit) {
-			t.Errorf("no base copy for resolved %q after bootstrap", state.ResolvedCommit)
+			t.Errorf("no base copy for resolved %q after init", state.ResolvedCommit)
 		}
 		got, err := ReadBaseFile(projectDir, state.ResolvedCommit, "hello.txt")
 		if err != nil {
@@ -123,7 +123,7 @@ func TestBootstrapStoresBase(t *testing.T) {
 func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) string {
 	t.Helper()
 	src := makeTemplate(t, "", map[string]string{"both.txt": base})
-	projectDir := bootstrapProject(t, src)
+	projectDir := initProject(t, src)
 	if err := os.WriteFile(filepath.Join(projectDir, "both.txt"), []byte(localEdit), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 	})
 }
 
-func TestBootstrapSymlinkAndSpecial(t *testing.T) {
+func TestInitSymlinkAndSpecial(t *testing.T) {
 	t.Run("escaping symlink refused", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"ok.txt": "ok\n"})
 		outside := filepath.Join(t.TempDir(), "secret.txt")
@@ -273,8 +273,8 @@ func TestBootstrapSymlinkAndSpecial(t *testing.T) {
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err == nil {
-			t.Error("Bootstrap with escaping symlink succeeded, want error")
+		if err := Init(context.Background(), src, target, testOptions(&stdout)); err == nil {
+			t.Error("Init with escaping symlink succeeded, want error")
 		} else if !strings.Contains(err.Error(), "escapes") && !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("error = %q, want a symlink-escape refusal", err)
 		}
@@ -284,7 +284,7 @@ func TestBootstrapSymlinkAndSpecial(t *testing.T) {
 		if err := os.Symlink(filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		got, err := os.ReadFile(filepath.Join(projectDir, "link.txt"))
 		if err != nil {
 			t.Fatalf("reading dereferenced link: %v", err)
@@ -298,7 +298,7 @@ func TestBootstrapSymlinkAndSpecial(t *testing.T) {
 		if !makeTestFifo(t, filepath.Join(src, "pipe")) {
 			t.Skip("fifos unavailable on this platform")
 		}
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		if _, err := os.Lstat(filepath.Join(projectDir, "pipe")); err == nil {
 			t.Error("fifo copied into project, want it skipped")
 		}
@@ -312,8 +312,8 @@ func TestBootstrapSymlinkAndSpecial(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Skip = []string{"/abs/path"}
-		if err := Bootstrap(context.Background(), src, target, opts); err == nil {
-			t.Error("Bootstrap with absolute --skip succeeded, want error")
+		if err := Init(context.Background(), src, target, opts); err == nil {
+			t.Error("Init with absolute --skip succeeded, want error")
 		}
 	})
 }

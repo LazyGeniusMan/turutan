@@ -25,7 +25,7 @@ includes:
 excludes:
   - "**/.git/**"
   - "**/node_modules/**"
-  - ".config/turutan/state.json"
+  - ".config/turutan/state.yml"
   - ".config/turutan/lock.json"
   - ".config/turutan/templates/**"
   - ".config/ai-rulez/.generated-manifest*.json"

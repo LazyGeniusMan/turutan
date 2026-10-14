@@ -73,20 +73,20 @@ func TestPreservedGlobsUnion(t *testing.T) {
 	})
 }
 
-func TestPreserveBootstrapSeedOnce(t *testing.T) {
+func TestPreserveInitSeedOnce(t *testing.T) {
 	src := makeTemplate(t, preservesSeedManifest, preservesSeedFiles)
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
-	if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
-		t.Fatalf("Bootstrap error: %v", err)
+	if err := Init(context.Background(), src, target, testOptions(&stdout)); err != nil {
+		t.Fatalf("Init error: %v", err)
 	}
 	writeLocalFile(t, target, "keep.local", "local\n")
 	writeFiles(t, src, map[string]string{"keep.local": "seed v2\n", "keep.txt": "keep v2\n"})
 	var reStdout strings.Builder
 	reOpts := testOptions(&reStdout)
 	reOpts.Force = true
-	if err := Bootstrap(context.Background(), src, target, reOpts); err != nil {
-		t.Fatalf("re-bootstrap error: %v", err)
+	if err := Init(context.Background(), src, target, reOpts); err != nil {
+		t.Fatalf("re-init error: %v", err)
 	}
 	assertProfileFile(t, target, "keep.local", "local\n")
 	assertProfileFile(t, target, "keep.txt", "keep v2\n")
@@ -96,7 +96,7 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 	setup := func(t *testing.T) (string, string) {
 		t.Helper()
 		src := makeTemplate(t, preservesSeedManifest, preservesSeedFiles)
-		projectDir := bootstrapProject(t, src)
+		projectDir := initProject(t, src)
 		return src, projectDir
 	}
 	t.Run("both changed keeps local preserved but updates core", func(t *testing.T) {
@@ -202,7 +202,7 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 
 func TestPreservePreviewAndDiff(t *testing.T) {
 	src := makeTemplate(t, preservesSeedManifest, preservesSeedFiles)
-	projectDir := bootstrapProject(t, src)
+	projectDir := initProject(t, src)
 	writeLocalFile(t, projectDir, "keep.local", "local\n")
 	writeFiles(t, src, map[string]string{
 		"keep.local": "seed v2\n",
@@ -248,7 +248,7 @@ func TestConditionalPreservesOnlyIfAbsent(t *testing.T) {
 	setup := func(t *testing.T, profiles ...string) (string, string) {
 		t.Helper()
 		src := makeTemplate(t, preservesSeedManifest, preservesSeedFiles)
-		return src, bootstrapProfiles(t, src, profiles...)
+		return src, initProfiles(t, src, profiles...)
 	}
 	t.Run("inactive conditional preserves sync normally", func(t *testing.T) {
 		src, projectDir := setup(t)

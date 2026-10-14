@@ -11,7 +11,7 @@ import (
 
 const (
 	DefaultURL     = "git::https://github.com/LazyGeniusMan/turutan.git//templates/default"
-	DefaultRef     = "templates-default/v1"
+	DefaultRef     = "main"
 	DefaultAlias   = "default"
 	defaultRepo    = "https://github.com/LazyGeniusMan/turutan.git"
 	defaultSubpath = "templates/default"

@@ -19,20 +19,20 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
-func Bootstrap(
+func Init(
 	ctx context.Context,
 	source, target string,
 	opts Options,
 ) error {
 	stdout, stderr, stdin := streams(opts)
-	if err := validateBootstrapOpts(opts); err != nil {
+	if err := validateInitOpts(opts); err != nil {
 		return err
 	}
-	src, err := resolveBootstrapSrc(source, opts, stderr)
+	src, err := resolveInitSrc(source, opts, stderr)
 	if err != nil {
 		return err
 	}
-	fetched, manifest, engine, err := fetchBootstrapTemplate(
+	fetched, manifest, engine, err := fetchInitTemplate(
 		ctx, src, opts, stderr)
 	if err != nil {
 		return err
@@ -40,33 +40,33 @@ func Bootstrap(
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
-	absTarget, data, staged, cleanupStage, err := stageBootstrap(
+	absTarget, data, staged, cleanupStage, err := stageInit(
 		target, fetched, manifest, opts, stdout, stdin)
 	if err != nil {
 		return err
 	}
 	defer cleanupStage()
-	return finishBootstrap(
+	return finishInit(
 		ctx, src, fetched, manifest, absTarget, data, staged,
 		opts, engine, stdout, stderr, stdin)
 }
 
-func validateBootstrapOpts(opts Options) error {
+func validateInitOpts(opts Options) error {
 	if err := opts.Conflict.Validate(); err != nil {
 		return err
 	}
 	if err := filter.ValidateGlobs(opts.Skip); err != nil {
-		return fmt.Errorf("bootstrap: bad --skip entry: %w", err)
+		return fmt.Errorf("init: bad --skip entry: %w", err)
 	}
 	if opts.NonInteractive && !opts.Defaults && opts.DataFile == "" {
 		return fmt.Errorf(
-			"bootstrap: non-interactive mode requires " +
+			"init: non-interactive mode requires " +
 				"--data-file or --defaults")
 	}
 	return nil
 }
 
-func resolveBootstrapSrc(
+func resolveInitSrc(
 	source string,
 	opts Options,
 	stderr io.Writer,
@@ -82,14 +82,14 @@ func resolveBootstrapSrc(
 		src.Subpath = filepath.ToSlash(filepath.Clean(opts.Subpath))
 	}
 	vlogf(stderr, opts.Verbose,
-		"bootstrap: source %q kind %s ref %q depth %d",
+		"init: source %q kind %s ref %q depth %d",
 		src.String(), src.Kind, src.RequestedRef, src.Depth)
 	if src.Kind == template.KindLocalGit ||
 		src.Kind == template.KindFilesystem {
 		abs, err := filepath.Abs(src.Repo)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"bootstrap: resolving source %q: %w", src.Raw, err)
+				"init: resolving source %q: %w", src.Raw, err)
 		}
 		src.Repo = abs
 	}
@@ -134,7 +134,7 @@ func storedRelativePath(projectDir, raw string) (string, bool) {
 	return filepath.Join(projectDir, filepath.FromSlash(raw)), true
 }
 
-func fetchBootstrapTemplate(
+func fetchInitTemplate(
 	ctx context.Context,
 	src *template.Source,
 	opts Options,
@@ -145,7 +145,7 @@ func fetchBootstrapTemplate(
 		return nil, nil, "", err
 	}
 	vlogf(stderr, opts.Verbose,
-		"bootstrap: fetched %s commit %q", src.Kind, fetched.ResolvedCommit)
+		"init: fetched %s commit %q", src.Kind, fetched.ResolvedCommit)
 	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
 	if err != nil {
 		if fetched.Cleanup != nil {
@@ -164,7 +164,7 @@ func fetchBootstrapTemplate(
 	return fetched, manifest, engine, nil
 }
 
-func stageBootstrap(
+func stageInit(
 	target string,
 	fetched *template.Fetched,
 	manifest *config.Manifest,
@@ -186,15 +186,15 @@ func stageBootstrap(
 		return "", nil, "", cleanup, err
 	}
 	if err := plantLicenseFiles(fetched.Dir, staged, manifest); err != nil {
-		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+		return "", nil, "", cleanup, fmt.Errorf("init: %w", err)
 	}
 	if err := plantDocFiles(staged, manifest); err != nil {
-		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+		return "", nil, "", cleanup, fmt.Errorf("init: %w", err)
 	}
 	return absTarget, data, staged, cleanup, nil
 }
 
-func finishBootstrap(
+func finishInit(
 	_ context.Context,
 	src *template.Source,
 	fetched *template.Fetched,
@@ -223,24 +223,24 @@ func finishBootstrap(
 			config.ComputeManifestHash(files), "sha256:")
 	}
 	license := resolveTemplateLicense(os.DirFS(fetched.Dir), manifest)
-	vlogf(stderr, opts.Verbose, "bootstrap: template license %s", license)
+	vlogf(stderr, opts.Verbose, "init: template license %s", license)
 	if err := writeStateAndLock(
 		absTarget, src, resolved, data, opts, files, engine, license,
 	); err != nil {
 		return err
 	}
 	if err := StoreBase(absTarget, resolved, staged); err != nil {
-		return fmt.Errorf("bootstrap: %w", err)
+		return fmt.Errorf("init: %w", err)
 	}
 	if err := gateHooks(manifest, absTarget, opts, stdout, stderr, stdin); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(stdout, "bootstrapped %s from %s @ %s (%d files)\n",
+	if _, err := fmt.Fprintf(stdout, "initialized %s from %s @ %s (%d files)\n",
 		absTarget, src.String(), shortSHA(resolved), len(files)); err != nil {
 		return err
 	}
 	vlogf(stderr, opts.Verbose,
-		"bootstrap: wrote %d file(s) state %s lock %s",
+		"init: wrote %d file(s) state %s lock %s",
 		len(files), config.StateFileName, config.LockFileName)
 	return nil
 }
@@ -259,7 +259,7 @@ func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, 
 	}
 	constraint, err := semver.NewConstraint(manifest.MinEngine)
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: bad min-engine %q: %w", manifest.MinEngine, err)
+		return "", fmt.Errorf("init: bad min-engine %q: %w", manifest.MinEngine, err)
 	}
 	current, err := semver.NewVersion(version)
 	if err != nil {
@@ -267,7 +267,7 @@ func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, 
 		return version, nil
 	}
 	if !constraint.Check(current) {
-		return "", fmt.Errorf("bootstrap: template requires engine %s: have %s", manifest.MinEngine, version)
+		return "", fmt.Errorf("init: template requires engine %s: have %s", manifest.MinEngine, version)
 	}
 	return version, nil
 }
@@ -275,20 +275,20 @@ func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, 
 func prepareTarget(target string, force bool) (string, error) {
 	abs, err := filepath.Abs(target)
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: resolving target %q: %w", target, err)
+		return "", fmt.Errorf("init: resolving target %q: %w", target, err)
 	}
 	entries, err := os.ReadDir(abs)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("bootstrap: reading target %q: %w", target, err)
+			return "", fmt.Errorf("init: reading target %q: %w", target, err)
 		}
 		if err := os.MkdirAll(abs, 0o750); err != nil {
-			return "", fmt.Errorf("bootstrap: creating target %q: %w", target, err)
+			return "", fmt.Errorf("init: creating target %q: %w", target, err)
 		}
 		return abs, nil
 	}
 	if len(entries) > 0 && !force {
-		return "", fmt.Errorf("bootstrap: target %q is not empty (use --force to overwrite)", target)
+		return "", fmt.Errorf("init: target %q is not empty (use --force to overwrite)", target)
 	}
 	return abs, nil
 }
@@ -303,20 +303,20 @@ func renderWithData(
 ) (string, func(), error) {
 	stage, err := os.MkdirTemp("", "turutan-stage-*")
 	if err != nil {
-		return "", nil, fmt.Errorf("bootstrap: creating staging dir: %w", err)
+		return "", nil, fmt.Errorf("init: creating staging dir: %w", err)
 	}
 	cleanup := func() { _ = os.RemoveAll(stage) }
 	for range maxInputAttempts {
-		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "init"); err != nil {
 			return "", cleanup, err
 		}
 		normalizeDataWithManifest(data, manifest)
 		conds := manifestConditionals(manifest)
 		if err := os.RemoveAll(stage); err != nil {
-			return "", cleanup, fmt.Errorf("bootstrap: resetting staging dir: %w", err)
+			return "", cleanup, fmt.Errorf("init: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
-			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
+			return "", cleanup, fmt.Errorf("init: creating staging dir: %w", err)
 		}
 		view := renderDataView(data)
 		err := template.RenderDirWithConditionals(srcDir, stage, view, manifest.Includes, manifest.Excludes, manifest.Preserves, conds)
@@ -329,14 +329,14 @@ func renderWithData(
 		}
 		if opts.NonInteractive {
 			return "", cleanup, fmt.Errorf(
-				"bootstrap: missing data for key %q "+"(use --data-file or --defaults): %w",
+				"init: missing data for key %q "+"(use --data-file or --defaults): %w",
 				key, err)
 		}
 		if err := inputMissingKey(data, manifest, stdout, stdin, key); err != nil {
 			return "", cleanup, err
 		}
 	}
-	return "", cleanup, fmt.Errorf("bootstrap: too many missing values (over %d inputs)", maxInputAttempts)
+	return "", cleanup, fmt.Errorf("init: too many missing values (over %d inputs)", maxInputAttempts)
 }
 
 func ensureInputValues(
@@ -519,7 +519,7 @@ func (p *publisher) publishEntry(
 	slash := filter.ToSlash(rel)
 	if _, err := filter.SafeJoin(
 		p.target, filepath.FromSlash(slash)); err != nil {
-		return fmt.Errorf("bootstrap: %w", err)
+		return fmt.Errorf("init: %w", err)
 	}
 	if d.IsDir() {
 		return p.publishDir(slash)
@@ -536,15 +536,15 @@ func (p *publisher) publishEntry(
 func (p *publisher) publishDir(slash string) error {
 	root, err := os.OpenRoot(p.target)
 	if err != nil {
-		return fmt.Errorf("bootstrap: opening target: %w", err)
+		return fmt.Errorf("init: opening target: %w", err)
 	}
 	mkdirErr := root.MkdirAll(filepath.FromSlash(slash), 0o755)
 	closeErr := root.Close()
 	if mkdirErr != nil {
-		return fmt.Errorf("bootstrap: creating dir %q: %w", slash, mkdirErr)
+		return fmt.Errorf("init: creating dir %q: %w", slash, mkdirErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("bootstrap: closing target: %w", closeErr)
+		return fmt.Errorf("init: closing target: %w", closeErr)
 	}
 	return nil
 }
@@ -582,7 +582,7 @@ func (p *publisher) publishFile(
 	}
 	if err := filter.WriteFileWithinRoot(
 		p.target, slash, data, info.Mode().Perm()); err != nil {
-		return fmt.Errorf("bootstrap: writing %q: %w", slash, err)
+		return fmt.Errorf("init: writing %q: %w", slash, err)
 	}
 	*files = append(*files, config.FileEntry(slash, data))
 	return nil
@@ -606,7 +606,7 @@ func (p *publisher) keepOrFail(
 	}
 	if !p.opts.Force {
 		return false, fmt.Errorf(
-			"bootstrap: %q exists (use --force to overwrite)", slash)
+			"init: %q exists (use --force to overwrite)", slash)
 	}
 	return false, nil
 }
@@ -614,14 +614,14 @@ func (p *publisher) keepOrFail(
 func keepExisting(slash string, manifest *config.Manifest, opts Options, preserved []string) (bool, error) {
 	kept, err := isPreservedPath(slash, manifest, preserved)
 	if err != nil {
-		return false, fmt.Errorf("bootstrap: %w", err)
+		return false, fmt.Errorf("init: %w", err)
 	}
 	if kept {
 		return true, nil
 	}
 	skipped, err := filter.MatchAny(opts.Skip, slash)
 	if err != nil {
-		return false, fmt.Errorf("bootstrap: matching --skip entries: %w", err)
+		return false, fmt.Errorf("init: matching --skip entries: %w", err)
 	}
 	return skipped, nil
 }
@@ -661,7 +661,7 @@ func writeStateAndLock(
 		TemplateLicense: license,
 	}
 	if err := config.SaveState(target, state); err != nil {
-		return fmt.Errorf("bootstrap: %w", err)
+		return fmt.Errorf("init: %w", err)
 	}
 	lock := &config.Lock{
 		Source:      src.String(),
@@ -671,7 +671,7 @@ func writeStateAndLock(
 		Files:       files,
 	}
 	if err := config.SaveLock(target, lock); err != nil {
-		return fmt.Errorf("bootstrap: %w", err)
+		return fmt.Errorf("init: %w", err)
 	}
 	return nil
 }
@@ -690,7 +690,7 @@ func gateHooks(
 	if !opts.AllowHooks {
 		if opts.NonInteractive {
 			return fmt.Errorf(
-				"bootstrap: template declares hooks %q: refusing in "+"--non-interactive mode without --allow-hooks",
+				"init: template declares hooks %q: refusing in "+"--non-interactive mode without --allow-hooks",
 				hooks)
 		}
 		allow, err := askConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks))
@@ -717,7 +717,7 @@ func gateHooks(
 
 func runHookCmd(target, hook string, stderr io.Writer) error {
 	if hook == "" {
-		return fmt.Errorf("bootstrap: hook has an empty command")
+		return fmt.Errorf("init: hook has an empty command")
 	}
 	argv := []string{"-c", hook}
 	if !strings.ContainsAny(hook, " \t\n|&;()<>$`\"'") {
@@ -737,7 +737,7 @@ func runHookCmd(target, hook string, stderr io.Writer) error {
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("bootstrap: hook %q failed: %w", hook, err)
+		return fmt.Errorf("init: hook %q failed: %w", hook, err)
 	}
 	return nil
 }

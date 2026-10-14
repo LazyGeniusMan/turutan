@@ -65,9 +65,9 @@ func TestMissingKeyTyped(t *testing.T) {
 	)
 	target := filepath.Join(t.TempDir(), "proj")
 	opts := testOptions(&strings.Builder{})
-	err := Bootstrap(context.Background(), src, target, opts)
+	err := Init(context.Background(), src, target, opts)
 	if err == nil {
-		t.Fatal("Bootstrap succeeded, want missing-key error")
+		t.Fatal("Init succeeded, want missing-key error")
 	}
 	key, ok := AsMissingKey(err)
 	if !ok {

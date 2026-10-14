@@ -260,7 +260,7 @@ func readBaseEntries(projectDir, sha string) (map[string][]byte, error) {
 			return nil
 		}
 		slash := filter.ToSlash(rel)
-		data, err := os.ReadFile(path) // #nosec G304, G122 -- reads file found by WalkDir of this run's base copy under .turutan/templates, not caller-controlled inclusion
+		data, err := os.ReadFile(path) // #nosec G304, G122 -- reads file found by WalkDir of this run's base copy under .config/turutan/templates, not caller-controlled inclusion
 		if err != nil {
 			return err
 		}

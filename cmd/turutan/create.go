@@ -20,7 +20,7 @@ func newCreateCmd() *cobra.Command {
 		Long: `Scaffold a new template-authoring project: an example .turutan.yml
 covering every engine feature plus the live files it references.
 
-Run 'turutan bootstrap --defaults <dir> <out-dir>' afterwards to see the
+Run 'turutan init --defaults <dir> <out-dir>' afterwards to see the
 example template render (add --allow-hooks to run its example hooks).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

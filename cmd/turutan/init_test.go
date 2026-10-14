@@ -28,24 +28,24 @@ func writeTemplate(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-func TestBootstrapCmd(t *testing.T) {
+func TestInitCmd(t *testing.T) {
 	oldCfg := appCfg
 	appCfg.nonInteractive = true
 	defer func() { appCfg = oldCfg }()
 
-	t.Run("bootstraps from filesystem with defaults", func(t *testing.T) {
+	t.Run("inits from filesystem with defaults", func(t *testing.T) {
 		src := writeTemplate(t, map[string]string{
 			".turutan.yml": "min-engine: \">=0.1.0\"\n",
 			"go.mod.tmpl":  "module {{.project_name}}\n",
 		})
 		dst := filepath.Join(t.TempDir(), "proj")
-		cmd := newBootstrapCmd()
+		cmd := newInitCmd()
 		out := &bytes.Buffer{}
 		cmd.SetOut(out)
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{src, dst, "--defaults"})
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("bootstrap error: %v", err)
+			t.Fatalf("init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(dst, "go.mod"))
 		if err != nil {
@@ -56,22 +56,22 @@ func TestBootstrapCmd(t *testing.T) {
 		}
 	})
 	t.Run("invalid conflict mode fails", func(t *testing.T) {
-		cmd := newBootstrapCmd()
+		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"./whatever", "--conflict", "merge"})
 		if err := cmd.Execute(); err == nil {
-			t.Error("bootstrap with bad --conflict succeeded, want error")
+			t.Error("init with bad --conflict succeeded, want error")
 		}
 	})
 	t.Run("missing data fail non-interactively", func(t *testing.T) {
 		src := writeTemplate(t, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
-		cmd := newBootstrapCmd()
+		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{src, filepath.Join(t.TempDir(), "p")})
 		if err := cmd.Execute(); err == nil {
-			t.Error("bootstrap without --defaults/--data-file succeeded, want error")
+			t.Error("init without --defaults/--data-file succeeded, want error")
 		}
 	})
 }
@@ -104,7 +104,7 @@ func TestResolveSourcePrecedence(t *testing.T) {
 	}
 }
 
-func TestBootstrapDefaultSourceLayers(t *testing.T) {
+func TestInitDefaultSourceLayers(t *testing.T) {
 	oldCfg := appCfg
 	appCfg.nonInteractive = true
 	defer func() { appCfg = oldCfg }()
@@ -116,12 +116,12 @@ func TestBootstrapDefaultSourceLayers(t *testing.T) {
 			"go.mod.tmpl":  "module {{.project_name}}\n",
 		})
 		dst := filepath.Join(t.TempDir(), "proj")
-		cmd := newBootstrapCmd()
+		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"--template", src, "--defaults", dst})
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("bootstrap error: %v", err)
+			t.Fatalf("init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(dst, "go.mod"))
 		if err != nil {
@@ -138,12 +138,12 @@ func TestBootstrapDefaultSourceLayers(t *testing.T) {
 		t.Setenv(config.EnvTemplateOverride, src)
 		dst := t.TempDir()
 		t.Chdir(dst)
-		cmd := newBootstrapCmd()
+		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{"--defaults"})
 		if err := cmd.Execute(); err != nil {
-			t.Fatalf("bootstrap error: %v", err)
+			t.Fatalf("init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(dst, "go.mod"))
 		if err != nil {

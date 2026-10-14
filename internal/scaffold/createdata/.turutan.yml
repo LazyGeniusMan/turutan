@@ -5,7 +5,7 @@ source: "git::https://example.com/org/my-template.git"
 min-engine: ">=0.1.0"
 
 license: MIT-0
-# SPDX identifier recorded into state.json as `templateLicense`. When
+# SPDX identifier recorded into state.yml as `templateLicense`. When
 # empty, the engine detects SPDX from TEMPLATE_LICENSE, then LICENSE.
 
 license-files:
@@ -32,7 +32,7 @@ excludes:
   - drafts/**
   - .turutan.yml
   - .turutan.yaml
-  - .config/turutan/state.json
+  - .config/turutan/state.yml
   - .config/turutan/lock.json
   - .config/turutan/templates/**
 

@@ -14,8 +14,6 @@ import (
 
 const baseStoreSubdir = ".config/turutan/templates"
 
-const legacyBaseStoreSubdir = ".turutan/templates"
-
 func BasePath(projectDir, sha string) (string, error) {
 	return basePathIn(projectDir, sha, baseStoreSubdir)
 }
@@ -32,16 +30,12 @@ func basePathIn(projectDir, sha, subdir string) (string, error) {
 }
 
 func HasBase(projectDir, sha string) bool {
-	for _, subdir := range []string{baseStoreSubdir, legacyBaseStoreSubdir} {
-		dir, err := basePathIn(projectDir, sha, subdir)
-		if err != nil {
-			continue
-		}
-		if info, err := os.Stat(dir); err == nil && info.IsDir() {
-			return true
-		}
+	dir, err := BasePath(projectDir, sha)
+	if err != nil {
+		return false
 	}
-	return false
+	info, err := os.Stat(dir)
+	return err == nil && info.IsDir()
 }
 
 func StoreBase(projectDir, sha, srcDir string) error {
@@ -95,7 +89,7 @@ func skipBaseMeta(slash string, d fs.DirEntry) (bool, error) {
 		return true, nil
 	}
 	switch {
-	case slash == ".config/turutan/state.json",
+	case slash == ".config/turutan/state.yml",
 		slash == ".config/turutan/lock.json",
 		slash == ".config/turutan/templates",
 		strings.HasPrefix(slash, ".config/turutan/templates/"):
@@ -136,16 +130,5 @@ func ReadBaseFile(projectDir, sha, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := filter.ReadFileWithinRoot(dir, name)
-	if err == nil {
-		return data, nil
-	}
-	if !os.IsNotExist(err) {
-		return nil, err
-	}
-	legacyDir, legacyErr := basePathIn(projectDir, sha, legacyBaseStoreSubdir)
-	if legacyErr != nil {
-		return nil, legacyErr
-	}
-	return filter.ReadFileWithinRoot(legacyDir, name)
+	return filter.ReadFileWithinRoot(dir, name)
 }

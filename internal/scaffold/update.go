@@ -516,11 +516,6 @@ func baseDirFor(projectDir, old string) string {
 			return dir
 		}
 	}
-	if dir, err := basePathIn(projectDir, old, legacyBaseStoreSubdir); err == nil {
-		if info, err := os.Stat(dir); err == nil && info.IsDir() {
-			return dir
-		}
-	}
 	return ""
 }
 
