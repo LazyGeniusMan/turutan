@@ -51,6 +51,7 @@ func newRootCmd(v *viper.Viper) *cobra.Command {
 		newDiffCmd(),
 		newUpdateCmd(),
 		newCreateCmd(),
+		newStateCmd(),
 		newVersionCmd(),
 	)
 	bindViperFlags(cmd, v)
@@ -62,7 +63,7 @@ func newRootCommand(v *viper.Viper) *cobra.Command {
 		Use:   "turutan",
 		Short: "Manage project-template lifecycle",
 		Long: `turutan scaffolds new projects from versioned templates and merges
-template updates back into them (init, check, diff, update, create).`,
+template updates back into them (init, check, diff, update, create, state).`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {

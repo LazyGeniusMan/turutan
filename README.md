@@ -28,6 +28,9 @@ cd myapp
 turutan check   # exit 0 up-to-date, 2 update available
 turutan diff           # exit 0 no drift, 2 drift found
 turutan update         # merge template changes (--conflict rej for .rej files)
+turutan state sync     # re-render hand-edited state.yml inputs at the pinned commit (no upstream check)
+turutan state input    # re-answer every input, then re-render at the pinned commit
+turutan create ./tpl   # scaffold a new template-authoring project
 turutan version        # version/commit/date plus license notice
 ```
 
