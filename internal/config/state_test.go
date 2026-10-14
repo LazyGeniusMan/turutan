@@ -950,6 +950,7 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 			".config/ai-rulez/config.toml.tmpl",
 			".config/ai-rulez/domains/index.md",
 			".config/ai-rulez/domains/pkl/.gitkeep",
+			".config/hk.pkl",
 			".config/hk.pkl.tmpl",
 		}
 		isCore := func(rel string) bool {
