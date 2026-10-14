@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	turutanconfig "github.com/LazyGeniusMan/turutan/internal/config"
@@ -387,12 +388,23 @@ func TestBootstrapLayeredYmlShared(t *testing.T) {
 	ymlKeep := filepath.Join(".config", "ai-rulez", "domains", "yml", ".gitkeep")
 	for _, profiles := range [][]string{
 		{"ai", "go", "github"},
-		{"docker"},
-		{"kubernetes"},
+		{"ai", "docker"},
+		{"ai", "kubernetes"},
 	} {
 		target := bootstrapWith(t, profiles...)
 		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
 			t.Errorf("yml .gitkeep missing with profiles %v: %v", profiles, err)
+		}
+	}
+	for _, profiles := range [][]string{
+		{"docker"},
+		{"kubernetes"},
+		{"github"},
+		{"ai"},
+	} {
+		target := bootstrapWith(t, profiles...)
+		if _, err := os.Stat(filepath.Join(target, ymlKeep)); !os.IsNotExist(err) {
+			t.Errorf("yml .gitkeep present with profiles %v, want ai+language gating", profiles)
 		}
 	}
 	bare := bootstrapWith(t)
@@ -1047,6 +1059,159 @@ func TestBootstrapDefaultEnabledPresets(t *testing.T) {
 		}
 		if got := readPresetsLine(t, target); got != `presets = ["pi", "opencode"]` {
 			t.Errorf("presets line = %q, want the manifest default", got)
+		}
+	})
+}
+
+// loadDefaultGating reads the real default manifest and evaluates its
+// conditionals for profiles, returning the IsIncluded decision func.
+// ~keep
+func loadDefaultGating(t *testing.T, profiles ...string) func(string) bool {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", turutanconfig.ManifestFileName))
+	if err != nil {
+		t.Skipf("default template manifest not found: %v", err)
+	}
+	manifest, err := turutanconfig.LoadManifest(fstest.MapFS{turutanconfig.ManifestFileName: {Data: data}})
+	if err != nil {
+		t.Fatalf("LoadManifest error: %v", err)
+	}
+	var viewProfiles []any
+	for _, p := range profiles {
+		viewProfiles = append(viewProfiles, p)
+	}
+	layers, err := turutantemplate.EvaluateConditionalIncludes(
+		map[string]any{"profiles": viewProfiles},
+		manifestConditionals(manifest),
+	)
+	if err != nil {
+		t.Fatalf("EvaluateConditionalIncludes error: %v", err)
+	}
+	return func(slash string) bool {
+		ok, err := turutantemplate.IsIncluded(manifest.Includes, manifest.Excludes, manifest.Preserves, layers, slash)
+		if err != nil {
+			t.Fatalf("IsIncluded(%q) error: %v", slash, err)
+		}
+		return ok
+	}
+}
+
+// TestAiRulezGatingMatrix guards the ai+language gate: ai-rulez base files
+// render only with ai, per-language ai-rulez files only with ai plus that
+// language, and plain languages never leak ai-rulez paths.
+// ~keep
+func TestAiRulezGatingMatrix(t *testing.T) {
+	t.Parallel()
+	base := []string{
+		".config/ai-rulez/config.toml",
+		".config/ai-rulez/config.ai.toml",
+		".config/ai-rulez/domains/core/rules/dev-ci-environment.md",
+		".config/ai-rulez/domains/ai/rules/ai-rulez-usage.md",
+		".config/ai-rulez/domains/pkl/.gitkeep",
+		".config/ai-rulez/config.custom.toml",
+		".config/ai-rulez/domains/custom/.gitkeep",
+	}
+	cFiles := []string{
+		".config/ai-rulez/config.c.toml",
+		".config/ai-rulez/domains/c/.gitkeep",
+	}
+	goFiles := []string{
+		".config/ai-rulez/config.go.toml",
+		".config/ai-rulez/domains/go/rules/go-skill-usage.md",
+	}
+	nonAi := []string{
+		".config/mise/config.c.toml",
+		".config/hk/c.pkl",
+		".config/mise/config.go.toml",
+		".config/hk/go.pkl",
+	}
+	t.Run("none renders no ai-rulez", func(t *testing.T) {
+		t.Parallel()
+		included := loadDefaultGating(t)
+		for _, path := range append(append(append([]string{}, base...), cFiles...), goFiles...) {
+			if included(path) {
+				t.Errorf("IsIncluded(%q) with no profiles = true, want false", path)
+			}
+		}
+	})
+	t.Run("ai renders base only", func(t *testing.T) {
+		t.Parallel()
+		included := loadDefaultGating(t, "ai")
+		for _, path := range base {
+			if !included(path) {
+				t.Errorf("IsIncluded(%q) with [ai] = false, want true", path)
+			}
+		}
+		for _, path := range append([]string{}, append(cFiles, goFiles...)...) {
+			if included(path) {
+				t.Errorf("IsIncluded(%q) with [ai] = true, want false (no language)", path)
+			}
+		}
+	})
+	t.Run("language alone renders toolchain without ai-rulez", func(t *testing.T) {
+		t.Parallel()
+		included := loadDefaultGating(t, "c")
+		for _, path := range nonAi[:2] {
+			if !included(path) {
+				t.Errorf("IsIncluded(%q) with [c] = false, want true", path)
+			}
+		}
+		for _, path := range append(append(append([]string{}, base...), cFiles...), goFiles...) {
+			if included(path) {
+				t.Errorf("IsIncluded(%q) with [c] = true, want false (no ai)", path)
+			}
+		}
+	})
+	t.Run("ai plus language renders both", func(t *testing.T) {
+		t.Parallel()
+		included := loadDefaultGating(t, "ai", "c")
+		for _, path := range append(append([]string{}, base...), cFiles...) {
+			if !included(path) {
+				t.Errorf("IsIncluded(%q) with [ai c] = false, want true", path)
+			}
+		}
+		for _, path := range goFiles {
+			if included(path) {
+				t.Errorf("IsIncluded(%q) with [ai c] = true, want false (other language)", path)
+			}
+		}
+	})
+	t.Run("second language spot check", func(t *testing.T) {
+		t.Parallel()
+		included := loadDefaultGating(t, "ai", "go")
+		for _, path := range goFiles {
+			if !included(path) {
+				t.Errorf("IsIncluded(%q) with [ai go] = false, want true", path)
+			}
+		}
+		for _, path := range cFiles {
+			if included(path) {
+				t.Errorf("IsIncluded(%q) with [ai go] = true, want false (other language)", path)
+			}
+		}
+	})
+	t.Run("plain language carries no ai-rulez patterns", func(t *testing.T) {
+		t.Parallel()
+		data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", turutanconfig.ManifestFileName))
+		if err != nil {
+			t.Skipf("default template manifest not found: %v", err)
+		}
+		manifest, err := turutanconfig.LoadManifest(fstest.MapFS{turutanconfig.ManifestFileName: {Data: data}})
+		if err != nil {
+			t.Fatalf("LoadManifest error: %v", err)
+		}
+		for _, cond := range manifest.Conditionals {
+			if !strings.HasPrefix(cond.If, `{{contains .profiles "`) {
+				continue
+			}
+			if cond.If == `{{contains .profiles "ai"}}` {
+				continue
+			}
+			for _, pattern := range cond.Includes {
+				if strings.Contains(pattern, "ai-rulez") {
+					t.Errorf("plain conditional %s includes %q, want ai-rulez gated on ai", cond.If, pattern)
+				}
+			}
 		}
 	})
 }

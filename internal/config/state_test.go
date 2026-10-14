@@ -706,8 +706,8 @@ func TestDefaultTemplateConditionals(t *testing.T) {
 	if strings.Contains(string(data), "\nprofiles:") {
 		t.Error("default manifest declares profiles, want conditionals only")
 	}
-	if len(got.Conditionals) != 20 {
-		t.Errorf("conditionals = %d, want 20 (one per feature, no custom)", len(got.Conditionals))
+	if len(got.Conditionals) != 39 {
+		t.Errorf("conditionals = %d, want 39 (20 plain + 19 ai+language)", len(got.Conditionals))
 	}
 	byIf := map[string]ManifestConditional{}
 	for _, cond := range got.Conditionals {
@@ -727,16 +727,58 @@ func TestDefaultTemplateConditionals(t *testing.T) {
 	if !slices.Contains(goCond.Includes, ".config/mise/config.go.toml") {
 		t.Errorf("go includes = %v, want go toolchain", goCond.Includes)
 	}
+	for _, pattern := range goCond.Includes {
+		if strings.Contains(pattern, "ai-rulez") {
+			t.Errorf("go includes %q, want ai-rulez gated on ai+go, not the language alone", pattern)
+		}
+	}
+	for _, id := range []string{"c", "go", "docker", "github", "kubernetes"} {
+		cond, ok := byIf[`{{and (contains .profiles "ai") (contains .profiles "`+id+`")}}`]
+		if !ok {
+			t.Errorf("missing ai+%s combined conditional", id)
+			continue
+		}
+		if len(cond.Includes) == 0 {
+			t.Errorf("ai+%s conditional has no includes", id)
+		}
+	}
+	aiGo := byIf[`{{and (contains .profiles "ai") (contains .profiles "go")}}`]
+	if !slices.Contains(aiGo.Includes, ".config/ai-rulez/config.go.toml") {
+		t.Errorf("ai+go includes = %v, want ai-rulez go config", aiGo.Includes)
+	}
+	if !slices.Contains(aiGo.Includes, ".config/ai-rulez/domains/go/**") {
+		t.Errorf("ai+go includes = %v, want ai-rulez go domain", aiGo.Includes)
+	}
+	aiCond := byIf[`{{contains .profiles "ai"}}`]
 	for _, want := range []string{
-		".config/mise/config.custom.toml",
 		".config/ai-rulez/config.custom.toml",
 		".config/ai-rulez/domains/custom/**",
+	} {
+		if !slices.Contains(aiCond.Preserves, want) {
+			t.Errorf("ai conditional preserves lacks %q (ai-gated custom seed)", want)
+		}
+	}
+	for _, want := range []string{
+		".config/mise/config.custom.toml",
 		".config/fnox.toml",
 		".config/hk/custom.pkl",
 		".gitignore",
 	} {
 		if !slices.Contains(got.Preserves, want) {
 			t.Errorf("preserves lacks %q (ex-custom file)", want)
+		}
+	}
+	for _, want := range []string{
+		".config/ai-rulez/config.custom.toml",
+		".config/ai-rulez/domains/custom/**",
+	} {
+		if slices.Contains(got.Preserves, want) {
+			t.Errorf("root preserves contains %q, want ai-gated conditional preserves only", want)
+		}
+	}
+	for _, pattern := range got.Includes {
+		if strings.Contains(pattern, "ai-rulez") {
+			t.Errorf("root includes %q, want ai-rulez gated on conditionals only", pattern)
 		}
 	}
 	if _, ok := got.Inputs["profiles"]; !ok {
@@ -801,12 +843,12 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 		}
 		slices.Sort(matched[".config/ai-rulez/domains/yml/**"])
 		want := []string{
-			`{{contains .profiles "docker"}}`,
-			`{{contains .profiles "github"}}`,
-			`{{contains .profiles "kubernetes"}}`,
+			`{{and (contains .profiles "ai") (contains .profiles "docker")}}`,
+			`{{and (contains .profiles "ai") (contains .profiles "github")}}`,
+			`{{and (contains .profiles "ai") (contains .profiles "kubernetes")}}`,
 		}
 		if !slices.Equal(matched[".config/ai-rulez/domains/yml/**"], want) {
-			t.Errorf("yml owners = %v, want layered OR across docker github kubernetes", matched[".config/ai-rulez/domains/yml/**"])
+			t.Errorf("yml owners = %v, want ai-gated layered OR across docker github kubernetes", matched[".config/ai-rulez/domains/yml/**"])
 		}
 	})
 	t.Run("every file excluded conditional preserved or core", func(t *testing.T) {
@@ -838,7 +880,15 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 		}
 		preservedHit := func(rel string) bool {
 			ok, err := filter.MatchAny(manifest.Preserves, rel)
-			return err == nil && ok
+			if err == nil && ok {
+				return true
+			}
+			for _, cond := range manifest.Conditionals {
+				if ok, err := filter.MatchAny(cond.Preserves, rel); err == nil && ok {
+					return true
+				}
+			}
+			return false
 		}
 		excludedHit := func(rel string) bool {
 			ok, err := filter.MatchAny(manifest.Excludes, rel)
