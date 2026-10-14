@@ -343,7 +343,7 @@ func renderDiffTemplate(
 	maps.Copy(answers, state.Answers)
 	seedMissingDefaults(answers, manifest)
 	normalizeAnswersWithManifest(answers, manifest)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest), profileIncludeFunc(manifest, answers)); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {

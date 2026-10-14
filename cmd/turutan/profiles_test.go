@@ -19,13 +19,8 @@ const profilesCmdManifest = "prompts:\n" +
 	"    default: [\"core\"]\n" +
 	"    options: [\"core\", \"go\", \"github\"]\n" +
 	"profiles:\n" +
-	"  go:\n    files: [\"go.mod\"]\n" +
-	"  github:\n    files: [\".github/**\"]\n" +
-	"conditionals:\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
-	"    skip: [\"go.mod\"]\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"github\") }}'\n" +
-	"    skip: [\".github/**\"]\n"
+	"  go:\n    includes: [\"go.mod\"]\n" +
+	"  github:\n    includes: [\".github/**\"]\n"
 
 func bootstrapProfilesProject(t *testing.T, profiles ...string) string {
 	t.Helper()

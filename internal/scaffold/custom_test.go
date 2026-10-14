@@ -19,11 +19,8 @@ const customSeedManifest = "prompts:\n" +
 	"    default: [\"core\"]\n" +
 	"    options: [\"core\", \"go\", \"custom\"]\n" +
 	"profiles:\n" +
-	"  go:\n    label: \"Go\"\n    files: [\"go.mod\"]\n" +
-	"  custom:\n    label: \"Custom\"\n    files: [\"custom.txt\", \"extra.txt\"]\n" +
-	"conditionals:\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
-	"    skip: [\"go.mod\"]\n"
+	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\"]\n" +
+	"  custom:\n    label: \"Custom\"\n    includes: [\"custom.txt\", \"extra.txt\"]\n"
 
 var customSeedFiles = map[string]string{
 	"keep.txt":   "keep v1\n",

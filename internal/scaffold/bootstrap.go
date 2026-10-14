@@ -309,13 +309,14 @@ func renderWithAnswers(
 		}
 		normalizeAnswersWithManifest(answers, manifest)
 		conds := manifestConditionals(manifest)
+		include := profileIncludeFunc(manifest, answers)
 		if err := os.RemoveAll(stage); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 		}
-		err := template.RenderDirWithConditionals(srcDir, stage, answers, conds)
+		err := template.RenderDirWithConditionals(srcDir, stage, answers, conds, include)
 		if err == nil {
 			return stage, cleanup, nil
 		}

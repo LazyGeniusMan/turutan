@@ -115,7 +115,7 @@ prompts:
 profiles:
   ai:
     label: "AI"
-    files:
+    includes:
       - ".config/ai-rulez/config.toml"
       - ".config/ai-rulez/config.ai.toml"
       - ".config/ai-rulez/index.md"
@@ -128,35 +128,35 @@ profiles:
       - ".config/hk/ai.pkl"
   c:
     label: "C"
-    files:
+    includes:
       - ".config/mise/config.c.toml"
       - ".config/ai-rulez/config.c.toml"
       - ".config/ai-rulez/domains/c/**"
       - ".config/hk/c.pkl"
   cloudflare:
     label: "Cloudflare"
-    files:
+    includes:
       - ".config/mise/config.cloudflare.toml"
       - ".config/ai-rulez/config.cloudflare.toml"
       - ".config/ai-rulez/domains/cloudflare/**"
       - ".config/hk/cloudflare.pkl"
   cpp:
     label: "C++"
-    files:
+    includes:
       - ".config/mise/config.cpp.toml"
       - ".config/ai-rulez/config.cpp.toml"
       - ".config/ai-rulez/domains/cpp/**"
       - ".config/hk/cpp.pkl"
   csharp:
     label: "C#"
-    files:
+    includes:
       - ".config/mise/config.csharp.toml"
       - ".config/ai-rulez/config.csharp.toml"
       - ".config/ai-rulez/domains/csharp/**"
       - ".config/hk/csharp.pkl"
   custom:
     label: "Custom — your overrides, never overwritten"
-    files:
+    includes:
       - ".config/mise/config.custom.toml"
       - ".config/ai-rulez/config.custom.toml"
       - ".config/ai-rulez/domains/custom/**"
@@ -165,7 +165,7 @@ profiles:
       - ".gitignore"
   docker:
     label: "Docker"
-    files:
+    includes:
       - ".config/mise/config.docker.toml"
       - ".config/ai-rulez/config.docker.toml"
       - ".config/ai-rulez/domains/docker/**"
@@ -173,14 +173,14 @@ profiles:
       - ".config/hk/docker.pkl"
   elixir:
     label: "Elixir"
-    files:
+    includes:
       - ".config/mise/config.elixir.toml"
       - ".config/ai-rulez/config.elixir.toml"
       - ".config/ai-rulez/domains/elixir/**"
       - ".config/hk/elixir.pkl"
   github:
     label: "GitHub"
-    files:
+    includes:
       - ".github/**"
       - ".github/jactionlint.yaml"
       - ".config/mise/config.github.toml"
@@ -193,14 +193,14 @@ profiles:
       - ".config/hk/github.pkl"
   gitlab:
     label: "GitLab"
-    files:
+    includes:
       - ".config/mise/config.gitlab.toml"
       - ".config/ai-rulez/config.gitlab.toml"
       - ".config/ai-rulez/domains/gitlab/**"
       - ".config/hk/gitlab.pkl"
   go:
     label: "Go"
-    files:
+    includes:
       - ".golangci.yml"
       - ".config/golangci-lint/**"
       - ".config/goreleaser.yml"
@@ -212,14 +212,14 @@ profiles:
       - ".config/hk/go.pkl"
   java:
     label: "Java"
-    files:
+    includes:
       - ".config/mise/config.java.toml"
       - ".config/ai-rulez/config.java.toml"
       - ".config/ai-rulez/domains/java/**"
       - ".config/hk/java.pkl"
   kubernetes:
     label: "Kubernetes"
-    files:
+    includes:
       - ".config/mise/config.kubernetes.toml"
       - ".config/ai-rulez/config.kubernetes.toml"
       - ".config/ai-rulez/domains/kubernetes/**"
@@ -227,56 +227,56 @@ profiles:
       - ".config/hk/kubernetes.pkl"
   php:
     label: "PHP"
-    files:
+    includes:
       - ".config/mise/config.php.toml"
       - ".config/ai-rulez/config.php.toml"
       - ".config/ai-rulez/domains/php/**"
       - ".config/hk/php.pkl"
   python:
     label: "Python"
-    files:
+    includes:
       - ".config/mise/config.python.toml"
       - ".config/ai-rulez/config.python.toml"
       - ".config/ai-rulez/domains/python/**"
       - ".config/hk/python.pkl"
   r:
     label: "R"
-    files:
+    includes:
       - ".config/mise/config.r.toml"
       - ".config/ai-rulez/config.r.toml"
       - ".config/ai-rulez/domains/r/**"
       - ".config/hk/r.pkl"
   ruby:
     label: "Ruby"
-    files:
+    includes:
       - ".config/mise/config.ruby.toml"
       - ".config/ai-rulez/config.ruby.toml"
       - ".config/ai-rulez/domains/ruby/**"
       - ".config/hk/ruby.pkl"
   rust:
     label: "Rust"
-    files:
+    includes:
       - ".config/mise/config.rust.toml"
       - ".config/ai-rulez/config.rust.toml"
       - ".config/ai-rulez/domains/rust/**"
       - ".config/hk/rust.pkl"
   rust-polygot:
     label: "Rust Polyglot"
-    files:
+    includes:
       - ".config/mise/config.rust-polygot.toml"
       - ".config/ai-rulez/config.rust-polygot.toml"
       - ".config/ai-rulez/domains/rust-polygot/**"
       - ".config/hk/rust-polygot.pkl"
   typescript:
     label: "TypeScript"
-    files:
+    includes:
       - ".config/mise/config.typescript.toml"
       - ".config/ai-rulez/config.typescript.toml"
       - ".config/ai-rulez/domains/typescript/**"
       - ".config/hk/typescript.pkl"
   typst:
     label: "Typst"
-    files:
+    includes:
       - ".config/mise/config.typst.toml"
       - ".config/ai-rulez/config.typst.toml"
       - ".config/ai-rulez/domains/typst/**"

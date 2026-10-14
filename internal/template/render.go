@@ -195,10 +195,14 @@ func matchesSkip(globs []string, slash string) (bool, error) {
 }
 
 func RenderFS(srcFS fs.FS, dstDir string, answers map[string]any) error {
-	return RenderFSWithConditionals(srcFS, dstDir, answers, nil)
+	return RenderFSWithConditionals(srcFS, dstDir, answers, nil, nil)
 }
 
-func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any, conds []Conditional) error {
+// RenderFSWithConditionals renders srcFS to dstDir, applying explicit
+// conditionals plus the layered profile include decision. A nil include
+// means every non-metadata path is rendered.
+// ~keep
+func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any, conds []Conditional, include func(string) (bool, error)) error {
 	skipSet, err := EvaluateSkip(answers, conds)
 	if err != nil {
 		return err
@@ -223,10 +227,16 @@ func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any
 			return fmt.Errorf("rendering template: matching conditional skip: %w", err)
 		}
 		if skip {
-			if d.IsDir() {
-				return fs.SkipDir
-			}
 			return nil
+		}
+		if include != nil {
+			ok, err := include(slash)
+			if err != nil {
+				return fmt.Errorf("rendering template: matching profile includes: %w", err)
+			}
+			if !ok {
+				return nil
+			}
 		}
 		if d.Type()&fs.ModeSymlink != 0 {
 			return fmt.Errorf("rendering template: symlink %q unsupported via FS renderer (use RenderDir)", path)
@@ -246,10 +256,16 @@ func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any
 }
 
 func RenderDir(srcDir, dstDir string, answers map[string]any) error {
-	return RenderDirWithConditionals(srcDir, dstDir, answers, nil)
+	return RenderDirWithConditionals(srcDir, dstDir, answers, nil, nil)
 }
 
-func RenderDirWithConditionals(srcDir, dstDir string, answers map[string]any, conds []Conditional) error {
+// RenderDirWithConditionals renders srcDir to dstDir, applying explicit
+// conditionals plus the layered profile include decision. A nil include
+// means every non-metadata path is rendered. Directories are never pruned:
+// files are evaluated individually so a later profile can re-include a
+// child of an excluded subtree.
+// ~keep
+func RenderDirWithConditionals(srcDir, dstDir string, answers map[string]any, conds []Conditional, include func(string) (bool, error)) error {
 	abs, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf("rendering template %q: %w", srcDir, err)
@@ -260,7 +276,7 @@ func RenderDirWithConditionals(srcDir, dstDir string, answers map[string]any, co
 	}
 	globs := skipGlobs(skipSet)
 	return filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, answers, globs)
+		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, answers, globs, include)
 	})
 }
 
@@ -270,7 +286,7 @@ func renderDirEntry(
 	walkErr error,
 	answers map[string]any,
 ) error {
-	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, answers, nil)
+	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, answers, nil, nil)
 }
 
 func renderDirEntryWithConditionals(
@@ -279,6 +295,7 @@ func renderDirEntryWithConditionals(
 	walkErr error,
 	answers map[string]any,
 	globs []string,
+	include func(string) (bool, error),
 ) error {
 	if walkErr != nil {
 		return walkErr
@@ -302,10 +319,16 @@ func renderDirEntryWithConditionals(
 		return fmt.Errorf("rendering template: matching conditional skip: %w", err)
 	}
 	if skip {
-		if d.IsDir() {
-			return filepath.SkipDir
-		}
 		return nil
+	}
+	if include != nil {
+		ok, err := include(slash)
+		if err != nil {
+			return fmt.Errorf("rendering template: matching profile includes: %w", err)
+		}
+		if !ok {
+			return nil
+		}
 	}
 	dst, err := filter.SafeJoin(dstDir, filepath.FromSlash(slash))
 	if err != nil {

@@ -943,11 +943,9 @@ const profileTestManifest = "prompts:\n" +
 	"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
 	"    default: [\"core\", \"go\", \"github\"]\n" +
 	"    options: [\"core\", \"go\", \"github\"]\n" +
-	"conditionals:\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
-	"    skip: [\"go.mod\", \"cmd/**\"]\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"github\") }}'\n" +
-	"    skip: [\".github/**\"]\n"
+	"profiles:\n" +
+	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\", \"cmd/**\"]\n" +
+	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
 
 var profileTestFiles = map[string]string{
 	"keep.txt":         "keep v1\n",

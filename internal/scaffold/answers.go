@@ -472,3 +472,13 @@ func manifestConditionals(manifest *config.Manifest) []template.Conditional {
 	}
 	return conds
 }
+
+func profileIncludeFunc(manifest *config.Manifest, answers map[string]any) func(string) (bool, error) {
+	if manifest == nil || len(manifest.Profiles) == 0 {
+		return nil
+	}
+	enabled := config.NormalizeProfiles(config.GetProfiles(answers))
+	return func(slash string) (bool, error) {
+		return manifest.IsIncluded(slash, enabled)
+	}
+}

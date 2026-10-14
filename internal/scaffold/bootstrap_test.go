@@ -349,6 +349,77 @@ func TestBootstrapDefaultTemplateOffline(t *testing.T) {
 	})
 }
 
+func TestBootstrapLayeredYmlShared(t *testing.T) {
+	fixture := filepath.Join("..", "..", "templates", "default")
+	if _, err := os.Stat(fixture); err != nil {
+		t.Skipf("default template not found: %v", err)
+	}
+	bootstrapWith := func(t *testing.T, profiles ...string) string {
+		t.Helper()
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		opts := testOptions(&stdout)
+		opts.AnswersFile = writeProfilesAnswers(t, profiles...)
+		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
+			t.Fatalf("Bootstrap error: %v", err)
+		}
+		return target
+	}
+	ymlKeep := filepath.Join(".config", "ai-rulez", "domains", "yml", ".gitkeep")
+	t.Run("github owner suffices", func(t *testing.T) {
+		target := bootstrapWith(t, "core", "ai", "go", "github")
+		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
+			t.Errorf("yml .gitkeep missing with github enabled: %v", err)
+		}
+	})
+	t.Run("docker-only copies shared yml", func(t *testing.T) {
+		target := bootstrapWith(t, "core", "docker")
+		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
+			t.Errorf("yml .gitkeep missing with docker-only: %v", err)
+		}
+	})
+	t.Run("k8s-only copies shared yml", func(t *testing.T) {
+		target := bootstrapWith(t, "core", "kubernetes")
+		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
+			t.Errorf("yml .gitkeep missing with k8s-only: %v", err)
+		}
+	})
+	t.Run("no yml owner drops shared file", func(t *testing.T) {
+		target := bootstrapWith(t, "core", "ai", "go")
+		if _, err := os.Stat(filepath.Join(target, ymlKeep)); !os.IsNotExist(err) {
+			t.Errorf("yml .gitkeep present without a yml owner, want it dropped")
+		}
+	})
+}
+
+func TestBootstrapLayeredIncludesExcludes(t *testing.T) {
+	const manifest = "profiles:\n" +
+		"  a:\n    label: A\n    includes: [\"foo/**\"]\n    excludes: [\"foo/bar/**\"]\n" +
+		"  b:\n    label: B\n    includes: [\"foo/bar/baz/**\"]\n    excludes: [\"foo/bar/baz/2.md\"]\n"
+	files := map[string]string{
+		"foo/bar/baz/1.md": "one\n",
+		"foo/bar/baz/2.md": "two\n",
+		"keep.txt":         "keep\n",
+	}
+	src := makeTemplate(t, manifest, files)
+	target := filepath.Join(t.TempDir(), "proj")
+	var stdout strings.Builder
+	opts := testOptions(&stdout)
+	opts.AnswersFile = writeProfilesAnswers(t, "core", "a", "b")
+	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
+		t.Fatalf("Bootstrap error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "foo", "bar", "baz", "1.md")); err != nil {
+		t.Errorf("1.md missing, want b re-include after a exclude: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "foo", "bar", "baz", "2.md")); !os.IsNotExist(err) {
+		t.Errorf("2.md present, want b exclude to win")
+	}
+	if _, err := os.Stat(filepath.Join(target, "keep.txt")); err != nil {
+		t.Errorf("keep.txt missing, want core-always: %v", err)
+	}
+}
+
 func TestBootstrapConflictPersisted(t *testing.T) {
 	t.Run("conflict flag stored in state", func(t *testing.T) {
 		src := makeTemplate(t, basicManifest, basicFiles)
@@ -575,25 +646,12 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
 		enabled := turutanconfig.NormalizeProfiles(turutanconfig.GetProfiles(map[string]any{"enabled_profiles": manifest.Prompts["enabled_profiles"].Default}))
-		enabledSet := map[string]bool{}
-		for _, id := range enabled {
-			enabledSet[id] = true
-		}
 		shouldRender := func(slash string) bool {
-			owners := turutanconfig.ProfilesForPath(manifest, nil, slash)
-			if len(owners) == 0 {
-				stripped := strings.TrimSuffix(slash, ".tmpl")
-				owners = turutanconfig.ProfilesForPath(manifest, nil, stripped)
+			ok, err := manifest.IsIncluded(slash, enabled)
+			if err != nil {
+				return false
 			}
-			if len(owners) == 0 {
-				return true
-			}
-			for _, id := range owners {
-				if !enabledSet[id] {
-					return false
-				}
-			}
-			return true
+			return ok
 		}
 		plantedSrc := map[string]bool{}
 		plantedDests := map[string]bool{}

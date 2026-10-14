@@ -427,8 +427,8 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			t.Fatal(err)
 		}
 		augmented := strings.Replace(string(manifest),
-			"  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n",
-			"  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n  extra:\n    label: \"Extra\"\n    files: [\"extra.txt\"]\n", 1)
+			"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n",
+			"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n  extra:\n    label: \"Extra\"\n    includes: [\"extra.txt\"]\n", 1)
 		if augmented == string(manifest) {
 			t.Fatal("could not splice the fixture manifest")
 		}

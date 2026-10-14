@@ -304,7 +304,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
 		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{"ai"}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond, nil))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))
@@ -317,7 +317,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
 		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{"go"}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond, nil))
 		got, err := os.ReadFile(filepath.Join(dst, "go.mod")) // #nosec G304 -- reads file from this test's temp dir
 		is.NoError(err)
 		is.Equal("module demo\n", string(got))
@@ -327,7 +327,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		dst := t.TempDir()
 		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{}}
 		conds := []Conditional{{If: "true", Skip: []string{"go.mod"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds, nil))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 	})
@@ -336,13 +336,13 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		dst := t.TempDir()
 		answers := map[string]any{"project_name": "demo"}
 		conds := []Conditional{{If: "true", Skip: []string{"github/**"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds, nil))
 		_, err := os.Stat(filepath.Join(dst, "github", "ci.yml"))
 		is.True(os.IsNotExist(err))
 	})
 	t.Run("missing key propagates for prompting", func(t *testing.T) {
 		conds := []Conditional{{If: `{{ .absent_key }}`, Skip: []string{"a"}}}
-		err := RenderFSWithConditionals(newFixture(), t.TempDir(), map[string]any{}, conds)
+		err := RenderFSWithConditionals(newFixture(), t.TempDir(), map[string]any{}, conds, nil)
 		is := assert.New(t)
 		is.Error(err)
 		is.Contains(err.Error(), `no entry for key "absent_key"`)
@@ -359,7 +359,7 @@ func TestRenderDirWithConditionals(t *testing.T) {
 		dst := t.TempDir()
 		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{}}
 		conds := []Conditional{{If: "true", Skip: []string{"go.mod", "cmd/**"}}}
-		is.NoError(RenderDirWithConditionals(src, dst, answers, conds))
+		is.NoError(RenderDirWithConditionals(src, dst, answers, conds, nil))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))

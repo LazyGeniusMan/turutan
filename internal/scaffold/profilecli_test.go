@@ -19,13 +19,8 @@ const profileCLIManifest = "prompts:\n" +
 	"    default: [\"core\"]\n" +
 	"    options: [\"core\", \"go\", \"github\"]\n" +
 	"profiles:\n" +
-	"  go:\n    label: \"Go\"\n    files: [\"go.mod\"]\n" +
-	"  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n" +
-	"conditionals:\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
-	"    skip: [\"go.mod\"]\n" +
-	"  - if: '{{ not (contains .enabled_profiles \"github\") }}'\n" +
-	"    skip: [\".github/**\"]\n"
+	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\"]\n" +
+	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
 
 var profileCLIFiles = map[string]string{
 	"keep.txt":       "keep v1\n",
@@ -424,8 +419,8 @@ func TestCheckUpdateNewProfiles(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
 		projectDir := bootstrapProfiles(t, src, "core")
 		evolveManifest(t, src,
-			"  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n",
-			"  extra:\n    label: \"Extra\"\n    files: [\"extra.txt\"]\n")
+			"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n",
+			"  extra:\n    label: \"Extra\"\n    includes: [\"extra.txt\"]\n")
 		var stdout strings.Builder
 		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
 		if err != nil {
@@ -592,7 +587,7 @@ func TestUpdateDroppedProfilesStderr(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		trimmed := strings.Replace(string(manifest), "  github:\n    label: \"GitHub\"\n    files: [\".github/**\"]\n", "", 1)
+		trimmed := strings.Replace(string(manifest), "  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n", "", 1)
 		if trimmed == string(manifest) {
 			t.Fatal("could not splice the fixture manifest")
 		}

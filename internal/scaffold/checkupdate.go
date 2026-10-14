@@ -214,7 +214,7 @@ func prepareFilesystemReresolve(
 	}
 	seedMissingDefaults(answers, manifest)
 	normalizeAnswersWithManifest(answers, manifest)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest), profileIncludeFunc(manifest, answers)); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}

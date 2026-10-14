@@ -106,7 +106,8 @@ type ManifestConditional struct {
 type ManifestProfile struct {
 	Label       string   `yaml:"label"`
 	Description string   `yaml:"description"`
-	Files       []string `yaml:"files"`
+	Includes    []string `yaml:"includes"`
+	Excludes    []string `yaml:"excludes"`
 }
 
 type Manifest struct {
@@ -265,45 +266,15 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 		}
 	}
 	var manifest Manifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&manifest); err != nil {
 		return nil, fmt.Errorf("parsing %q: %w", name, err)
 	}
 	if err := ValidateManifest(&manifest); err != nil {
 		return nil, err
 	}
-	normalizeManifest(&manifest)
 	return &manifest, nil
-}
-
-func normalizeManifest(manifest *Manifest) {
-	if manifest == nil || len(manifest.Profiles) == 0 {
-		return
-	}
-	ids := make([]string, 0, len(manifest.Profiles))
-	for id := range manifest.Profiles {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	for _, id := range ids {
-		if hasConditionalForProfile(manifest.Conditionals, id) {
-			continue
-		}
-		files := append([]string(nil), manifest.Profiles[id].Files...)
-		manifest.Conditionals = append(manifest.Conditionals, ManifestConditional{
-			If:   fmt.Sprintf(`{{ not (contains .enabled_profiles "%s") }}`, id),
-			Skip: files,
-		})
-	}
-}
-
-func hasConditionalForProfile(conds []ManifestConditional, id string) bool {
-	needle := `"` + id + `"`
-	for _, cond := range conds {
-		if strings.Contains(cond.If, needle) {
-			return true
-		}
-	}
-	return false
 }
 
 func ValidateManifest(manifest *Manifest) error {
@@ -471,8 +442,11 @@ func validateManifestProfiles(profiles map[string]ManifestProfile) error {
 		if id == "" {
 			return fmt.Errorf("invalid manifest: profile with empty id")
 		}
-		if err := filter.ValidateGlobs(profile.Files); err != nil {
-			return fmt.Errorf("invalid manifest: bad profile %q files pattern: %w", id, err)
+		if err := filter.ValidateGlobs(profile.Includes); err != nil {
+			return fmt.Errorf("invalid manifest: bad profile %q includes pattern: %w", id, err)
+		}
+		if err := filter.ValidateGlobs(profile.Excludes); err != nil {
+			return fmt.Errorf("invalid manifest: bad profile %q excludes pattern: %w", id, err)
 		}
 	}
 	return nil
@@ -579,7 +553,7 @@ func (s *State) GetProfiles() []string {
 	return GetProfiles(s.Answers)
 }
 
-// ProfilesForPath reports which of the given profiles own path.
+// ProfilesForPath reports which of the given profiles include path.
 // Update and diff output attribute drift to profiles, so they need the
 // owning ids without reimplementing manifest glob matching each time.
 // ~keep
@@ -601,7 +575,7 @@ func ProfilesForPath(manifest *Manifest, profiles []string, path string) []strin
 		if !ok {
 			continue
 		}
-		for _, pattern := range profile.Files {
+		for _, pattern := range profile.Includes {
 			ok, err := filter.Match(pattern, slash)
 			if err != nil {
 				continue
@@ -614,6 +588,86 @@ func ProfilesForPath(manifest *Manifest, profiles []string, path string) []strin
 	}
 	slices.Sort(matched)
 	return matched
+}
+
+// IsIncluded reports the layered profile decision for path.
+// Files matched by zero includes across all profiles are core-always and
+// return true. Otherwise start excluded and apply each enabled profile in
+// order: its includes in order set included, then its excludes in order
+// clear it. Only enabled profiles participate; disabled ones are ignored.
+// Both slash and its .tmpl-stripped form are matched so template sources
+// and rendered destinations share one decision.
+// ~keep
+func (m *Manifest) IsIncluded(path string, enabled []string) (bool, error) {
+	if m == nil || len(m.Profiles) == 0 {
+		return true, nil
+	}
+	slash := filter.ToSlash(path)
+	stripped := strings.TrimSuffix(slash, ".tmpl")
+	matchBoth := func(pattern string) (bool, error) {
+		ok, err := filter.Match(pattern, slash)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+		if stripped != slash {
+			ok, err := filter.Match(pattern, stripped)
+			if err != nil {
+				return false, err
+			}
+			return ok, nil
+		}
+		return false, nil
+	}
+	core := true
+	for _, profile := range m.Profiles {
+		for _, pattern := range profile.Includes {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				core = false
+				break
+			}
+		}
+		if !core {
+			break
+		}
+	}
+	if core {
+		return true, nil
+	}
+	included := false
+	for _, id := range enabled {
+		profile, ok := m.Profiles[id]
+		if !ok {
+			continue
+		}
+		for _, pattern := range profile.Includes {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				included = true
+				break
+			}
+		}
+		for _, pattern := range profile.Excludes {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				included = false
+				break
+			}
+		}
+	}
+	return included, nil
 }
 
 // ResolveRenames follows the manifest renames chain for an old path.

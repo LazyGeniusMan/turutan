@@ -1217,7 +1217,7 @@ func renderUpdateWithAnswers(
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return fmt.Errorf("update: creating staging dir: %w", err)
 		}
-		err := template.RenderDirWithConditionals(fetchedDir, stage, answers, manifestConditionals(manifest))
+		err := template.RenderDirWithConditionals(fetchedDir, stage, answers, manifestConditionals(manifest), profileIncludeFunc(manifest, answers))
 		if err == nil {
 			return nil
 		}
