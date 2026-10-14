@@ -939,7 +939,7 @@ func manifestWithConflict(mode string) *config.Manifest {
 }
 
 const profileTestManifest = "inputs:\n" +
-	"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+	"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\", \"cmd/**\"]\n" +
 	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
@@ -1187,7 +1187,7 @@ func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	projectDir := bootstrapProject(t, src)
 	writeFiles(t, src, map[string]string{
 		".turutan.yml": "inputs:\n" +
-			"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+			"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
 			"  new_feature:\n    question: \"New feature\"\n    type: array\n" +
 			"    default: [\"alpha\", \"beta\"]\n",
 		"feat.txt.tmpl": "[{{ range $i, $p := .new_feature }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",

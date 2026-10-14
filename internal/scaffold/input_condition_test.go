@@ -12,10 +12,10 @@ import (
 
 func conditionalInputManifest() *config.Manifest {
 	return &config.Manifest{Inputs: map[string]config.ManifestInput{
-		"project_name":      {Question: "Project name", Type: "string"},
-		"enabled_ai_agents": {Question: "agents", Type: "array", Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
-		"nick":              {Type: "string", Default: "n/a", If: `{{eq .project_name "x"}}`},
-		"opt_no_default":    {Type: "string", If: `{{contains .profiles "ai"}}`},
+		"project_name":   {Question: "Project Name", Type: "string"},
+		"ai_agents":      {Question: "agents", Type: "array", Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
+		"nick":           {Type: "string", Default: "n/a", If: `{{eq .project_name "x"}}`},
+		"opt_no_default": {Type: "string", If: `{{contains .profiles "ai"}}`},
 	}}
 }
 
@@ -38,8 +38,8 @@ func TestShouldAskInput(t *testing.T) {
 		wantErr  string
 	}{
 		{name: "no if asks", key: "project_name", data: map[string]any{}, profiles: []string{"core"}, want: true},
-		{name: "ai in asks", key: "enabled_ai_agents", data: map[string]any{}, profiles: []string{"core", "ai"}, want: true},
-		{name: "ai out skips", key: "enabled_ai_agents", data: map[string]any{}, profiles: []string{"core", "go"}, want: false},
+		{name: "ai in asks", key: "ai_agents", data: map[string]any{}, profiles: []string{"core", "ai"}, want: true},
+		{name: "ai out skips", key: "ai_agents", data: map[string]any{}, profiles: []string{"core", "go"}, want: false},
 		{name: "data eq true asks", key: "nick", data: map[string]any{"project_name": "x"}, profiles: []string{"core"}, want: true},
 		{name: "data eq false skips", key: "nick", data: map[string]any{"project_name": "y"}, profiles: []string{"core"}, want: false},
 		{name: "missing dep retries", key: "nick", data: map[string]any{}, profiles: []string{"core"}, wantErr: `no entry for key "project_name"`},
@@ -105,8 +105,8 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		if err := ensureInputValues(data, manifest, []string{"core", "go"}, false, false, &stdout, stdin, "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
-		if got, ok := data["enabled_ai_agents"].([]string); !ok || len(got) != 2 || got[0] != "opencode" || got[1] != "pi" {
-			t.Errorf("enabled_ai_agents = %v (%T), want [opencode pi]", data["enabled_ai_agents"], data["enabled_ai_agents"])
+		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 || got[0] != "opencode" || got[1] != "pi" {
+			t.Errorf("ai_agents = %v (%T), want [opencode pi]", data["ai_agents"], data["ai_agents"])
 		}
 		if data["nick"] != "n/a" {
 			t.Errorf("nick = %v, want skipped default n/a", data["nick"])
@@ -127,8 +127,8 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		if err := ensureInputValues(data, manifest, []string{"core", "ai"}, false, false, &stdout, stdin, "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
-		if got, ok := data["enabled_ai_agents"].([]string); !ok || len(got) != 2 {
-			t.Errorf("enabled_ai_agents = %v (%T), want default [opencode pi] on empty line", data["enabled_ai_agents"], data["enabled_ai_agents"])
+		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
+			t.Errorf("ai_agents = %v (%T), want default [opencode pi] on empty line", data["ai_agents"], data["ai_agents"])
 		}
 		if data["opt_no_default"] != "" {
 			t.Errorf("opt_no_default = %v, want prompted empty value", data["opt_no_default"])
@@ -171,8 +171,8 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		if err := ensureInputValues(data, conditionalInputManifest(), []string{"core", "go"}, true, false, &stdout, strings.NewReader(""), "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v, want skipped default without missing-value error", err)
 		}
-		if got, ok := data["enabled_ai_agents"].([]string); !ok || len(got) != 2 {
-			t.Errorf("enabled_ai_agents = %v, want default [opencode pi]", data["enabled_ai_agents"])
+		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
+			t.Errorf("ai_agents = %v, want default [opencode pi]", data["ai_agents"])
 		}
 	})
 	t.Run("non-interactive asked still errors", func(t *testing.T) {
@@ -203,11 +203,11 @@ func TestInputMissingKeyConditional(t *testing.T) {
 		t.Parallel()
 		data := map[string]any{"project_name": "demo"}
 		var stdout bytes.Buffer
-		if err := inputMissingKey(data, conditionalInputManifest(), []string{"core"}, &stdout, strings.NewReader(""), "enabled_ai_agents"); err != nil {
+		if err := inputMissingKey(data, conditionalInputManifest(), []string{"core"}, &stdout, strings.NewReader(""), "ai_agents"); err != nil {
 			t.Fatalf("inputMissingKey error = %v", err)
 		}
-		if got, ok := data["enabled_ai_agents"].([]string); !ok || len(got) != 2 {
-			t.Errorf("enabled_ai_agents = %v, want default without prompt", data["enabled_ai_agents"])
+		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
+			t.Errorf("ai_agents = %v, want default without prompt", data["ai_agents"])
 		}
 	})
 	t.Run("skipped without default errors", func(t *testing.T) {

@@ -12,9 +12,9 @@ import (
 
 func conditionalInputsManifest() *Manifest {
 	return &Manifest{Inputs: map[string]ManifestInput{
-		"project_name":      {},
-		"enabled_ai_agents": {Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
-		"nick":              {Default: "n/a", If: `{{eq .project_name "x"}}`},
+		"project_name": {},
+		"ai_agents":    {Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
+		"nick":         {Default: "n/a", If: `{{eq .project_name "x"}}`},
 	}}
 }
 
@@ -24,8 +24,8 @@ func TestDiffProfilesConditionalInputs(t *testing.T) {
 	t.Run("ai absent excludes agents", func(t *testing.T) {
 		t.Parallel()
 		diff := DiffProfiles([]string{"core", "go"}, map[string]any{"project_name": "demo"}, manifest)
-		if slices.Contains(diff.NewInputs, "enabled_ai_agents") {
-			t.Errorf("NewInputs = %v, want no skipped enabled_ai_agents", diff.NewInputs)
+		if slices.Contains(diff.NewInputs, "ai_agents") {
+			t.Errorf("NewInputs = %v, want no skipped ai_agents", diff.NewInputs)
 		}
 		if slices.Contains(diff.NewInputs, "nick") {
 			t.Errorf("NewInputs = %v, want no skipped nick", diff.NewInputs)
@@ -37,8 +37,8 @@ func TestDiffProfilesConditionalInputs(t *testing.T) {
 	t.Run("ai present includes agents only", func(t *testing.T) {
 		t.Parallel()
 		diff := DiffProfiles([]string{"core", "ai"}, map[string]any{"project_name": "demo"}, manifest)
-		if !slices.Equal(diff.NewInputs, []string{"enabled_ai_agents"}) {
-			t.Errorf("NewInputs = %v, want [enabled_ai_agents]", diff.NewInputs)
+		if !slices.Equal(diff.NewInputs, []string{"ai_agents"}) {
+			t.Errorf("NewInputs = %v, want [ai_agents]", diff.NewInputs)
 		}
 	})
 	t.Run("data predicate true includes nick", func(t *testing.T) {
@@ -57,8 +57,8 @@ func TestDiffProfilesConditionalInputs(t *testing.T) {
 		if !slices.Contains(diff.NewInputs, "nick") {
 			t.Errorf("NewInputs = %v, want undecidable nick still reported", diff.NewInputs)
 		}
-		if slices.Contains(diff.NewInputs, "enabled_ai_agents") {
-			t.Errorf("NewInputs = %v, want no skipped enabled_ai_agents", diff.NewInputs)
+		if slices.Contains(diff.NewInputs, "ai_agents") {
+			t.Errorf("NewInputs = %v, want no skipped ai_agents", diff.NewInputs)
 		}
 	})
 }
@@ -73,37 +73,37 @@ func TestDefaultTemplateConditionalInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadManifest error: %v", err)
 	}
-	def, ok := got.Inputs["enabled_ai_agents"]
+	def, ok := got.Inputs["ai_agents"]
 	if !ok {
-		t.Fatal("default manifest lacks enabled_ai_agents input")
+		t.Fatal("default manifest lacks ai_agents input")
 	}
 	if def.If != `{{contains .profiles "ai"}}` {
-		t.Errorf("enabled_ai_agents if = %q, want profiles-ai predicate", def.If)
+		t.Errorf("ai_agents if = %q, want profiles-ai predicate", def.If)
 	}
 	if def.Question == "" {
-		t.Errorf("enabled_ai_agents lost question: %+v", def)
+		t.Errorf("ai_agents lost question: %+v", def)
 	}
 	if def.Type != "array" {
-		t.Errorf("enabled_ai_agents type = %q, want array", def.Type)
+		t.Errorf("ai_agents type = %q, want array", def.Type)
 	}
 	if def.Default == nil {
-		t.Error("enabled_ai_agents lost default, want [opencode pi]")
+		t.Error("ai_agents lost default, want [opencode pi]")
 	}
 	if len(def.Options) == 0 {
-		t.Error("enabled_ai_agents lost options")
+		t.Error("ai_agents lost options")
 	}
 	diff := DiffProfiles([]string{"core", "go"}, map[string]any{
-		"project_name": "demo", "enabled_ai_agents": []string{"opencode", "pi"},
+		"project_name": "demo", "ai_agents": []string{"opencode", "pi"},
 	}, got)
-	if slices.Contains(diff.NewInputs, "enabled_ai_agents") {
+	if slices.Contains(diff.NewInputs, "ai_agents") {
 		t.Errorf("NewInputs = %v, want stored agents kept without ai", diff.NewInputs)
 	}
 	fresh := DiffProfiles([]string{"core", "go"}, map[string]any{"project_name": "demo"}, got)
-	if slices.Contains(fresh.NewInputs, "enabled_ai_agents") {
+	if slices.Contains(fresh.NewInputs, "ai_agents") {
 		t.Errorf("NewInputs = %v, want skipped agents excluded without ai", fresh.NewInputs)
 	}
 	asked := DiffProfiles([]string{"core", "ai"}, map[string]any{"project_name": "demo"}, got)
-	if !slices.Contains(asked.NewInputs, "enabled_ai_agents") {
+	if !slices.Contains(asked.NewInputs, "ai_agents") {
 		t.Errorf("NewInputs = %v, want agents reported with ai", asked.NewInputs)
 	}
 }

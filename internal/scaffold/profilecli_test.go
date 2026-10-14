@@ -14,7 +14,7 @@ import (
 )
 
 const profileCLIManifest = "inputs:\n" +
-	"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+	"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\"]\n" +
 	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
@@ -437,7 +437,7 @@ func TestCheckUpdateNewProfiles(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
 		projectDir := bootstrapProfiles(t, src, "core")
 		evolveManifest(t, src,
-			"  project_name:\n    question: \"Project name\"\n    type: string\n",
+			"  project_name:\n    question: \"Project Name\"\n    type: string\n",
 			"  service_name:\n    question: \"Service name\"\n    type: string\n")
 		var stdout strings.Builder
 		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
@@ -618,8 +618,8 @@ func TestUpdateNewInputsStderr(t *testing.T) {
 			t.Fatal(err)
 		}
 		augmented := strings.Replace(string(manifest),
-			"  project_name:\n    question: \"Project name\"\n    type: string\n",
-			"  project_name:\n    question: \"Project name\"\n    type: string\n  service_name:\n    question: \"Service name\"\n    type: string\n    default: \"svc\"\n", 1)
+			"  project_name:\n    question: \"Project Name\"\n    type: string\n",
+			"  project_name:\n    question: \"Project Name\"\n    type: string\n  service_name:\n    question: \"Service name\"\n    type: string\n    default: \"svc\"\n", 1)
 		if augmented == string(manifest) {
 			t.Fatal("could not splice the fixture manifest")
 		}

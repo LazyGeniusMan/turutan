@@ -95,7 +95,7 @@ func TestBootstrapDocFiles(t *testing.T) {
 	t.Run("profile-gated doc skipped when profile off", func(t *testing.T) {
 		t.Parallel()
 		const condManifest = "inputs:\n" +
-			"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+			"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
 			"conditionals:\n" +
 			"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
 			"    skip: [\"GO.md\", \"GO.md.tmpl\"]\n" +
