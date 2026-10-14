@@ -2,25 +2,22 @@
   "version": 1,
   "template": "templates/default",
   "sourceKind": "filesystem",
-  "resolvedCommit": "a54ff724106d364e00de36d6e00b48f5b1cb37127aa84a109ea5e5bfa9c7b34d",
+  "resolvedCommit": "5671e1e9d59da0181991d69352fa04e3a5bfd439b3b0fbe47843625080889180",
   "answers": {
     "enabled_ai_agents": [
-      "pi",
-      "opencode"
+      "opencode",
+      "pi"
     ],
     "enabled_profiles": [
       "core",
       "ai",
-      "github",
       "go",
+      "github",
       "custom"
     ],
-    "project_description": "",
+    "project_description": "Project template lifecycle manager",
     "project_name": "turutan"
   },
-  "skip": [
-    ".golangci.yml"
-  ],
   "engine": "turutan/dev",
   "templateLicense": "MIT-0"
 }

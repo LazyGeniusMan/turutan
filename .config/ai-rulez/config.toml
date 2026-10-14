@@ -3,7 +3,7 @@ name = "turutan"
 gitignore = true
 compact = true
 
-presets = ["pi", "opencode"]
+presets = ["opencode", "pi"]
 
 agents_md = true
 
@@ -20,10 +20,10 @@ Folder Structure:
 .config/ai-rulez/config*.toml
 .config/ai-rulez/domains/{domain-name}/{agents,context,rules,skills}
 
-agents: Agent definitions
-context: References documentation
-rules: Mandatory rules for AI assistants
-skills: Agent Skills definitions
+agents: Specialized role and persona for agents
+context: Reference documentation, architecture, guidelines
+rules: Mandatory constraints, standards, do's and don'ts
+skills: On demand prompt and knowledge using Agent Skills format
 
 INSTRUCTIONS FOR AI AGENTS
 1. NEVER edit this file - it is auto-generated
@@ -50,7 +50,7 @@ omit_agent_fields = ["model", "effort", "tools"]
 mode = "split"
 
 [skills]
-delivery = "served"
+delivery = "both"
 
 [mcp]
 self_server = false
