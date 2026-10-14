@@ -9,7 +9,7 @@ x-ai-rulez:
     priority: critical
     activation: glob
     paths:
-      - '*.go'
+      - '**/*.go'
       - '**/go.mod'
       - '**/go.sum'
 ---

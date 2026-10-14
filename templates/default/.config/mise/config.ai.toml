@@ -12,10 +12,10 @@ run = "exec basemind comms daemon"
 
 [tasks."dev-setup:ai-rulez"]
 depends = "dev-setup:fnox"
-run = "ai-rulez generate"
+run = "ai-rulez migrate okf && ai-rulez generate"
 
 [tasks."dev-setup:basemind"]
-run = "basemind scan"
+run = "basemind scan || basemind rescan"
 
 [tasks."dev-setup:basemind-comms"]
 depends = "dev-setup:basemind"

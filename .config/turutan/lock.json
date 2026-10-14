@@ -1,7 +1,7 @@
 {
   "source": "templates/default",
-  "resolved_sha": "a54ff724106d364e00de36d6e00b48f5b1cb37127aa84a109ea5e5bfa9c7b34d",
-  "manifest_hash": "sha256:e4a1d72ba1a7cfc20d779268823b1ff6b512b51a6c4a98e9d7ce701e96dac9fe",
+  "resolved_sha": "a4514373b90fa03bd953723c87742789dc870e0db5d4ebdee0f150f0ee537565",
+  "manifest_hash": "sha256:beb9bf562aad01f5667cfa49481713586d9326ca4fcff516347f63c057697fdf",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".config/ai-rulez/config.toml",
-      "sha256": "7917195f49bdbe9491b118a73b31267579ce30eef5eb6ac85be2245440ef696f",
-      "bytes": 1669,
+      "sha256": "564364aaaa9169181ddcab7fff75dc1bfb200863f01856bc526a7c7008cce842",
+      "bytes": 1762,
       "profile": "ai"
     },
     {
@@ -58,12 +58,6 @@
       "profile": "ai"
     },
     {
-      "path": ".config/ai-rulez/domains/ai/rules/index.md",
-      "sha256": "961c1fb2c87d31f7d30a3a1762dfe01dae609c5d09d7e04fd7b6e8acb9b3187b",
-      "bytes": 290,
-      "profile": "ai"
-    },
-    {
       "path": ".config/ai-rulez/domains/ai/rules/skill-usage.md",
       "sha256": "93c18c564aef0b6454f5dc91fda83c4e48354f82df57175b4396ab5b8f61621d",
       "bytes": 539,
@@ -88,33 +82,15 @@
       "profile": "ai"
     },
     {
-      "path": ".config/ai-rulez/domains/ai/skills/index.md",
-      "sha256": "95e002bd834b597abcf50838a0ad2ef1b450f755e206ce32ba1e72a36cc16cb1",
-      "bytes": 68,
-      "profile": "ai"
-    },
-    {
       "path": ".config/ai-rulez/domains/ai/skills/orchestrate-agent/SKILL.md",
       "sha256": "bd705f36581cc2e0ec705d96be8a10cf9d178b9af8d8508d76cd48294b7dc599",
       "bytes": 12843,
       "profile": "ai"
     },
     {
-      "path": ".config/ai-rulez/domains/ai/skills/orchestrate-agent/index.md",
-      "sha256": "b13ad4415719c24c00c47baf842908acb82eeae1579f9a62eccc45e6180d511b",
-      "bytes": 140,
-      "profile": "ai"
-    },
-    {
       "path": ".config/ai-rulez/domains/core/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0,
-      "profile": "ai"
-    },
-    {
-      "path": ".config/ai-rulez/domains/core/context/index.md",
-      "sha256": "43bcf62d9cae527036fd9a33d7d1ff649514104eca09387702befd77f71ca09f",
-      "bytes": 58,
       "profile": "ai"
     },
     {
@@ -133,12 +109,6 @@
       "path": ".config/ai-rulez/domains/core/rules/hk-usage.md",
       "sha256": "1758371fe754dfdfba9040e6e5c36c618397cc0273cd882645d9eb00c019cc5a",
       "bytes": 1537,
-      "profile": "ai"
-    },
-    {
-      "path": ".config/ai-rulez/domains/core/rules/index.md",
-      "sha256": "29c7ba4dce8a445dad2591c006b9a7a2f4b20936769a625b1d0ccf158762d6ca",
-      "bytes": 240,
       "profile": "ai"
     },
     {
@@ -166,21 +136,9 @@
       "profile": "ai"
     },
     {
-      "path": ".config/ai-rulez/domains/core/skills/index.md",
-      "sha256": "95e002bd834b597abcf50838a0ad2ef1b450f755e206ce32ba1e72a36cc16cb1",
-      "bytes": 68,
-      "profile": "ai"
-    },
-    {
-      "path": ".config/ai-rulez/domains/core/skills/orchestrate-agent/SKILL.md",
-      "sha256": "bd705f36581cc2e0ec705d96be8a10cf9d178b9af8d8508d76cd48294b7dc599",
-      "bytes": 12843,
-      "profile": "ai"
-    },
-    {
-      "path": ".config/ai-rulez/domains/core/skills/orchestrate-agent/index.md",
-      "sha256": "b13ad4415719c24c00c47baf842908acb82eeae1579f9a62eccc45e6180d511b",
-      "bytes": 140,
+      "path": ".config/ai-rulez/domains/core/skills/task-runner/SKILL.md",
+      "sha256": "94cc6812c322760e7eeafc2216df9831aa68f8fc7e53a51acc41a564446bb231",
+      "bytes": 686,
       "profile": "ai"
     },
     {
@@ -196,12 +154,6 @@
       "profile": "github"
     },
     {
-      "path": ".config/ai-rulez/domains/github/index.md",
-      "sha256": "92cc9825aedab82636f7a3300f459f93e201289590ae9b8ca75508051cf2115d",
-      "bytes": 73,
-      "profile": "github"
-    },
-    {
       "path": ".config/ai-rulez/domains/github/rules/github-skill-usage.md",
       "sha256": "7222b2b5f74c5cd85296ad87c616eef5b0b8f18020c79f24478d6f4a800a916f",
       "bytes": 359,
@@ -214,21 +166,9 @@
       "profile": "github"
     },
     {
-      "path": ".config/ai-rulez/domains/github/rules/index.md",
-      "sha256": "09a78c9eb5958934cc7bbfa4d731c10460061679c5958b601e079ce24c2a16e3",
-      "bytes": 102,
-      "profile": "github"
-    },
-    {
       "path": ".config/ai-rulez/domains/go/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0,
-      "profile": "go"
-    },
-    {
-      "path": ".config/ai-rulez/domains/go/index.md",
-      "sha256": "05e781cfeb354c4ac9af388d05c9c9a15494042ff17b1d266229475e066d8b8a",
-      "bytes": 69,
       "profile": "go"
     },
     {
@@ -239,31 +179,14 @@
     },
     {
       "path": ".config/ai-rulez/domains/go/rules/go-toolchains.md",
-      "sha256": "3ae4f7fbc6de8b9840567337c3bae931fcbad876bb589bcb7a67a33de8e3878b",
-      "bytes": 732,
+      "sha256": "72d01f32f76175df0d0e843866285ea081c0b9a831f1edc196a396835c0e332c",
+      "bytes": 735,
       "profile": "go"
-    },
-    {
-      "path": ".config/ai-rulez/domains/go/rules/index.md",
-      "sha256": "c65753b48944714f2a1907b56dc57b23c199b0dc9209db0ed77c0810fcfba2a0",
-      "bytes": 86,
-      "profile": "go"
-    },
-    {
-      "path": ".config/ai-rulez/domains/index.md",
-      "sha256": "f455e59ca059c72102dfa8850bc1daa875ed94b7fb8cceab299ecd7c20cc449f",
-      "bytes": 124
     },
     {
       "path": ".config/ai-rulez/domains/pkl/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
-    },
-    {
-      "path": ".config/ai-rulez/index.md",
-      "sha256": "a0b5049c739558c761cf1e1f439de156d84ffbda24634f17d7d5e3f8ac8d6f1e",
-      "bytes": 106,
-      "profile": "ai"
     },
     {
       "path": ".config/basemind/config.toml",
@@ -302,19 +225,19 @@
     },
     {
       "path": ".config/hk/core.pkl",
-      "sha256": "7b9022bab49fe3a5fd481b9fd1c2586d23eebcb6773a97ad6b1d94e687fb3f23",
-      "bytes": 1787
+      "sha256": "7f006c7b822b8a0292ab4b36b665e8f736be25b16709febfb1a93d4c534daffb",
+      "bytes": 1829
     },
     {
       "path": ".config/hk/custom.pkl",
-      "sha256": "a03324f550a1f9ee32fb035d4948b589d77d84f42853197eabbe1230d9be6507",
+      "sha256": "35c880eb117df0d9525aefbed2a222983c7b6cbba1b687fa964408d236cc4013",
       "bytes": 576,
       "profile": "custom"
     },
     {
       "path": ".config/hk/github.pkl",
-      "sha256": "4afeabb5b6fab2c49ade05469fa004416b32cec73d6ce06f00b1e7210ae83e53",
-      "bytes": 658,
+      "sha256": "87e439b2c20ea3db96986e846374c9ff0ff8d2de0d8218849f28f8180e90fda1",
+      "bytes": 702,
       "profile": "github"
     },
     {
@@ -330,14 +253,14 @@
     },
     {
       "path": ".config/mise/config.ai.toml",
-      "sha256": "8805208665b8f39d629e1edf1b92468f75e9fa56732f8121e8d1e43092f7d5f9",
-      "bytes": 546,
+      "sha256": "209906f04e659544e8443a391d5fac6bb6735b16ec20b848f4ee1516d65ed926",
+      "bytes": 589,
       "profile": "ai"
     },
     {
       "path": ".config/mise/config.custom.toml",
-      "sha256": "1ccdd5e3950fb135cce22b078c2ef8e02b9c3b448fb2c20e48893c3a53cefd44",
-      "bytes": 1981,
+      "sha256": "c44ca628d335245ad065b066b74c351512f277a1b9bb16f9c4d79ca385991e8d",
+      "bytes": 1816,
       "profile": "custom"
     },
     {
@@ -353,18 +276,13 @@
       "profile": "go"
     },
     {
-      "path": ".config/mise/config.linux.toml",
-      "sha256": "6e600d66b8a916ec84e8f65ddad7010c7ed6513758d73a2c4a6f3c070566b8d8",
-      "bytes": 6
-    },
-    {
       "path": ".config/mise/config.toml",
       "sha256": "b265ba6fb11902ca33fe5b9c2eb0927098214f13ab3159e1b6dc26c30a1d9b1d",
       "bytes": 2473
     },
     {
       "path": ".config/miserc.toml",
-      "sha256": "745638332b8b2ac8d31845ace1a513ea3307333478bf402a07ede024d238c005",
+      "sha256": "499c5985fccf7fd8e837742dc6bdf26c93c48978127ac2c094f503678d8f5dc8",
       "bytes": 63
     },
     {
@@ -385,8 +303,8 @@
     },
     {
       "path": ".config/turutan/README.md",
-      "sha256": "8e79d6676c9d7e30d45011f74fafac4f1ced9d2cff3f770c0f2959f64325b5b8",
-      "bytes": 3182
+      "sha256": "4db97b665a10dd093338217f0aa2179a9569b03baffcbbdcb67be3288de90f24",
+      "bytes": 3216
     },
     {
       "path": ".config/updatecli/github-actions.yaml",
@@ -449,8 +367,8 @@
     },
     {
       "path": ".gitignore",
-      "sha256": "8023da7d953073009714bc68efd76888631dbb148407063e5f83b3c6df2fd9b5",
-      "bytes": 340,
+      "sha256": "cadf6fecbda82af2d38fc46dc1b1eb0b2cad527087d8119953f29914eda20728",
+      "bytes": 339,
       "profile": "custom"
     },
     {

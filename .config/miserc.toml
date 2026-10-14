@@ -1,2 +1,2 @@
-env = ["core", "ai", "github", "go", "custom"]
+env = ["core", "ai", "go", "github", "custom"]
 auto_env = true
