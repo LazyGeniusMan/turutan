@@ -405,14 +405,15 @@ func TestValidateManifestInputs(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "empty inputs accepted", inputs: map[string]ManifestInput{}, wantErr: false},
-		{name: "string type accepted", inputs: map[string]ManifestInput{"project_name": {Type: "string"}}, wantErr: false},
-		{name: "empty type defaults to string", inputs: map[string]ManifestInput{"project_name": {}}, wantErr: false},
-		{name: "array type accepted", inputs: map[string]ManifestInput{"tags": {Type: "array"}}, wantErr: false},
-		{name: "bool type accepted", inputs: map[string]ManifestInput{"flag": {Type: "bool"}}, wantErr: false},
-		{name: "unknown type rejected", inputs: map[string]ManifestInput{"x": {Type: "number"}}, wantErr: true},
-		{name: "empty option rejected", inputs: map[string]ManifestInput{"x": {Type: "array", Options: []string{"a", ""}}}, wantErr: true},
-		{name: "bool with options rejected", inputs: map[string]ManifestInput{"x": {Type: "bool", Options: []string{"a"}}}, wantErr: true},
-		{name: "string with options accepted", inputs: map[string]ManifestInput{"x": {Type: "string", Options: []string{"a", "b"}}}, wantErr: false},
+		{name: "string type accepted", inputs: map[string]ManifestInput{"project_name": {Label: "Project Name", Type: "string"}}, wantErr: false},
+		{name: "empty type defaults to string", inputs: map[string]ManifestInput{"project_name": {Label: "Project Name"}}, wantErr: false},
+		{name: "array type accepted", inputs: map[string]ManifestInput{"tags": {Label: "Tags", Type: "array"}}, wantErr: false},
+		{name: "bool type accepted", inputs: map[string]ManifestInput{"flag": {Label: "Flag", Type: "bool"}}, wantErr: false},
+		{name: "unknown type rejected", inputs: map[string]ManifestInput{"x": {Label: "X", Type: "number"}}, wantErr: true},
+		{name: "empty option rejected", inputs: map[string]ManifestInput{"x": {Label: "X", Type: "array", Options: []string{"a", ""}}}, wantErr: true},
+		{name: "bool with options rejected", inputs: map[string]ManifestInput{"x": {Label: "X", Type: "bool", Options: []string{"a"}}}, wantErr: true},
+		{name: "string with options accepted", inputs: map[string]ManifestInput{"x": {Label: "X", Type: "string", Options: []string{"a", "b"}}}, wantErr: false},
+		{name: "missing label rejected", inputs: map[string]ManifestInput{"x": {Type: "string"}}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 )
 
 const profilesCmdManifest = "inputs:\n" +
-	"  project_name:\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    includes: [\"go.mod\"]\n" +
 	"  github:\n    includes: [\".github/**\"]\n"

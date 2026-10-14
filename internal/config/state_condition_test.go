@@ -80,8 +80,8 @@ func TestDefaultTemplateConditionalInputs(t *testing.T) {
 	if def.If != `{{contains .profiles "ai"}}` {
 		t.Errorf("ai_agents if = %q, want profiles-ai predicate", def.If)
 	}
-	if def.Question == "" {
-		t.Errorf("ai_agents lost question: %+v", def)
+	if def.Label == "" {
+		t.Errorf("ai_agents lost label: %+v", def)
 	}
 	if def.Type != "array" {
 		t.Errorf("ai_agents type = %q, want array", def.Type)

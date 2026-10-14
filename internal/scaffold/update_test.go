@@ -729,7 +729,7 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 			if got, _ := os.ReadFile(filepath.Join(projectDir, "b.txt")); string(got) != tt.wantFile {
 				t.Errorf("b.txt = %q, want input render %q", got, tt.wantFile)
 			}
-			if !strings.Contains(stdout.String(), "Enter value for brand_new_key") {
+			if !strings.Contains(stdout.String(), "Enter brand_new_key") {
 				t.Errorf("stdout = %q, want the key-name input", stdout.String())
 			}
 			state, err := config.LoadState(os.DirFS(projectDir))
@@ -939,7 +939,7 @@ func manifestWithConflict(mode string) *config.Manifest {
 }
 
 const profileTestManifest = "inputs:\n" +
-	"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\", \"cmd/**\"]\n" +
 	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
@@ -1187,8 +1187,8 @@ func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	projectDir := bootstrapProject(t, src)
 	writeFiles(t, src, map[string]string{
 		".turutan.yml": "inputs:\n" +
-			"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
-			"  new_feature:\n    question: \"New feature\"\n    type: array\n" +
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+			"  new_feature:\n    label: \"New feature\"\n    type: array\n" +
 			"    default: [\"alpha\", \"beta\"]\n",
 		"feat.txt.tmpl": "[{{ range $i, $p := .new_feature }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",
 	})

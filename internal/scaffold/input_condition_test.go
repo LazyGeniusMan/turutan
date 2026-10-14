@@ -12,8 +12,8 @@ import (
 
 func conditionalInputManifest() *config.Manifest {
 	return &config.Manifest{Inputs: map[string]config.ManifestInput{
-		"project_name":   {Question: "Project Name", Type: "string"},
-		"ai_agents":      {Question: "agents", Type: "array", Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
+		"project_name":   {Label: "Project Name", Type: "string"},
+		"ai_agents":      {Label: "agents", Type: "array", Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
 		"nick":           {Type: "string", Default: "n/a", If: `{{eq .project_name "x"}}`},
 		"opt_no_default": {Type: "string", If: `{{contains .profiles "ai"}}`},
 	}}
@@ -134,7 +134,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 			t.Errorf("opt_no_default = %v, want prompted empty value", data["opt_no_default"])
 		}
 		if !strings.Contains(stdout.String(), "agents") {
-			t.Errorf("prompt output %q lacks agents question, want prompt when ai present", stdout.String())
+			t.Errorf("prompt output %q lacks agents label, want prompt when ai present", stdout.String())
 		}
 	})
 	t.Run("multi-pass answers forward reference", func(t *testing.T) {

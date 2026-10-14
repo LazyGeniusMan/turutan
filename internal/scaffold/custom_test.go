@@ -14,7 +14,7 @@ import (
 )
 
 const customSeedManifest = "inputs:\n" +
-	"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\"]\n" +
 	"  custom:\n    label: \"Custom\"\n    includes: [\"custom.txt\", \"extra.txt\"]\n"

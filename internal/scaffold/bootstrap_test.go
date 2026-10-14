@@ -492,8 +492,8 @@ func TestBootstrapManifestSourceMismatch(t *testing.T) {
 
 func TestBootstrapConditionalProfiles(t *testing.T) {
 	const condManifest = "inputs:\n" +
-		"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
-		"  project_description:\n    question: \"Project Description\"\n    type: string\n    default: \"\"\n" +
+		"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+		"  project_description:\n    label: \"Project Description\"\n    type: string\n    default: \"\"\n" +
 		"conditionals:\n" +
 		"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
 		"    skip: [\"go.mod\", \"go.mod.tmpl\", \"cmd/**\"]\n" +
@@ -564,8 +564,8 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 	})
 	t.Run("non-interactive missing key names key", func(t *testing.T) {
 		const noDefaultManifest = "inputs:\n" +
-			"  project_name:\n    question: \"Project Name\"\n    type: string\n" +
-			"  service_name:\n    question: \"Service name\"\n    type: string\n"
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+			"  service_name:\n    label: \"Service name\"\n    type: string\n"
 		src := makeTemplate(t, noDefaultManifest, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
@@ -1018,7 +1018,7 @@ func TestBootstrapDefaultEnabledPresets(t *testing.T) {
 		if err := Bootstrap(context.Background(), fixture, target, testOptions(&stdout)); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
-		if got := readPresetsLine(t, target); got != `presets = ["opencode", "pi"]` {
+		if got := readPresetsLine(t, target); got != `presets = ["pi", "opencode"]` {
 			t.Errorf("presets line = %q, want the manifest default", got)
 		}
 	})

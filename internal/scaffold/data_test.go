@@ -3,7 +3,9 @@
 package scaffold
 
 import (
+	"bytes"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
@@ -90,6 +92,153 @@ func TestSeedMissingDefaultsCopies(t *testing.T) {
 		seeded[0] = "mutated"
 		if def, _ := manifest.Inputs["mixed"].Default.([]any); len(def) != 2 || def[0] != "a" {
 			t.Errorf("manifest default = %v, want it unchanged after seeding", def)
+		}
+	})
+}
+
+func TestInputLabelRendering(t *testing.T) {
+	t.Parallel()
+	t.Run("string uses label", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		got, err := inputForKey(&stdout, strings.NewReader("\n"),
+			"project_name", config.ManifestInput{Label: "Project Name", Type: "string", Default: "my-new-project"})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		if got != "my-new-project" {
+			t.Errorf("got = %v, want default my-new-project", got)
+		}
+		if out := stdout.String(); !strings.Contains(out, "Enter Project Name [my-new-project]:") {
+			t.Errorf("prompt = %q, want label-driven string prompt", out)
+		}
+	})
+	t.Run("array uses label with suffix", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		got, err := inputForKey(&stdout, strings.NewReader("\n"),
+			"ai_agents", config.ManifestInput{Label: "AI Agents", Type: "array", Default: []string{"opencode", "pi"}})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		list, ok := got.([]string)
+		if !ok || !slices.Equal(list, []string{"opencode", "pi"}) {
+			t.Errorf("got = %v (%T), want [opencode pi]", got, got)
+		}
+		out := stdout.String()
+		if !strings.Contains(out, "Enter AI Agents (comma-separated) [opencode,pi]:") {
+			t.Errorf("prompt = %q, want label-driven array prompt", out)
+		}
+		if strings.Contains(out, "value for") {
+			t.Errorf("prompt = %q, want no legacy key-name branch", out)
+		}
+		if n := strings.Count(out, "(comma-separated)"); n != 1 {
+			t.Errorf("prompt = %q, want exactly one suffix, got %d", out, n)
+		}
+	})
+	t.Run("array suffix not duplicated", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		_, err := inputForKey(&stdout, strings.NewReader("a\n"),
+			"tags", config.ManifestInput{Label: "Tags (comma-separated)", Type: "array"})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		if n := strings.Count(stdout.String(), "(comma-separated)"); n != 1 {
+			t.Errorf("prompt = %q, want no duplication, got %d", stdout.String(), n)
+		}
+	})
+	t.Run("bool renders y/n with shortcut", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range []struct {
+			stdin string
+			want  bool
+		}{
+			{stdin: "y\n", want: true},
+			{stdin: "n\n", want: false},
+			{stdin: "yes\n", want: true},
+			{stdin: "no\n", want: false},
+			{stdin: "true\n", want: true},
+			{stdin: "false\n", want: false},
+			{stdin: "1\n", want: true},
+			{stdin: "0\n", want: false},
+		} {
+			var stdout bytes.Buffer
+			got, err := inputForKey(&stdout, strings.NewReader(tt.stdin),
+				"flag", config.ManifestInput{Label: "Feature", Type: "bool"})
+			if err != nil {
+				t.Fatalf("inputForKey(%q) error = %v", tt.stdin, err)
+			}
+			if got != tt.want {
+				t.Errorf("inputForKey(%q) = %v, want %v", tt.stdin, got, tt.want)
+			}
+			if out := stdout.String(); !strings.Contains(out, "Enter Feature (y/n):") {
+				t.Errorf("prompt = %q, want (y/n) suffix", out)
+			}
+		}
+	})
+	t.Run("bool default shown as y/n", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		got, err := inputForKey(&stdout, strings.NewReader("\n"),
+			"flag", config.ManifestInput{Label: "Feature", Type: "bool", Default: true})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		if got != true {
+			t.Errorf("got = %v, want true", got)
+		}
+		if out := stdout.String(); !strings.Contains(out, "Enter Feature (y/n) [y]:") {
+			t.Errorf("prompt = %q, want [y] default", out)
+		}
+		var stdoutN bytes.Buffer
+		gotN, err := inputForKey(&stdoutN, strings.NewReader("\n"),
+			"flag", config.ManifestInput{Label: "Feature", Type: "bool", Default: false})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		if gotN != false {
+			t.Errorf("got = %v, want false", gotN)
+		}
+		if out := stdoutN.String(); !strings.Contains(out, "Enter Feature (y/n) [n]:") {
+			t.Errorf("prompt = %q, want [n] default", out)
+		}
+	})
+	t.Run("options listed before prompt", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		_, err := inputForKey(&stdout, strings.NewReader("a\n"),
+			"choice", config.ManifestInput{Label: "Choice", Type: "string", Options: []string{"a", "b", "c"}})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		out := stdout.String()
+		if !strings.Contains(out, "Possible values: a, b, c") {
+			t.Errorf("prompt = %q, want options line", out)
+		}
+		if strings.Index(out, "Possible values:") > strings.Index(out, "Enter Choice") {
+			t.Errorf("prompt = %q, want options before the prompt", out)
+		}
+		var stdoutArr bytes.Buffer
+		_, err = inputForKey(&stdoutArr, strings.NewReader("a,b\n"),
+			"tags", config.ManifestInput{Label: "Tags", Type: "array", Options: []string{"a", "b"}})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		if !strings.Contains(stdoutArr.String(), "Possible values: a, b") {
+			t.Errorf("array prompt = %q, want options line", stdoutArr.String())
+		}
+	})
+	t.Run("empty label falls back to key", func(t *testing.T) {
+		t.Parallel()
+		var stdout bytes.Buffer
+		_, err := inputForKey(&stdout, strings.NewReader("v\n"),
+			"mykey", config.ManifestInput{Type: "string"})
+		if err != nil {
+			t.Fatalf("inputForKey error = %v", err)
+		}
+		if !strings.Contains(stdout.String(), "Enter mykey:") {
+			t.Errorf("prompt = %q, want key fallback", stdout.String())
 		}
 	})
 }

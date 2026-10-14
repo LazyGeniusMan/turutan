@@ -285,6 +285,23 @@ func inputForKey(
 	}
 }
 
+func inputLabel(def config.ManifestInput, key string) string {
+	if def.Label != "" {
+		return def.Label
+	}
+	return key
+}
+
+func printInputOptions(stdout io.Writer, options []string) error {
+	if len(options) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(stdout, "Possible values: %s\n", strings.Join(options, ", ")); err != nil {
+		return err
+	}
+	return nil
+}
+
 func inputArrayValue(
 	stdout io.Writer,
 	stdin io.Reader,
@@ -295,12 +312,20 @@ func inputArrayValue(
 	if def.Default == nil {
 		defaultList = nil
 	}
+	label := inputLabel(def, key)
+	if err := printInputOptions(stdout, def.Options); err != nil {
+		return nil, err
+	}
+	prompt := label
+	if !strings.Contains(strings.ToLower(label), "comma-separated") {
+		prompt += " (comma-separated)"
+	}
 	var text string
 	switch {
 	case def.Default != nil:
-		text = fmt.Sprintf("Enter value for %s (comma-separated) [%s]: ", key, strings.Join(defaultList, ","))
+		text = fmt.Sprintf("Enter %s [%s]: ", prompt, strings.Join(defaultList, ","))
 	default:
-		text = fmt.Sprintf("Enter value for %s (comma-separated): ", key)
+		text = fmt.Sprintf("Enter %s: ", prompt)
 	}
 	if _, err := fmt.Fprint(stdout, text); err != nil {
 		return nil, err
@@ -335,9 +360,9 @@ func inputStringValue(
 	key string,
 	def config.ManifestInput,
 ) (any, error) {
-	label := key
-	if def.Question != "" {
-		label = def.Question
+	label := inputLabel(def, key)
+	if err := printInputOptions(stdout, def.Options); err != nil {
+		return nil, err
 	}
 	var defaultStr string
 	hasDefault := def.Default != nil
@@ -388,9 +413,9 @@ func inputBoolValue(
 	key string,
 	def config.ManifestInput,
 ) (any, error) {
-	label := key
-	if def.Question != "" {
-		label = def.Question
+	label := inputLabel(def, key)
+	if err := printInputOptions(stdout, def.Options); err != nil {
+		return nil, err
 	}
 	var defaultStr string
 	hasDefault := def.Default != nil
@@ -398,21 +423,33 @@ func inputBoolValue(
 		switch v := def.Default.(type) {
 		case bool:
 			if v {
-				defaultStr = "true"
+				defaultStr = "y"
 			} else {
-				defaultStr = "false"
+				defaultStr = "n"
 			}
 		case string:
-			defaultStr = v
+			if parsed, err := parseBoolInput(strings.TrimSpace(v), key); err == nil {
+				if parsed {
+					defaultStr = "y"
+				} else {
+					defaultStr = "n"
+				}
+			} else {
+				defaultStr = v
+			}
 		default:
 			defaultStr = fmt.Sprint(v)
 		}
 	}
+	prompt := label
+	if !strings.Contains(strings.ToLower(label), "y/n") {
+		prompt += " (y/n)"
+	}
 	var text string
 	if hasDefault {
-		text = fmt.Sprintf("Enter %s [%s]: ", label, defaultStr)
+		text = fmt.Sprintf("Enter %s [%s]: ", prompt, defaultStr)
 	} else {
-		text = fmt.Sprintf("Enter %s (true/false): ", label)
+		text = fmt.Sprintf("Enter %s: ", prompt)
 	}
 	if _, err := fmt.Fprint(stdout, text); err != nil {
 		return nil, err
@@ -459,12 +496,12 @@ func parseBoolInput(s, key string) (bool, error) {
 	case "false", "0", "no", "n":
 		return false, nil
 	default:
-		return false, fmt.Errorf("invalid value %q for %q (want true/false)", s, key)
+		return false, fmt.Errorf("invalid value %q for %q (want y/n)", s, key)
 	}
 }
 
 func inputValue(stdout io.Writer, stdin io.Reader, key string) (string, error) {
-	if _, err := fmt.Fprintf(stdout, "Enter value for %s: ", key); err != nil {
+	if _, err := fmt.Fprintf(stdout, "Enter %s: ", key); err != nil {
 		return "", err
 	}
 	line, err := readInputLine(stdin)
@@ -474,8 +511,8 @@ func inputValue(stdout io.Writer, stdin io.Reader, key string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-func askConfirm(stdout io.Writer, stdin io.Reader, question string) (bool, error) {
-	if _, err := fmt.Fprintf(stdout, "%s [y/N]: ", question); err != nil {
+func askConfirm(stdout io.Writer, stdin io.Reader, prompt string) (bool, error) {
+	if _, err := fmt.Fprintf(stdout, "%s [y/N]: ", prompt); err != nil {
 		return false, err
 	}
 	line, _ := readInputLine(stdin)

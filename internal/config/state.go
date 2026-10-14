@@ -90,12 +90,12 @@ type ManifestMigration struct {
 // ManifestInput describes one template input value.
 // ~keep
 type ManifestInput struct {
-	Question string   `yaml:"question"`
-	Default  any      `yaml:"default"`
-	Type     string   `yaml:"type"`
-	Options  []string `yaml:"options"`
-	Help     string   `yaml:"help"`
-	If       string   `yaml:"if,omitempty"`
+	Label   string   `yaml:"label"`
+	Default any      `yaml:"default"`
+	Type    string   `yaml:"type"`
+	Options []string `yaml:"options"`
+	Help    string   `yaml:"help"`
+	If      string   `yaml:"if,omitempty"`
 }
 
 type ManifestConditional struct {
@@ -412,6 +412,9 @@ func validateManifestInputs(inputs map[string]ManifestInput) error {
 		if key == "" {
 			return fmt.Errorf("invalid manifest: input with empty key")
 		}
+		if strings.TrimSpace(input.Label) == "" {
+			return fmt.Errorf("invalid manifest: input %q is missing label", key)
+		}
 		switch input.Type {
 		case "", "string", "array", "bool":
 		default:
@@ -664,7 +667,7 @@ func ResolveRenames(old string, renames map[string]string) string {
 
 // ProfileDiff summarizes how the profile and input surface changed.
 // Update uses it to ask only for genuinely new inputs instead of
-// replaying every question on each template sync.
+// replaying every prompt on each template sync.
 // ~keep
 type ProfileDiff struct {
 	Added     []string
