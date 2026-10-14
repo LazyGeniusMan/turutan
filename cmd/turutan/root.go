@@ -85,7 +85,9 @@ func addRootFlags(cmd *cobra.Command) {
 		&appCfg.cfgFile, "config", "", "config file path")
 	cmd.PersistentFlags().BoolVar(
 		&appCfg.nonInteractive, "non-interactive", false,
-		"disable interactive prompts")
+		"disable interactive inputs")
+	cmd.PersistentFlags().StringSlice(
+		"profiles", nil, "template profiles to select (repeatable or comma-separated; see go doc text/template for data/dot terms)")
 	cmd.PersistentFlags().BoolVar(
 		&appCfg.verbose, "verbose", false,
 		"verbose diagnostics on stderr")

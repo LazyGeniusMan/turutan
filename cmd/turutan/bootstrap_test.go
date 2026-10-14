@@ -64,14 +64,14 @@ func TestBootstrapCmd(t *testing.T) {
 			t.Error("bootstrap with bad --conflict succeeded, want error")
 		}
 	})
-	t.Run("missing answers fail non-interactively", func(t *testing.T) {
+	t.Run("missing data fail non-interactively", func(t *testing.T) {
 		src := writeTemplate(t, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
 		cmd := newBootstrapCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetArgs([]string{src, filepath.Join(t.TempDir(), "p")})
 		if err := cmd.Execute(); err == nil {
-			t.Error("bootstrap without --defaults/--answers-file succeeded, want error")
+			t.Error("bootstrap without --defaults/--data-file succeeded, want error")
 		}
 	})
 }

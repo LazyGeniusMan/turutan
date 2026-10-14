@@ -13,11 +13,8 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-const profilesCmdManifest = "prompts:\n" +
+const profilesCmdManifest = "inputs:\n" +
 	"  project_name:\n    type: string\n" +
-	"  enabled_profiles:\n    type: array\n" +
-	"    default: [\"core\"]\n" +
-	"    options: [\"core\", \"go\", \"github\"]\n" +
 	"profiles:\n" +
 	"  go:\n    includes: [\"go.mod\"]\n" +
 	"  github:\n    includes: [\".github/**\"]\n"
@@ -30,18 +27,17 @@ func bootstrapProfilesProject(t *testing.T, profiles ...string) string {
 		"go.mod":       "module example\n",
 	})
 	var list strings.Builder
-	list.WriteString("project_name: proj\nenabled_profiles: [")
-	list.WriteString(strings.Join(profiles, ", "))
-	list.WriteString("]\n")
-	answersFile := filepath.Join(t.TempDir(), "answers.yml")
-	if err := os.WriteFile(answersFile, []byte(list.String()), 0o600); err != nil {
+	list.WriteString("project_name: proj\n")
+	dataFile := filepath.Join(t.TempDir(), "data.yml")
+	if err := os.WriteFile(dataFile, []byte(list.String()), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	dst := filepath.Join(t.TempDir(), "proj")
 	opts := scaffold.Options{
 		NonInteractive: true,
 		Defaults:       true,
-		AnswersFile:    answersFile,
+		DataFile:       dataFile,
+		Profiles:       append([]string{}, profiles...),
 		Engine:         "0.1.0",
 		Stdout:         &bytes.Buffer{},
 		Stderr:         &bytes.Buffer{},
@@ -217,7 +213,7 @@ func TestUpdateDisableCmd(t *testing.T) {
 	})
 	t.Run("disable and preview flags register", func(t *testing.T) {
 		cmd := newUpdateCmd()
-		for _, name := range []string{"disable", "enable", "preview", "force", "answers-file"} {
+		for _, name := range []string{"disable", "enable", "preview", "force", "data-file"} {
 			if cmd.Flags().Lookup(name) == nil {
 				t.Errorf("flag --%s missing", name)
 			}

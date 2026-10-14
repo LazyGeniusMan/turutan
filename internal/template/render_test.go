@@ -25,8 +25,8 @@ func renderFixture() fstest.MapFS {
 func TestRenderFS(t *testing.T) {
 	t.Run("renders tmpl strips suffix skips metadata", func(t *testing.T) {
 		dst := t.TempDir()
-		answers := map[string]any{"project_name": "demo"}
-		if err := RenderFS(renderFixture(), dst, answers); err != nil {
+		data := map[string]any{"project_name": "demo"}
+		if err := RenderFS(renderFixture(), dst, data); err != nil {
 			t.Fatalf("RenderFS error: %v", err)
 		}
 		for _, path := range []string{"go.mod", "internal/app/app.go", "README.md", "static.txt"} {
@@ -96,7 +96,7 @@ func TestRenderFS(t *testing.T) {
 	})
 	t.Run("missing key fails", func(t *testing.T) {
 		if err := RenderFS(renderFixture(), t.TempDir(), map[string]any{}); err == nil {
-			t.Error("RenderFS with missing answers succeeded, want error")
+			t.Error("RenderFS with missing data succeeded, want error")
 		}
 	})
 }
@@ -258,24 +258,24 @@ func TestContainsFunc(t *testing.T) {
 func TestEvaluateSkip(t *testing.T) {
 	tests := []struct {
 		name    string
-		answers map[string]any
+		data    map[string]any
 		conds   []Conditional
 		want    map[string]bool
 		wantErr string
 	}{
-		{name: "empty conds empty set", answers: map[string]any{}, conds: nil, want: map[string]bool{}},
-		{name: "truthy adds skips", answers: map[string]any{"enabled_profiles": []string{"ai"}}, conds: []Conditional{{If: `{{ not (contains .enabled_profiles "go") }}`, Skip: []string{"go.mod"}}}, want: map[string]bool{"go.mod": true}},
-		{name: "falsy adds nothing", answers: map[string]any{"enabled_profiles": []string{"go"}}, conds: []Conditional{{If: `{{ not (contains .enabled_profiles "go") }}`, Skip: []string{"go.mod"}}}, want: map[string]bool{}},
-		{name: "any slice handled", answers: map[string]any{"enabled_profiles": []any{"go"}}, conds: []Conditional{{If: `{{ contains .enabled_profiles "go" }}`, Skip: []string{"x"}}}, want: map[string]bool{"x": true}},
-		{name: "yes truthy", answers: map[string]any{}, conds: []Conditional{{If: "yes", Skip: []string{"a"}}}, want: map[string]bool{"a": true}},
-		{name: "empty falsy", answers: map[string]any{}, conds: []Conditional{{If: "", Skip: []string{"a"}}}, want: map[string]bool{}},
-		{name: "non-bool errors", answers: map[string]any{}, conds: []Conditional{{If: "maybe", Skip: []string{"a"}}}, wantErr: "not a boolean"},
-		{name: "missing key errors", answers: map[string]any{}, conds: []Conditional{{If: `{{ .absent_key }}`, Skip: []string{"a"}}}, wantErr: `no entry for key "absent_key"`},
+		{name: "empty conds empty set", data: map[string]any{}, conds: nil, want: map[string]bool{}},
+		{name: "truthy adds skips", data: map[string]any{"profiles": []string{"ai"}}, conds: []Conditional{{If: `{{ not (contains .profiles "go") }}`, Skip: []string{"go.mod"}}}, want: map[string]bool{"go.mod": true}},
+		{name: "falsy adds nothing", data: map[string]any{"profiles": []string{"go"}}, conds: []Conditional{{If: `{{ not (contains .profiles "go") }}`, Skip: []string{"go.mod"}}}, want: map[string]bool{}},
+		{name: "any slice handled", data: map[string]any{"profiles": []any{"go"}}, conds: []Conditional{{If: `{{ contains .profiles "go" }}`, Skip: []string{"x"}}}, want: map[string]bool{"x": true}},
+		{name: "yes truthy", data: map[string]any{}, conds: []Conditional{{If: "yes", Skip: []string{"a"}}}, want: map[string]bool{"a": true}},
+		{name: "empty falsy", data: map[string]any{}, conds: []Conditional{{If: "", Skip: []string{"a"}}}, want: map[string]bool{}},
+		{name: "non-bool errors", data: map[string]any{}, conds: []Conditional{{If: "maybe", Skip: []string{"a"}}}, wantErr: "not a boolean"},
+		{name: "missing key errors", data: map[string]any{}, conds: []Conditional{{If: `{{ .absent_key }}`, Skip: []string{"a"}}}, wantErr: `no entry for key "absent_key"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := assert.New(t)
-			got, err := EvaluateSkip(tt.answers, tt.conds)
+			got, err := EvaluateSkip(tt.data, tt.conds)
 			if tt.wantErr != "" {
 				is.Error(err)
 				is.Contains(err.Error(), tt.wantErr)
@@ -299,12 +299,12 @@ func TestRenderFSWithConditionals(t *testing.T) {
 			"keep.txt":        {Data: []byte("keep\n")},
 		}
 	}
-	goCond := []Conditional{{If: `{{ not (contains .enabled_profiles "go") }}`, Skip: []string{"go.mod", "cmd/**"}}}
+	goCond := []Conditional{{If: `{{ not (contains .profiles "go") }}`, Skip: []string{"go.mod", "cmd/**"}}}
 	t.Run("skips go files when profile absent", func(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
-		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{"ai"}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond, nil))
+		data := map[string]any{"project_name": "demo", "profiles": []string{"ai"}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, goCond, nil))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))
@@ -316,8 +316,8 @@ func TestRenderFSWithConditionals(t *testing.T) {
 	t.Run("keeps go files when profile present", func(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
-		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{"go"}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, goCond, nil))
+		data := map[string]any{"project_name": "demo", "profiles": []string{"go"}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, goCond, nil))
 		got, err := os.ReadFile(filepath.Join(dst, "go.mod")) // #nosec G304 -- reads file from this test's temp dir
 		is.NoError(err)
 		is.Equal("module demo\n", string(got))
@@ -325,22 +325,22 @@ func TestRenderFSWithConditionals(t *testing.T) {
 	t.Run("tmpl suffix matches stripped path", func(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
-		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{}}
+		data := map[string]any{"project_name": "demo", "profiles": []string{}}
 		conds := []Conditional{{If: "true", Skip: []string{"go.mod"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds, nil))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, conds, nil))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 	})
 	t.Run("dir skip prunes tree", func(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
-		answers := map[string]any{"project_name": "demo"}
+		data := map[string]any{"project_name": "demo"}
 		conds := []Conditional{{If: "true", Skip: []string{"github/**"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, answers, conds, nil))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, conds, nil))
 		_, err := os.Stat(filepath.Join(dst, "github", "ci.yml"))
 		is.True(os.IsNotExist(err))
 	})
-	t.Run("missing key propagates for prompting", func(t *testing.T) {
+	t.Run("missing key propagates for input", func(t *testing.T) {
 		conds := []Conditional{{If: `{{ .absent_key }}`, Skip: []string{"a"}}}
 		err := RenderFSWithConditionals(newFixture(), t.TempDir(), map[string]any{}, conds, nil)
 		is := assert.New(t)
@@ -357,9 +357,9 @@ func TestRenderDirWithConditionals(t *testing.T) {
 		is.NoError(os.WriteFile(filepath.Join(src, "go.mod.tmpl"), []byte("module {{.project_name}}\n"), 0o600))
 		is.NoError(os.WriteFile(filepath.Join(src, "cmd", "app", "main.go"), []byte("main\n"), 0o600))
 		dst := t.TempDir()
-		answers := map[string]any{"project_name": "demo", "enabled_profiles": []string{}}
+		data := map[string]any{"project_name": "demo", "profiles": []string{}}
 		conds := []Conditional{{If: "true", Skip: []string{"go.mod", "cmd/**"}}}
-		is.NoError(RenderDirWithConditionals(src, dst, answers, conds, nil))
+		is.NoError(RenderDirWithConditionals(src, dst, data, conds, nil))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))

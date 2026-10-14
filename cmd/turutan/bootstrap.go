@@ -14,15 +14,15 @@ import (
 )
 
 type bootstrapFlags struct {
-	ref         string
-	subpath     string
-	answersFile string
-	defaults    bool
-	conflict    string
-	skip        string
-	force       bool
-	allowHooks  bool
-	template    string
+	ref        string
+	subpath    string
+	dataFile   string
+	defaults   bool
+	conflict   string
+	skip       string
+	force      bool
+	allowHooks bool
+	template   string
 }
 
 func newBootstrapCmd() *cobra.Command {
@@ -48,9 +48,9 @@ func newBootstrapCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&flags.ref, "ref", "", "override the requested template ref for this run")
 	cmd.Flags().StringVar(&flags.subpath, "subpath", "", "override the URI //subpath at bootstrap")
-	cmd.Flags().StringVar(&flags.answersFile, "answers-file", "", "load template answers from a YAML/JSON file")
+	cmd.Flags().StringVar(&flags.dataFile, "data-file", "", "load template data from a YAML/JSON file (see go doc text/template for data/dot terms)")
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false,
-		"seed project_name from target basename; answers-file overlay wins")
+		"seed project_name from target basename; data-file overlay wins")
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "",
 		"conflict record mode for future updates (inline|rej; stored in .config/turutan/state.json)")
 	cmd.Flags().StringVar(&flags.skip, "skip", "", "comma-separated template paths kept as-is")
@@ -72,13 +72,15 @@ func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags)
 		return err
 	}
 	source = resolveBootstrapSource(source, flags.template, dir)
+	profiles := resolveProfiles(cmd, viper.GetViper(), "")
 	return scaffold.Bootstrap(cmd.Context(), source, dir, scaffold.Options{
 		NonInteractive: appCfg.nonInteractive,
 		Force:          flags.force,
 		Conflict:       conflict,
 		Ref:            flags.ref,
 		Subpath:        flags.subpath,
-		AnswersFile:    flags.answersFile,
+		DataFile:       flags.dataFile,
+		Profiles:       profiles,
 		Defaults:       flags.defaults,
 		AllowHooks:     flags.allowHooks,
 		Skip:           skip,

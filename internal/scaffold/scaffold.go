@@ -30,7 +30,8 @@ type Options struct {
 	Conflict       ConflictMode
 	Ref            string
 	Subpath        string
-	AnswersFile    string
+	DataFile       string
+	Profiles       []string
 	Defaults       bool
 	AllowHooks     bool
 	Skip           []string

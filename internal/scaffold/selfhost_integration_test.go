@@ -80,13 +80,13 @@ func TestDefaultSelfHostE2E(t *testing.T) {
 		if _, err := git.ResolveRemoteRef(context.Background(), repo, template.DefaultRef); err != nil {
 			t.Skipf("default template ref %q unresolvable (unpublished or offline): %v", template.DefaultRef, err)
 		}
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: parity\n"), 0o600); err != nil {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: parity\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		opts := func(stdout *strings.Builder) Options {
 			o := testOptions(stdout)
-			o.AnswersFile = answersFile
+			o.DataFile = dataFile
 			return o
 		}
 		local := filepath.Join(t.TempDir(), "local")
@@ -274,7 +274,7 @@ func TestDefaultProfileChangeOffline(t *testing.T) {
 			t.Errorf("miserc.toml = %q, want env [core go custom]", miserc)
 		}
 		if got := e2eStoredProfiles(t, proj); len(got) != 3 || got[0] != "core" || got[1] != "go" || got[2] != "custom" {
-			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+			t.Errorf("stored profiles = %v, want [core go custom]", got)
 		}
 	})
 	t.Run("remove go profile without template change", func(t *testing.T) {
@@ -300,7 +300,7 @@ func TestDefaultProfileChangeOffline(t *testing.T) {
 			t.Errorf("miserc.toml = %q, want no go profile entry", miserc)
 		}
 		if got := e2eStoredProfiles(t, proj); len(got) != 2 || got[0] != "core" || got[1] != "custom" {
-			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
+			t.Errorf("stored profiles = %v, want [core custom]", got)
 		}
 	})
 }
@@ -313,17 +313,15 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 	}
 	bin := e2eBuildTurutan(t, root)
 	work := t.TempDir()
-	coreAnswers := e2eWriteProfilesAnswers(t, "core")
-	coreGoAnswers := e2eWriteProfilesAnswers(t, "core", "go")
 	if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
-		"--answers-file", coreAnswers, "--defaults", "--non-interactive"); code != 0 {
+		"--profiles", "core", "--defaults", "--non-interactive"); code != 0 {
 		t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 	}
 	proj := filepath.Join(work, "proj")
 	e2eAssertMisercEnv(t, proj, `env = ["core", "custom"]`)
-	e2eAssertReadmeProject(t, proj, "demoe2e")
+	e2eAssertReadmeProject(t, proj, "proj")
 	if out, code := e2eRun(t, bin, proj, "update",
-		"--answers-file", coreGoAnswers, "--force", "--non-interactive"); code != 0 {
+		"--profiles", "core,go", "--force", "--non-interactive"); code != 0 {
 		t.Fatalf("update (add go) exit = %d, want 0:\n%s", code, out)
 	} else if !strings.Contains(out, "updated") {
 		t.Errorf("update output missing summary:\n%s", out)
@@ -336,12 +334,12 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 		t.Errorf("config.go.toml = %q, want go toolchain", got)
 	}
 	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 3 || profiles[1] != "go" || profiles[2] != "custom" {
-		t.Errorf("stored enabled_profiles = %v, want [core go custom]", profiles)
+		t.Errorf("stored profiles = %v, want [core go custom]", profiles)
 	}
 	e2eAssertMisercEnv(t, proj, `env = ["core", "go", "custom"]`)
-	e2eAssertReadmeProject(t, proj, "demoe2e")
+	e2eAssertReadmeProject(t, proj, "proj")
 	if out, code := e2eRun(t, bin, proj, "update",
-		"--answers-file", coreAnswers, "--force", "--non-interactive"); code != 0 {
+		"--profiles", "core", "--force", "--non-interactive"); code != 0 {
 		t.Fatalf("update (remove go) exit = %d, want 0:\n%s", code, out)
 	} else if !strings.Contains(out, "updated") {
 		t.Errorf("update output missing summary:\n%s", out)
@@ -350,10 +348,10 @@ func TestDefaultProfileChangeBinaryE2E(t *testing.T) {
 		t.Error("config.go.toml exists after removing the go profile, want it gone")
 	}
 	if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[0] != "core" || profiles[1] != "custom" {
-		t.Errorf("stored enabled_profiles = %v, want [core custom]", profiles)
+		t.Errorf("stored profiles = %v, want [core custom]", profiles)
 	}
 	e2eAssertMisercEnv(t, proj, `env = ["core", "custom"]`)
-	e2eAssertReadmeProject(t, proj, "demoe2e")
+	e2eAssertReadmeProject(t, proj, "proj")
 }
 
 func TestDefaultBinarySyncE2E(t *testing.T) {
@@ -371,9 +369,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 			t.Fatal(err)
 		}
 		work := t.TempDir()
-		answers := e2eWriteProfilesAnswers(t, "core")
 		if out, code := e2eRun(t, bin, work, "bootstrap", tmpl, "proj",
-			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			"--profiles", "core", "--defaults", "--non-interactive"); code != 0 {
 			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
@@ -440,9 +437,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 	t.Run("update enable disable preview flags", func(t *testing.T) {
 		t.Parallel()
 		work := t.TempDir()
-		answers := e2eWriteProfilesAnswers(t, "core")
 		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
-			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			"--profiles", "core", "--defaults", "--non-interactive"); code != 0 {
 			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
@@ -455,7 +451,7 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 			t.Error("config.go.toml exists after --preview, want preview to write nothing")
 		}
 		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[0] != "core" || profiles[1] != "custom" {
-			t.Errorf("stored enabled_profiles = %v after --preview, want [core custom]", profiles)
+			t.Errorf("stored profiles = %v after --preview, want [core custom]", profiles)
 		}
 		if out, code := e2eRun(t, bin, proj, "update", "--enable", "go", "--force", "--non-interactive"); code != 0 {
 			t.Fatalf("update --enable go exit = %d, want 0:\n%s", code, out)
@@ -468,7 +464,7 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 			t.Errorf("config.go.toml = %q, want go toolchain", got)
 		}
 		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 3 || profiles[1] != "go" || profiles[2] != "custom" {
-			t.Errorf("stored enabled_profiles = %v, want [core go custom]", profiles)
+			t.Errorf("stored profiles = %v, want [core go custom]", profiles)
 		}
 		e2eAssertMisercEnv(t, proj, `env = ["core", "go", "custom"]`)
 		if out, code := e2eRun(t, bin, proj, "update", "--disable", "go", "--preview", "--non-interactive"); code != 0 {
@@ -488,7 +484,7 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 			t.Error("config.go.toml exists after --disable go, want it gone")
 		}
 		if profiles := e2eStoredProfiles(t, proj); len(profiles) != 2 || profiles[0] != "core" || profiles[1] != "custom" {
-			t.Errorf("stored enabled_profiles = %v, want [core custom]", profiles)
+			t.Errorf("stored profiles = %v, want [core custom]", profiles)
 		}
 		if _, code := e2eRun(t, bin, proj, "update", "--enable", "nope", "--force", "--non-interactive"); code == 0 {
 			t.Error("update --enable nope exit = 0, want non-zero for unknown profile")
@@ -498,9 +494,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 	t.Run("profiles list", func(t *testing.T) {
 		t.Parallel()
 		work := t.TempDir()
-		answers := e2eWriteProfilesAnswers(t, "core")
 		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
-			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			"--profiles", "core", "--defaults", "--non-interactive"); code != 0 {
 			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
@@ -526,9 +521,8 @@ func TestDefaultBinarySyncE2E(t *testing.T) {
 	t.Run("check-update offers", func(t *testing.T) {
 		t.Parallel()
 		work := t.TempDir()
-		answers := e2eWriteProfilesAnswers(t, "core")
 		if out, code := e2eRun(t, bin, work, "bootstrap", fixture, "proj",
-			"--answers-file", answers, "--defaults", "--non-interactive"); code != 0 {
+			"--profiles", "core", "--defaults", "--non-interactive"); code != 0 {
 			t.Fatalf("bootstrap exit = %d, want 0:\n%s", code, out)
 		}
 		proj := filepath.Join(work, "proj")
@@ -566,19 +560,9 @@ func e2eAssertReadmeProject(t *testing.T, proj, want string) {
 	}
 }
 
-func e2eWriteProfilesAnswers(t *testing.T, profiles ...string) string {
+func e2eProfilesForTest(t *testing.T, profiles ...string) []string {
 	t.Helper()
-	var b strings.Builder
-	b.WriteString("project_name: demoe2e\n")
-	b.WriteString("enabled_profiles:\n")
-	for _, p := range profiles {
-		b.WriteString("  - " + p + "\n")
-	}
-	path := filepath.Join(t.TempDir(), "answers.yml")
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return append([]string{}, profiles...)
 }
 
 func e2eBootstrapProfiles(t *testing.T, fixture string, profiles ...string) string {
@@ -586,7 +570,7 @@ func e2eBootstrapProfiles(t *testing.T, fixture string, profiles ...string) stri
 	proj := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.AnswersFile = e2eWriteProfilesAnswers(t, profiles...)
+	opts.Profiles = e2eProfilesForTest(t, profiles...)
 	if err := Bootstrap(context.Background(), fixture, proj, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -599,7 +583,7 @@ func e2eUpdateProfiles(t *testing.T, projectDir string, profiles ...string) {
 	opts := updateTestOptions(&stdout, &stderr)
 	opts.Force = true
 	opts.NonInteractive = true
-	opts.AnswersFile = e2eWriteProfilesAnswers(t, profiles...)
+	opts.Profiles = e2eProfilesForTest(t, profiles...)
 	if _, err := Update(context.Background(), projectDir, opts); err != nil {
 		t.Fatalf("Update error: %v", err)
 	}
@@ -611,7 +595,7 @@ func e2eStoredProfiles(t *testing.T, projectDir string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return normalizeArrayValue(state.Answers["enabled_profiles"])
+	return append([]string{}, state.GetProfiles()...)
 }
 
 func e2eModuleRoot(t *testing.T) string {

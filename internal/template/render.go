@@ -117,7 +117,9 @@ func templateFuncMap() map[string]any {
 	return funcs
 }
 
-func EvaluateSkip(answers map[string]any, conds []Conditional) (map[string]bool, error) {
+// EvaluateSkip evaluates conditional skip globs against data.
+// ~keep
+func EvaluateSkip(data map[string]any, conds []Conditional) (map[string]bool, error) {
 	skipSet := map[string]bool{}
 	for i, cond := range conds {
 		if cond.If == "" {
@@ -131,7 +133,7 @@ func EvaluateSkip(answers map[string]any, conds []Conditional) (map[string]bool,
 			return nil, fmt.Errorf("evaluating conditional[%d]: parsing: %w", i, err)
 		}
 		var rendered strings.Builder
-		if err := tmpl.Execute(&rendered, answers); err != nil {
+		if err := tmpl.Execute(&rendered, data); err != nil {
 			wrapped := fmt.Errorf("evaluating conditional[%d]: %w", i, err)
 			if key := parseMissingKey(err); key != "" {
 				return nil, &MissingKeyError{Key: key, Err: wrapped}
@@ -194,16 +196,18 @@ func matchesSkip(globs []string, slash string) (bool, error) {
 	return false, nil
 }
 
-func RenderFS(srcFS fs.FS, dstDir string, answers map[string]any) error {
-	return RenderFSWithConditionals(srcFS, dstDir, answers, nil, nil)
+// RenderFS renders a filesystem template with data.
+// ~keep
+func RenderFS(srcFS fs.FS, dstDir string, data map[string]any) error {
+	return RenderFSWithConditionals(srcFS, dstDir, data, nil, nil)
 }
 
 // RenderFSWithConditionals renders srcFS to dstDir, applying explicit
 // conditionals plus the layered profile include decision. A nil include
 // means every non-metadata path is rendered.
 // ~keep
-func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any, conds []Conditional, include func(string) (bool, error)) error {
-	skipSet, err := EvaluateSkip(answers, conds)
+func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, conds []Conditional, include func(string) (bool, error)) error {
+	skipSet, err := EvaluateSkip(data, conds)
 	if err != nil {
 		return err
 	}
@@ -251,12 +255,14 @@ func RenderFSWithConditionals(srcFS fs.FS, dstDir string, answers map[string]any
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		return renderFile(srcFS, slash, dst, answers)
+		return renderFile(srcFS, slash, dst, data)
 	})
 }
 
-func RenderDir(srcDir, dstDir string, answers map[string]any) error {
-	return RenderDirWithConditionals(srcDir, dstDir, answers, nil, nil)
+// RenderDir renders a directory template with data.
+// ~keep
+func RenderDir(srcDir, dstDir string, data map[string]any) error {
+	return RenderDirWithConditionals(srcDir, dstDir, data, nil, nil)
 }
 
 // RenderDirWithConditionals renders srcDir to dstDir, applying explicit
@@ -265,18 +271,18 @@ func RenderDir(srcDir, dstDir string, answers map[string]any) error {
 // files are evaluated individually so a later profile can re-include a
 // child of an excluded subtree.
 // ~keep
-func RenderDirWithConditionals(srcDir, dstDir string, answers map[string]any, conds []Conditional, include func(string) (bool, error)) error {
+func RenderDirWithConditionals(srcDir, dstDir string, data map[string]any, conds []Conditional, include func(string) (bool, error)) error {
 	abs, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf("rendering template %q: %w", srcDir, err)
 	}
-	skipSet, err := EvaluateSkip(answers, conds)
+	skipSet, err := EvaluateSkip(data, conds)
 	if err != nil {
 		return err
 	}
 	globs := skipGlobs(skipSet)
 	return filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, answers, globs, include)
+		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, data, globs, include)
 	})
 }
 
@@ -284,16 +290,16 @@ func renderDirEntry(
 	abs, dstDir, path string,
 	d fs.DirEntry,
 	walkErr error,
-	answers map[string]any,
+	data map[string]any,
 ) error {
-	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, answers, nil, nil)
+	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, data, nil, nil)
 }
 
 func renderDirEntryWithConditionals(
 	abs, dstDir, path string,
 	d fs.DirEntry,
 	walkErr error,
-	answers map[string]any,
+	data map[string]any,
 	globs []string,
 	include func(string) (bool, error),
 ) error {
@@ -340,11 +346,11 @@ func renderDirEntryWithConditionals(
 	}
 	switch {
 	case info.Mode()&fs.ModeSymlink != 0:
-		return renderSymlink(abs, path, rel, slash, dst, answers)
+		return renderSymlink(abs, path, rel, slash, dst, data)
 	case info.IsDir():
 		return os.MkdirAll(dst, 0o750)
 	case info.Mode().IsRegular():
-		return renderFile(os.DirFS(abs), slash, dst, answers)
+		return renderFile(os.DirFS(abs), slash, dst, data)
 	default:
 		return nil
 	}
@@ -352,7 +358,7 @@ func renderDirEntryWithConditionals(
 
 func renderSymlink(
 	abs, path, rel, slash, dst string,
-	answers map[string]any,
+	data map[string]any,
 ) error {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
@@ -372,32 +378,32 @@ func renderSymlink(
 				"regular file",
 			rel)
 	}
-	data, err := os.ReadFile(resolved)
+	content, err := os.ReadFile(resolved)
 	if err != nil {
 		return fmt.Errorf(
 			"rendering template: reading symlink target of %q: %w",
 			rel, err)
 	}
 	return renderFileBytes(
-		data, stripTmpl(dst), slash, answers, target.Mode().Perm())
+		content, stripTmpl(dst), slash, data, target.Mode().Perm())
 }
 
-func renderFile(srcFS fs.FS, slash, dst string, answers map[string]any) error {
-	data, err := fs.ReadFile(srcFS, slash)
+func renderFile(srcFS fs.FS, slash, dst string, data map[string]any) error {
+	content, err := fs.ReadFile(srcFS, slash)
 	if err != nil {
 		return fmt.Errorf("rendering template: reading %q: %w", slash, err)
 	}
-	return renderFileBytes(data, stripTmpl(dst), slash, answers, 0o644)
+	return renderFileBytes(content, stripTmpl(dst), slash, data, 0o644)
 }
 
-func renderFileBytes(data []byte, dst, slash string, answers map[string]any, perm fs.FileMode) error {
+func renderFileBytes(content []byte, dst, slash string, data map[string]any, perm fs.FileMode) error {
 	if strings.HasSuffix(slash, tmplSuffix) {
-		tmpl, err := template.New(slash).Option("missingkey=error").Funcs(templateFuncMap()).Parse(string(data))
+		tmpl, err := template.New(slash).Option("missingkey=error").Funcs(templateFuncMap()).Parse(string(content))
 		if err != nil {
 			return fmt.Errorf("rendering template: parsing %q: %w", slash, err)
 		}
 		var rendered strings.Builder
-		if err := tmpl.Execute(&rendered, answers); err != nil {
+		if err := tmpl.Execute(&rendered, data); err != nil {
 			wrapped := fmt.Errorf(
 				"rendering template: executing %q: %w", slash, err)
 			if key := parseMissingKey(err); key != "" {
@@ -405,7 +411,7 @@ func renderFileBytes(data []byte, dst, slash string, answers map[string]any, per
 			}
 			return wrapped
 		}
-		data = []byte(rendered.String())
+		content = []byte(rendered.String())
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		return err
@@ -413,7 +419,7 @@ func renderFileBytes(data []byte, dst, slash string, answers map[string]any, per
 	if perm == 0 {
 		perm = 0o644
 	}
-	return os.WriteFile(dst, data, perm) // #nosec G703 -- dst is filter.SafeJoin-pinned under dstDir; analyzer does not model the pin
+	return os.WriteFile(dst, content, perm) // #nosec G703 -- dst is filter.SafeJoin-pinned under dstDir; analyzer does not model the pin
 }
 
 func stripTmpl(dst string) string {

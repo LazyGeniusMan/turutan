@@ -32,7 +32,8 @@ type UpdateOptions struct {
 	Ref            string
 	Conflict       ConflictMode
 	Force          bool
-	AnswersFile    string
+	DataFile       string
+	Profiles       []string
 	Defaults       bool
 	AllowHooks     bool
 	NonInteractive bool
@@ -60,7 +61,7 @@ func Update(
 	opts UpdateOptions,
 ) (*UpdateResult, error) {
 	stdout, stderr, stdin := updateStreams(opts)
-	state, lock, answers, err := loadUpdateInputs(projectDir, opts)
+	state, lock, data, profiles, err := loadUpdateInputs(projectDir, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -72,21 +73,23 @@ func Update(
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
-	if err := reconcileProfiles(answers, manifest, opts, stderr); err != nil {
+	profiles, err = reconcileProfiles(profiles, data, manifest, opts, stderr)
+	if err != nil {
 		return nil, err
 	}
+	state.Profiles = profiles
 	if !opts.Force {
-		if err := guardCleanTree(projectDir, lock, manifest, answers); err != nil {
+		if err := guardCleanTree(projectDir, lock, manifest, profiles); err != nil {
 			return nil, err
 		}
 	}
 	if opts.Preview {
 		return previewUpdate(
-			projectDir, state, lock, fetched, manifest, answers,
+			projectDir, state, lock, fetched, manifest, data, profiles,
 			opts, stdout, stderr, stdin)
 	}
 	rendered, old, fresh, merger, skipMigrations, stage, err := stageUpdate(
-		projectDir, state, fetched, manifest, answers,
+		projectDir, state, fetched, manifest, data, profiles,
 		opts, stdout, stderr, stdin)
 	if err != nil {
 		return nil, err
@@ -104,7 +107,7 @@ func Update(
 		}
 	}
 	return finishUpdate(
-		projectDir, state, lock, src, wantRef, answers, fresh,
+		projectDir, state, lock, src, wantRef, data, profiles, fresh,
 		rendered, stage, manifest, stdout, updated, conflicts, migrated, old)
 }
 
@@ -112,11 +115,11 @@ func Update(
 // profile. Custom-owned files seed once and are never overwritten, so every
 // sync path consults it before writing, reporting, or dirty-checking.
 // ~keep
-func customOwned(manifest *config.Manifest, answers map[string]any, path string) bool {
+func customOwned(manifest *config.Manifest, profiles []string, path string) bool {
 	if manifest == nil {
 		return false
 	}
-	enabled := config.NormalizeProfiles(config.GetProfiles(answers))
+	enabled := config.NormalizeProfiles(splitProfilesValue(profiles))
 	return slices.Contains(config.ProfilesForPath(manifest, enabled, path), "custom")
 }
 
@@ -129,61 +132,63 @@ func (m *merger) customOwned(path string) bool {
 	if m == nil || m.state == nil {
 		return false
 	}
-	return customOwned(m.manifest, m.state.Answers, path)
+	return customOwned(m.manifest, m.state.GetProfiles(), path)
 }
 
 func reconcileProfiles(
-	answers map[string]any,
+	profiles []string,
+	data map[string]any,
 	manifest *config.Manifest,
 	opts UpdateOptions,
 	stderr io.Writer,
-) error {
-	diff := relevantProfileDiff(manifest, config.DiffProfiles(answers, manifest))
+) ([]string, error) {
+	diff := relevantProfileDiff(manifest, config.DiffProfiles(profiles, data, manifest))
 	if err := reportProfileDiff(stderr, diff); err != nil {
-		return err
+		return nil, err
 	}
+	base := config.NormalizeProfiles(splitProfilesValue(profiles))
 	if len(opts.Enable) == 0 && len(opts.Disable) == 0 {
-		return nil
+		return base, nil
 	}
 	offered := offeredProfiles(manifest)
 	known := map[string]bool{}
 	for _, id := range offered {
 		known[id] = true
 	}
-	for _, id := range opts.Enable {
+	for _, id := range splitProfilesValue(opts.Enable) {
 		if !known[strings.TrimSpace(id)] {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"update: unknown profile %q (offered: %s)",
 				id, strings.Join(offered, ", "))
 		}
 	}
-	for _, id := range opts.Disable {
+	for _, id := range splitProfilesValue(opts.Disable) {
 		if !known[strings.TrimSpace(id)] {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"update: unknown profile %q (offered: %s)",
 				id, strings.Join(offered, ", "))
 		}
 	}
-	for _, id := range opts.Disable {
+	for _, id := range splitProfilesValue(opts.Disable) {
 		if trimmed := strings.TrimSpace(id); trimmed == "core" || trimmed == "custom" {
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"update: cannot disable always-enabled profile %q", trimmed)
 		}
 	}
 	drop := map[string]bool{}
-	for _, id := range opts.Disable {
+	for _, id := range splitProfilesValue(opts.Disable) {
 		drop[strings.TrimSpace(id)] = true
 	}
 	var next []string
 	present := map[string]bool{}
-	for _, id := range config.GetProfiles(answers) {
+	for _, id := range base {
 		if drop[id] || present[id] {
 			continue
 		}
 		present[id] = true
 		next = append(next, id)
 	}
-	for _, id := range opts.Enable {
+	for _, id := range splitProfilesValue(opts.Enable) {
 		trimmed := strings.TrimSpace(id)
 		if trimmed == "" || present[trimmed] {
 			continue
@@ -194,8 +199,7 @@ func reconcileProfiles(
 	if next == nil {
 		next = []string{}
 	}
-	answers["enabled_profiles"] = next
-	return nil
+	return config.NormalizeProfiles(next), nil
 }
 
 func reportProfileDiff(stderr io.Writer, diff config.ProfileDiff) error {
@@ -213,10 +217,10 @@ func reportProfileDiff(stderr io.Writer, diff config.ProfileDiff) error {
 			return err
 		}
 	}
-	if len(diff.NewPrompts) > 0 {
+	if len(diff.NewInputs) > 0 {
 		if _, err := fmt.Fprintf(stderr,
-			"turutan: template adds new prompts: %s\n",
-			strings.Join(diff.NewPrompts, ", ")); err != nil {
+			"turutan: template adds new inputs: %s\n",
+			strings.Join(diff.NewInputs, ", ")); err != nil {
 			return err
 		}
 	}
@@ -271,7 +275,8 @@ func previewUpdate(
 	lock *config.Lock,
 	fetched *template.Fetched,
 	manifest *config.Manifest,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	opts UpdateOptions,
 	stdout, stderr io.Writer,
 	stdin io.Reader,
@@ -283,7 +288,7 @@ func previewUpdate(
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
 	rendered, err := renderStaged(
-		fetched, stage, manifest, answers, opts, stdout, stdin)
+		fetched, stage, manifest, data, profiles, opts, stdout, stdin)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +300,7 @@ func previewUpdate(
 			"sha256:")
 	}
 	vlogf(stderr, opts.Verbose, "update: preview %s -> %s", old, fresh)
-	plan := previewPlan(projectDir, rendered, lock, manifest, answers)
+	plan := previewPlan(projectDir, rendered, lock, manifest, profiles)
 	if err := printPreview(stdout, plan); err != nil {
 		return nil, err
 	}
@@ -311,7 +316,7 @@ func previewPlan(
 	rendered map[string]renderedEntry,
 	lock *config.Lock,
 	manifest *config.Manifest,
-	answers map[string]any,
+	profiles []string,
 ) []previewEntry {
 	lockMap, _ := renamedLockMap(lock, manifest.Renames)
 	paths := make([]string, 0, len(lockMap)+len(rendered))
@@ -326,7 +331,7 @@ func previewPlan(
 		}
 	}
 	sort.Strings(paths)
-	enabled := config.GetProfiles(answers)
+	enabled := config.NormalizeProfiles(splitProfilesValue(profiles))
 	var plan []previewEntry
 	for _, path := range paths {
 		locked, inLock := lockMap[path]
@@ -427,7 +432,8 @@ func finishUpdate(
 	lock *config.Lock,
 	src *template.Source,
 	wantRef string,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	fresh string,
 	rendered map[string]renderedEntry,
 	stage string,
@@ -437,7 +443,7 @@ func finishUpdate(
 	old string,
 ) (*UpdateResult, error) {
 	if err := refreshStateLock(
-		projectDir, state, lock, src, wantRef, answers, fresh, rendered, manifest,
+		projectDir, state, lock, src, wantRef, data, profiles, fresh, rendered, manifest,
 	); err != nil {
 		return nil, err
 	}
@@ -458,31 +464,31 @@ func finishUpdate(
 func loadUpdateInputs(
 	projectDir string,
 	opts UpdateOptions,
-) (*config.State, *config.Lock, map[string]any, error) {
+) (*config.State, *config.Lock, map[string]any, []string, error) {
 	if err := opts.Conflict.Validate(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	state, err := config.LoadState(os.DirFS(projectDir))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("update: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("update: %w", err)
 	}
 	lock, err := config.LoadLock(os.DirFS(projectDir))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("update: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("update: %w", err)
 	}
 	if err := filter.ValidateGlobs(state.Skip); err != nil {
-		return nil, nil, nil, fmt.Errorf(
+		return nil, nil, nil, nil, fmt.Errorf(
 			"update: bad skip entry in state: %w", err)
 	}
-	answers, err := updateAnswers(projectDir, state, opts)
+	data, profiles, err := updateData(projectDir, state, opts)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return state, lock, answers, nil
+	return state, lock, data, profiles, nil
 }
 
-func guardCleanTree(projectDir string, lock *config.Lock, manifest *config.Manifest, answers map[string]any) error {
-	dirty, err := dirtyFiles(projectDir, lock, manifest, answers)
+func guardCleanTree(projectDir string, lock *config.Lock, manifest *config.Manifest, profiles []string) error {
+	dirty, err := dirtyFiles(projectDir, lock, manifest, profiles)
 	if err != nil {
 		return err
 	}
@@ -543,7 +549,8 @@ func stageUpdate(
 	state *config.State,
 	fetched *template.Fetched,
 	manifest *config.Manifest,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	opts UpdateOptions,
 	stdout, stderr io.Writer,
 	stdin io.Reader,
@@ -554,7 +561,7 @@ func stageUpdate(
 			"update: creating staging dir: %w", err)
 	}
 	rendered, err := renderStaged(
-		fetched, stage, manifest, answers, opts, stdout, stdin)
+		fetched, stage, manifest, data, profiles, opts, stdout, stdin)
 	if err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, "", "", nil, false, "", err
@@ -580,14 +587,15 @@ func renderStaged(
 	fetched *template.Fetched,
 	stage string,
 	manifest *config.Manifest,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	opts UpdateOptions,
 	stdout io.Writer,
 	stdin io.Reader,
 ) (map[string]renderedEntry, error) {
-	normalizeUpdateAnswers(answers, manifest, opts)
-	if err := renderUpdateWithAnswers(
-		fetched.Dir, stage, answers, manifest, opts, stdout, stdin); err != nil {
+	normalizeUpdateData(data, manifest, opts)
+	if err := renderUpdateWithData(
+		fetched.Dir, stage, data, profiles, manifest, opts, stdout, stdin); err != nil {
 		return nil, err
 	}
 	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
@@ -656,40 +664,47 @@ func updateStreams(opts UpdateOptions) (io.Writer, io.Writer, io.Reader) {
 	return resolveStreams(opts.Stdout, opts.Stderr, opts.Stdin)
 }
 
-func updateAnswers(projectDir string, state *config.State, opts UpdateOptions) (map[string]any, error) {
-	answers := map[string]any{}
-	maps.Copy(answers, state.Answers)
-	if opts.Defaults && answers["project_name"] == nil {
+func updateData(projectDir string, state *config.State, opts UpdateOptions) (map[string]any, []string, error) {
+	data := map[string]any{}
+	maps.Copy(data, state.Data)
+	if opts.Defaults && data["project_name"] == nil {
 		abs, err := filepath.Abs(projectDir)
 		if err != nil {
-			return nil, fmt.Errorf("update: resolving project dir: %w", err)
+			return nil, nil, fmt.Errorf("update: resolving project dir: %w", err)
 		}
-		answers["project_name"] = filepath.Base(abs)
+		data["project_name"] = filepath.Base(abs)
 	}
-	if opts.AnswersFile != "" {
-		overlay, err := LoadAnswersFile(opts.AnswersFile)
+	if opts.DataFile != "" {
+		overlay, err := LoadDataFile(opts.DataFile)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		maps.Copy(answers, overlay)
+		maps.Copy(data, overlay)
 	}
-	if s, ok := answers["enabled_profiles"].(string); ok {
-		answers["enabled_profiles"] = splitDedupeList(s)
+	delete(data, "profiles")
+	var profiles []string
+	switch {
+	case len(splitProfilesValue(opts.Profiles)) > 0:
+		profiles = splitProfilesValue(opts.Profiles)
+	case len(state.Profiles) > 0:
+		profiles = append([]string{}, state.Profiles...)
+	default:
+		profiles = append([]string{}, config.DefaultProfiles...)
 	}
-	return answers, nil
+	return data, profiles, nil
 }
 
-func normalizeUpdateAnswers(answers map[string]any, manifest *config.Manifest, opts UpdateOptions) {
+func normalizeUpdateData(data map[string]any, manifest *config.Manifest, opts UpdateOptions) {
 	_ = opts
-	normalizeAnswersWithManifest(answers, manifest)
-	seedMissingDefaults(answers, manifest)
-	normalizeAnswersWithManifest(answers, manifest)
+	normalizeDataWithManifest(data, manifest)
+	seedMissingDefaults(data, manifest)
+	normalizeDataWithManifest(data, manifest)
 }
 
-func dirtyFiles(projectDir string, lock *config.Lock, manifest *config.Manifest, answers map[string]any) ([]string, error) {
+func dirtyFiles(projectDir string, lock *config.Lock, manifest *config.Manifest, profiles []string) ([]string, error) {
 	var dirty []string
 	for _, entry := range lock.Files {
-		if customOwned(manifest, answers, entry.Path) {
+		if customOwned(manifest, profiles, entry.Path) {
 			continue
 		}
 		data, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
@@ -1198,26 +1213,28 @@ func (m *merger) write(rel string, data []byte) error {
 	return nil
 }
 
-func renderUpdateWithAnswers(
+func renderUpdateWithData(
 	fetchedDir, stage string,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	manifest *config.Manifest,
 	opts UpdateOptions,
 	stdout io.Writer,
 	stdin io.Reader,
 ) error {
-	for range maxPromptAttempts {
-		if err := ensurePromptAnswers(answers, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "update"); err != nil {
+	for range maxInputAttempts {
+		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "update"); err != nil {
 			return err
 		}
-		normalizeAnswersWithManifest(answers, manifest)
+		normalizeDataWithManifest(data, manifest)
 		if err := os.RemoveAll(stage); err != nil {
 			return fmt.Errorf("update: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return fmt.Errorf("update: creating staging dir: %w", err)
 		}
-		err := template.RenderDirWithConditionals(fetchedDir, stage, answers, manifestConditionals(manifest), profileIncludeFunc(manifest, answers))
+		view := renderDataView(data, profiles)
+		err := template.RenderDirWithConditionals(fetchedDir, stage, view, manifestConditionals(manifest), profileIncludeFunc(manifest, profiles))
 		if err == nil {
 			return nil
 		}
@@ -1226,13 +1243,16 @@ func renderUpdateWithAnswers(
 			return err
 		}
 		if opts.NonInteractive {
-			return fmt.Errorf("update: missing answer for key %q (use --answers-file or --defaults): %w", key, err)
+			if key == "profiles" {
+				return fmt.Errorf("update: missing data for key %q: %w", key, err)
+			}
+			return fmt.Errorf("update: missing data for key %q (use --data-file or --defaults): %w", key, err)
 		}
-		if err := promptMissingKey(answers, manifest, stdout, stdin, key); err != nil {
+		if err := inputMissingKey(data, manifest, stdout, stdin, key); err != nil {
 			return err
 		}
 	}
-	return fmt.Errorf("update: too many missing answers (over %d prompts)", maxPromptAttempts)
+	return fmt.Errorf("update: too many missing values (over %d inputs)", maxInputAttempts)
 }
 
 func gateMigrations(
@@ -1262,7 +1282,7 @@ func gateMigrations(
 		return false, fmt.Errorf(
 			"update: template declares migrations: refusing in " + "--non-interactive mode without --allow-hooks")
 	}
-	allow, err := promptConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending))
+	allow, err := askConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending))
 	if err != nil {
 		return false, err
 	}
@@ -1355,7 +1375,8 @@ func refreshStateLock(
 	lock *config.Lock,
 	src *template.Source,
 	wantRef string,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	fresh string,
 	rendered map[string]renderedEntry,
 	manifest *config.Manifest,
@@ -1366,7 +1387,7 @@ func refreshStateLock(
 	}
 	sort.Strings(paths)
 	final := make([]config.LockFile, 0, len(paths))
-	enabled := config.GetProfiles(answers)
+	enabled := config.NormalizeProfiles(splitProfilesValue(profiles))
 	for _, path := range paths {
 		data, err := filter.ReadFileWithinRoot(projectDir, path)
 		if err != nil {
@@ -1383,7 +1404,8 @@ func refreshStateLock(
 	}
 	state.RequestedRef = wantRef
 	state.ResolvedCommit = fresh
-	state.Answers = answers
+	state.Data = data
+	state.Profiles = config.NormalizeProfiles(splitProfilesValue(profiles))
 	stored := relativizeForStore(projectDir, src)
 	state.Template = stored.String()
 	if err := config.SaveState(projectDir, state); err != nil {

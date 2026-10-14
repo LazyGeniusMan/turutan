@@ -20,11 +20,12 @@ import (
 const shortSHALen = 12
 
 type CheckUpdateOptions struct {
-	Ref     string
-	Engine  string
-	Verbose bool
-	Stdout  io.Writer
-	Stderr  io.Writer
+	Ref      string
+	Engine   string
+	Verbose  bool
+	Profiles []string
+	Stdout   io.Writer
+	Stderr   io.Writer
 }
 
 type CheckUpdateResult struct {
@@ -51,13 +52,17 @@ func CheckUpdate(
 		ref = opts.Ref
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
+	effectiveProfiles := state.GetProfiles()
+	if len(splitProfilesValue(opts.Profiles)) > 0 {
+		effectiveProfiles = splitProfilesValue(opts.Profiles)
+	}
 	fresh, changed, profiles, err := reresolve(
-		ctx, state, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
+		ctx, state, effectiveProfiles, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
-	if changed && len(profiles.Added)+len(profiles.Removed)+len(profiles.NewPrompts) == 0 {
-		profiles = fetchProfileDiff(ctx, projectDir, state, ref, opts.Engine, opts.Stderr, opts.Verbose)
+	if changed && len(profiles.Added)+len(profiles.Removed)+len(profiles.NewInputs) == 0 {
+		profiles = fetchProfileDiff(ctx, projectDir, state, effectiveProfiles, ref, opts.Engine, opts.Stderr, opts.Verbose)
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
 	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
@@ -79,6 +84,7 @@ func CheckUpdate(
 func reresolve(
 	ctx context.Context,
 	state *config.State,
+	effectiveProfiles []string,
 	ref, projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
@@ -105,7 +111,7 @@ func reresolve(
 		}
 		return sha, sha != state.ResolvedCommit, config.ProfileDiff{}, nil
 	case template.KindFilesystem:
-		return reresolveFilesystem(ctx, state, ref, projectDir, engine, stderr, verbose)
+		return reresolveFilesystem(ctx, state, effectiveProfiles, ref, projectDir, engine, stderr, verbose)
 	default:
 		return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
 	}
@@ -115,6 +121,7 @@ func fetchProfileDiff(
 	ctx context.Context,
 	projectDir string,
 	state *config.State,
+	effectiveProfiles []string,
 	ref, engine string,
 	stderr io.Writer,
 	verbose bool,
@@ -144,12 +151,18 @@ func fetchProfileDiff(
 		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
 		return config.ProfileDiff{}
 	}
-	return relevantProfileDiff(manifest, config.DiffProfiles(state.Answers, manifest))
+	_ = effectiveProfiles
+	profiles := state.GetProfiles()
+	if len(effectiveProfiles) > 0 {
+		profiles = effectiveProfiles
+	}
+	return relevantProfileDiff(manifest, config.DiffProfiles(profiles, state.Data, manifest))
 }
 
 func reresolveFilesystem(
 	ctx context.Context,
 	state *config.State,
+	effectiveProfiles []string,
 	ref, projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
@@ -161,12 +174,12 @@ func reresolveFilesystem(
 			ref)
 	}
 	lock, _, manifest, stage, err := prepareFilesystemReresolve(
-		ctx, state, projectDir, engine, stderr, verbose)
+		ctx, state, effectiveProfiles, projectDir, engine, stderr, verbose)
 	if err != nil {
 		return "", false, config.ProfileDiff{}, err
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
-	profiles := relevantProfileDiff(manifest, config.DiffProfiles(state.Answers, manifest))
+	profiles := relevantProfileDiff(manifest, config.DiffProfiles(effectiveProfiles, state.Data, manifest))
 	fresh, changed, err := compareFilesystemHashes(projectDir, stage, manifest, state, lock)
 	if err != nil {
 		return "", false, config.ProfileDiff{}, err
@@ -177,6 +190,7 @@ func reresolveFilesystem(
 func prepareFilesystemReresolve(
 	ctx context.Context,
 	state *config.State,
+	effectiveProfiles []string,
 	projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
@@ -208,13 +222,19 @@ func prepareFilesystemReresolve(
 		return nil, nil, nil, "", fmt.Errorf(
 			"check-update: creating staging dir: %w", err)
 	}
-	answers := map[string]any{}
-	for key, val := range state.Answers {
-		answers[key] = val
+	data := map[string]any{}
+	for key, val := range state.Data {
+		data[key] = val
 	}
-	seedMissingDefaults(answers, manifest)
-	normalizeAnswersWithManifest(answers, manifest)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest), profileIncludeFunc(manifest, answers)); err != nil {
+	seedMissingDefaults(data, manifest)
+	normalizeDataWithManifest(data, manifest)
+	profiles := state.GetProfiles()
+	if len(effectiveProfiles) > 0 {
+		profiles = effectiveProfiles
+	}
+	profiles = config.NormalizeProfiles(splitProfilesValue(profiles))
+	view := renderDataView(data, profiles)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifestConditionals(manifest), profileIncludeFunc(manifest, profiles)); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
@@ -270,7 +290,7 @@ func withoutPresentCustom(
 	}
 	kept := files[:0]
 	for _, file := range files {
-		if customOwned(manifest, state.Answers, file.Path) && filePresent(projectDir, file.Path) {
+		if customOwned(manifest, state.GetProfiles(), file.Path) && filePresent(projectDir, file.Path) {
 			continue
 		}
 		kept = append(kept, file)

@@ -51,8 +51,8 @@ type State struct {
 	Subpath         string         `json:"subpath,omitempty"`
 	RequestedRef    string         `json:"requestedRef,omitempty"`
 	ResolvedCommit  string         `json:"resolvedCommit"`
-	Answers         map[string]any `json:"answers,omitempty"`
-	AnswersSchema   int            `json:"answersSchema,omitempty"`
+	Data            map[string]any `json:"data,omitempty"`
+	DataSchema      int            `json:"dataSchema,omitempty"`
 	Profiles        []string       `json:"profiles,omitempty"`
 	Skip            []string       `json:"skip,omitempty"`
 	Conflict        string         `json:"conflict,omitempty"`
@@ -86,12 +86,14 @@ type ManifestMigration struct {
 	Run  []string `yaml:"run"`
 }
 
-type ManifestPrompt struct {
-	Prompt  string   `yaml:"prompt"`
-	Default any      `yaml:"default"`
-	Type    string   `yaml:"type"`
-	Options []string `yaml:"options"`
-	Help    string   `yaml:"help"`
+// ManifestInput describes one template input value.
+// ~keep
+type ManifestInput struct {
+	Question string   `yaml:"question"`
+	Default  any      `yaml:"default"`
+	Type     string   `yaml:"type"`
+	Options  []string `yaml:"options"`
+	Help     string   `yaml:"help"`
 }
 
 type ManifestConditional struct {
@@ -101,7 +103,7 @@ type ManifestConditional struct {
 
 // ManifestProfile describes one installable feature slice of a template.
 // Templates use profiles to ship optional file sets behind a single opt-in
-// id so projects only render the variants they asked for via enabled_profiles.
+// id so projects only render the variants selected via native profiles.
 // ~keep
 type ManifestProfile struct {
 	Label       string   `yaml:"label"`
@@ -121,7 +123,7 @@ type Manifest struct {
 	Conflict     string                     `yaml:"conflict"`
 	Hooks        ManifestHooks              `yaml:"hooks"`
 	Migrations   []ManifestMigration        `yaml:"migrations"`
-	Prompts      map[string]ManifestPrompt  `yaml:"prompts"`
+	Inputs       map[string]ManifestInput   `yaml:"inputs"`
 	Conditionals []ManifestConditional      `yaml:"conditionals"`
 	Renames      map[string]string          `yaml:"renames"`
 	Profiles     map[string]ManifestProfile `yaml:"profiles"`
@@ -289,7 +291,7 @@ func ValidateManifest(manifest *Manifest) error {
 	if err := filter.ValidateGlobs(manifest.Preserve); err != nil {
 		return fmt.Errorf("invalid manifest: bad preserve pattern: %w", err)
 	}
-	if err := validateManifestPrompts(manifest.Prompts); err != nil {
+	if err := validateManifestInputs(manifest.Inputs); err != nil {
 		return err
 	}
 	if err := validateManifestConditionals(manifest.Conditionals); err != nil {
@@ -403,23 +405,23 @@ func validateManifestPlantedOverlap(licenseFiles, docFiles []string) error {
 	return nil
 }
 
-func validateManifestPrompts(prompts map[string]ManifestPrompt) error {
-	for key, prompt := range prompts {
+func validateManifestInputs(inputs map[string]ManifestInput) error {
+	for key, input := range inputs {
 		if key == "" {
-			return fmt.Errorf("invalid manifest: prompt with empty key")
+			return fmt.Errorf("invalid manifest: input with empty key")
 		}
-		switch prompt.Type {
+		switch input.Type {
 		case "", "string", "array", "bool":
 		default:
-			return fmt.Errorf("invalid manifest: prompt %q has unknown type %q", key, prompt.Type)
+			return fmt.Errorf("invalid manifest: input %q has unknown type %q", key, input.Type)
 		}
-		for _, opt := range prompt.Options {
+		for _, opt := range input.Options {
 			if opt == "" {
-				return fmt.Errorf("invalid manifest: prompt %q has an empty option", key)
+				return fmt.Errorf("invalid manifest: input %q has an empty option", key)
 			}
 		}
-		if len(prompt.Options) > 0 && prompt.Type == "bool" {
-			return fmt.Errorf("invalid manifest: prompt %q options not meaningful for bool type", key)
+		if len(input.Options) > 0 && input.Type == "bool" {
+			return fmt.Errorf("invalid manifest: input %q options not meaningful for bool type", key)
 		}
 	}
 	return nil
@@ -479,8 +481,8 @@ func validateMigrationFrom(from string) error {
 
 // NormalizeProfiles deduplicates ids (keeping the first occurrence),
 // forces core first and custom last, injecting both when missing.
-// Bootstrap and update funnel every enabled_profiles value through it so
-// the always-enabled pair stays ordered no matter the prompt path.
+// Bootstrap and update funnel every profiles value through it so
+// the always-enabled pair stays ordered no matter the selection path.
 // ~keep
 func NormalizeProfiles(ids []string) []string {
 	seen := map[string]bool{}
@@ -499,58 +501,22 @@ func NormalizeProfiles(ids []string) []string {
 	return append(append([]string{"core"}, rest...), "custom")
 }
 
-// GetProfiles returns the deduplicated enabled_profiles from raw answers.
-// Answers arrive as strings, string slices, or decoded YAML/JSON values
-// depending on the prompt path, so callers need one normalization point.
+// DefaultProfiles is the code default when no selection layer provides one.
+// The manifest offers the full set via its profiles map; core stays implicit
+// and NormalizeProfiles injects the always-enabled pair.
 // ~keep
-func GetProfiles(answers map[string]any) []string {
-	if answers == nil {
-		return nil
-	}
-	val, ok := answers["enabled_profiles"]
-	if !ok || val == nil {
-		return nil
-	}
-	var raw []string
-	switch v := val.(type) {
-	case []string:
-		raw = v
-	case []any:
-		for _, el := range v {
-			raw = append(raw, strings.Split(fmt.Sprint(el), ",")...)
-		}
-	case string:
-		raw = strings.Split(v, ",")
-	default:
-		raw = strings.Split(strings.TrimSpace(fmt.Sprint(val)), ",")
-	}
-	var out []string
-	seen := map[string]bool{}
-	for _, el := range raw {
-		trimmed := strings.TrimSpace(el)
-		if trimmed == "" || seen[trimmed] {
-			continue
-		}
-		seen[trimmed] = true
-		out = append(out, trimmed)
-	}
-	return out
-}
+var DefaultProfiles = []string{"core", "ai"}
 
 // GetProfiles reports the profiles recorded for this project.
-// Newer state carries Profiles explicitly while older checkouts only have
-// answers, so it falls back to GetProfiles to keep both readable.
+// State carries Profiles natively; there is no fallback into data.
 // ~keep
 func (s *State) GetProfiles() []string {
-	if s == nil {
+	if s == nil || len(s.Profiles) == 0 {
 		return nil
 	}
-	if len(s.Profiles) > 0 {
-		out := make([]string, len(s.Profiles))
-		copy(out, s.Profiles)
-		return out
-	}
-	return GetProfiles(s.Answers)
+	out := make([]string, len(s.Profiles))
+	copy(out, s.Profiles)
+	return out
 }
 
 // ProfilesForPath reports which of the given profiles include path.
@@ -694,28 +660,28 @@ func ResolveRenames(old string, renames map[string]string) string {
 	return cur
 }
 
-// ProfileDiff summarizes how the profile and prompt surface changed.
-// Update uses it to re-prompt only for genuinely new inputs instead of
+// ProfileDiff summarizes how the profile and input surface changed.
+// Update uses it to ask only for genuinely new inputs instead of
 // replaying every question on each template sync.
 // ~keep
 type ProfileDiff struct {
-	Added      []string
-	Removed    []string
-	NewPrompts []string
+	Added     []string
+	Removed   []string
+	NewInputs []string
 }
 
-// DiffProfiles compares previously answered profiles and prompts against a new manifest.
-// Sync needs the added/removed profile ids plus unseen prompt keys to decide
+// DiffProfiles compares previously selected profiles and stored data against a new manifest.
+// Sync needs the added/removed profile ids plus unseen input keys to decide
 // what to ask and what to warn about before re-rendering.
 // ~keep
-func DiffProfiles(oldAnswers map[string]any, newManifest *Manifest) ProfileDiff {
+func DiffProfiles(oldProfiles []string, oldData map[string]any, newManifest *Manifest) ProfileDiff {
 	var diff ProfileDiff
 	if newManifest == nil {
 		return diff
 	}
 	oldSet := map[string]bool{}
-	for _, id := range GetProfiles(oldAnswers) {
-		oldSet[id] = true
+	for _, id := range oldProfiles {
+		oldSet[strings.TrimSpace(id)] = true
 	}
 	newSet := map[string]bool{"core": true, "custom": true}
 	for id := range newManifest.Profiles {
@@ -735,16 +701,16 @@ func DiffProfiles(oldAnswers map[string]any, newManifest *Manifest) ProfileDiff 
 	}
 	slices.Sort(diff.Added)
 	slices.Sort(diff.Removed)
-	for key := range newManifest.Prompts {
-		if oldAnswers == nil {
-			diff.NewPrompts = append(diff.NewPrompts, key)
+	for key := range newManifest.Inputs {
+		if oldData == nil {
+			diff.NewInputs = append(diff.NewInputs, key)
 			continue
 		}
-		if _, ok := oldAnswers[key]; !ok {
-			diff.NewPrompts = append(diff.NewPrompts, key)
+		if _, ok := oldData[key]; !ok {
+			diff.NewInputs = append(diff.NewInputs, key)
 		}
 	}
-	slices.Sort(diff.NewPrompts)
+	slices.Sort(diff.NewInputs)
 	return diff
 }
 

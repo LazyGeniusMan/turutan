@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
@@ -26,11 +27,13 @@ func newProfilesCmd() *cobra.Command {
 }
 
 func runProfiles(cmd *cobra.Command, ref string) error {
+	profiles := resolveProfiles(cmd, viper.GetViper(), ".")
 	info, err := scaffold.ListProfiles(cmd.Context(), ".", scaffold.ProfileOptions{
-		Ref:     ref,
-		Engine:  version,
-		Verbose: appCfg.verbose,
-		Stderr:  cmd.ErrOrStderr(),
+		Ref:      ref,
+		Engine:   version,
+		Verbose:  appCfg.verbose,
+		Profiles: profiles,
+		Stderr:   cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return err

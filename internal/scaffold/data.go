@@ -20,8 +20,10 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
-const maxPromptAttempts = 10
+const maxInputAttempts = 10
 
+// AsMissingKey reports the missing data key for a render failure.
+// ~keep
 func AsMissingKey(err error) (string, bool) {
 	if missing, ok := errors.AsType[*template.MissingKeyError](err); ok {
 		return missing.Key, true
@@ -46,89 +48,90 @@ func missingKey(err error) string {
 	return key
 }
 
-func LoadAnswersFile(path string) (map[string]any, error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- reads CLI-provided answers file; caller-intended file read
+// LoadDataFile reads template data from a YAML or JSON file.
+// ~keep
+func LoadDataFile(path string) (map[string]any, error) {
+	raw, err := os.ReadFile(path) // #nosec G304 -- reads CLI-provided data file; caller-intended file read
 	if err != nil {
-		return nil, fmt.Errorf("reading answers file %q: %w", path, err)
+		return nil, fmt.Errorf("reading data file %q: %w", path, err)
 	}
-	answers := map[string]any{}
+	data := map[string]any{}
 	if strings.EqualFold(filepath.Ext(path), ".json") {
-		if err := json.Unmarshal(data, &answers); err != nil {
-			return nil, fmt.Errorf("parsing answers file %q: %w", path, err)
+		if err := json.Unmarshal(raw, &data); err != nil {
+			return nil, fmt.Errorf("parsing data file %q: %w", path, err)
 		}
-		return answers, nil
+		delete(data, "profiles")
+		return data, nil
 	}
-	if err := yaml.Unmarshal(data, &answers); err != nil {
-		return nil, fmt.Errorf("parsing answers file %q: %w", path, err)
+	if err := yaml.Unmarshal(raw, &data); err != nil {
+		return nil, fmt.Errorf("parsing data file %q: %w", path, err)
 	}
-	return answers, nil
+	delete(data, "profiles")
+	return data, nil
 }
 
-func seedAnswers(target string, opts Options) (map[string]any, error) {
-	answers := map[string]any{}
+func seedData(target string, opts Options) (map[string]any, error) {
+	data := map[string]any{}
 	if opts.Defaults {
-		answers["project_name"] = filepath.Base(target)
+		data["project_name"] = filepath.Base(target)
 	}
-	if opts.AnswersFile != "" {
-		fileAnswers, err := LoadAnswersFile(opts.AnswersFile)
+	if opts.DataFile != "" {
+		fileData, err := LoadDataFile(opts.DataFile)
 		if err != nil {
 			return nil, err
 		}
-		maps.Copy(answers, fileAnswers)
+		maps.Copy(data, fileData)
 	}
-	return answers, nil
+	delete(data, "profiles")
+	return data, nil
 }
 
-func seedAnswersWithManifest(
+func seedDataWithManifest(
 	target string,
 	opts Options,
 	manifest *config.Manifest,
 ) (map[string]any, error) {
-	answers, err := seedAnswers(target, opts)
+	data, err := seedData(target, opts)
 	if err != nil {
 		return nil, err
 	}
-	normalizeAnswersWithManifest(answers, manifest)
+	normalizeDataWithManifest(data, manifest)
 	if manifest != nil && opts.Defaults {
-		for key, def := range manifest.Prompts {
-			if _, ok := answers[key]; ok {
+		for key, def := range manifest.Inputs {
+			if _, ok := data[key]; ok {
 				continue
 			}
 			if def.Default == nil {
 				continue
 			}
-			answers[key] = manifestDefaultCopy(def.Default)
+			data[key] = manifestDefaultCopy(def.Default)
 		}
-		normalizeAnswersWithManifest(answers, manifest)
+		normalizeDataWithManifest(data, manifest)
 	}
-	return answers, nil
+	return data, nil
 }
 
-func normalizeAnswersWithManifest(answers map[string]any, manifest *config.Manifest) {
+func normalizeDataWithManifest(data map[string]any, manifest *config.Manifest) {
 	if manifest == nil {
 		return
 	}
-	for key, def := range manifest.Prompts {
-		if !isArrayPrompt(def) {
+	for key, def := range manifest.Inputs {
+		if !isArrayInput(def) {
 			continue
 		}
-		val, ok := answers[key]
+		val, ok := data[key]
 		if !ok || val == nil {
 			continue
 		}
 		if _, ok := val.([]string); ok {
 			continue
 		}
-		answers[key] = normalizeArrayValue(val)
+		data[key] = normalizeArrayValue(val)
 	}
-	if val, ok := answers["enabled_profiles"]; ok && val != nil {
-		if list, ok := val.([]string); ok {
-			answers["enabled_profiles"] = config.NormalizeProfiles(list)
-		}
-	}
+	delete(data, "profiles")
 }
 
-func isArrayPrompt(def config.ManifestPrompt) bool {
+func isArrayInput(def config.ManifestInput) bool {
 	if def.Type == "array" {
 		return true
 	}
@@ -154,18 +157,18 @@ func manifestDefaultCopy(def any) any {
 	}
 }
 
-func seedMissingDefaults(answers map[string]any, manifest *config.Manifest) {
+func seedMissingDefaults(data map[string]any, manifest *config.Manifest) {
 	if manifest == nil {
 		return
 	}
-	for key, def := range manifest.Prompts {
-		if _, ok := answers[key]; ok {
+	for key, def := range manifest.Inputs {
+		if _, ok := data[key]; ok {
 			continue
 		}
 		if def.Default == nil {
 			continue
 		}
-		answers[key] = manifestDefaultCopy(def.Default)
+		data[key] = manifestDefaultCopy(def.Default)
 	}
 }
 
@@ -220,21 +223,43 @@ func splitDedupeList(s string) []string {
 	return out
 }
 
-func promptOrder(manifest *config.Manifest) []string {
+func splitProfilesValue(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		for _, part := range strings.Split(id, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func normalizeProfilesSelection(ids []string) []string {
+	expanded := splitProfilesValue(ids)
+	if len(expanded) == 0 {
+		expanded = append([]string{}, config.DefaultProfiles...)
+	}
+	return config.NormalizeProfiles(expanded)
+}
+
+func inputOrder(manifest *config.Manifest) []string {
 	if manifest == nil {
 		return nil
 	}
-	priority := []string{"project_name", "project_description", "enabled_profiles"}
+	priority := []string{"project_name", "project_description"}
 	var ordered []string
 	seen := map[string]bool{}
 	for _, key := range priority {
-		if _, ok := manifest.Prompts[key]; ok {
+		if _, ok := manifest.Inputs[key]; ok {
 			ordered = append(ordered, key)
 			seen[key] = true
 		}
 	}
 	var rest []string
-	for key := range manifest.Prompts {
+	for key := range manifest.Inputs {
 		if !seen[key] {
 			rest = append(rest, key)
 		}
@@ -243,46 +268,46 @@ func promptOrder(manifest *config.Manifest) []string {
 	return append(ordered, rest...)
 }
 
-func promptForKey(
+func inputForKey(
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
-	def config.ManifestPrompt,
+	def config.ManifestInput,
 ) (any, error) {
-	if def.Type == "array" || (def.Type == "" && isArrayPrompt(def)) {
-		return promptArrayValue(stdout, stdin, key, def)
+	if def.Type == "array" || (def.Type == "" && isArrayInput(def)) {
+		return inputArrayValue(stdout, stdin, key, def)
 	}
 	switch def.Type {
 	case "bool":
-		return promptBoolValue(stdout, stdin, key, def)
+		return inputBoolValue(stdout, stdin, key, def)
 	default:
-		return promptStringValue(stdout, stdin, key, def)
+		return inputStringValue(stdout, stdin, key, def)
 	}
 }
 
-func promptArrayValue(
+func inputArrayValue(
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
-	def config.ManifestPrompt,
+	def config.ManifestInput,
 ) (any, error) {
 	defaultList := normalizeArrayValue(def.Default)
 	if def.Default == nil {
 		defaultList = nil
 	}
-	var prompt string
+	var text string
 	switch {
 	case def.Default != nil:
-		prompt = fmt.Sprintf("Enter value for %s (comma-separated) [%s]: ", key, strings.Join(defaultList, ","))
+		text = fmt.Sprintf("Enter value for %s (comma-separated) [%s]: ", key, strings.Join(defaultList, ","))
 	default:
-		prompt = fmt.Sprintf("Enter value for %s (comma-separated): ", key)
+		text = fmt.Sprintf("Enter value for %s (comma-separated): ", key)
 	}
-	if _, err := fmt.Fprint(stdout, prompt); err != nil {
+	if _, err := fmt.Fprint(stdout, text); err != nil {
 		return nil, err
 	}
-	line, err := readPromptLine(stdin)
+	line, err := readInputLine(stdin)
 	if err != nil && len(line) == 0 {
-		return nil, fmt.Errorf("reading answer for %q: %w", key, err)
+		return nil, fmt.Errorf("reading value for %q: %w", key, err)
 	}
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
@@ -304,15 +329,15 @@ func promptArrayValue(
 	return values, nil
 }
 
-func promptStringValue(
+func inputStringValue(
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
-	def config.ManifestPrompt,
+	def config.ManifestInput,
 ) (any, error) {
 	label := key
-	if def.Prompt != "" {
-		label = def.Prompt
+	if def.Question != "" {
+		label = def.Question
 	}
 	var defaultStr string
 	hasDefault := def.Default != nil
@@ -332,18 +357,18 @@ func promptStringValue(
 			defaultStr = fmt.Sprint(v)
 		}
 	}
-	var prompt string
+	var text string
 	if hasDefault {
-		prompt = fmt.Sprintf("Enter %s [%s]: ", label, defaultStr)
+		text = fmt.Sprintf("Enter %s [%s]: ", label, defaultStr)
 	} else {
-		prompt = fmt.Sprintf("Enter %s: ", label)
+		text = fmt.Sprintf("Enter %s: ", label)
 	}
-	if _, err := fmt.Fprint(stdout, prompt); err != nil {
+	if _, err := fmt.Fprint(stdout, text); err != nil {
 		return nil, err
 	}
-	line, err := readPromptLine(stdin)
+	line, err := readInputLine(stdin)
 	if err != nil && len(line) == 0 {
-		return nil, fmt.Errorf("reading answer for %q: %w", key, err)
+		return nil, fmt.Errorf("reading value for %q: %w", key, err)
 	}
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" && hasDefault {
@@ -357,15 +382,15 @@ func promptStringValue(
 	return trimmed, nil
 }
 
-func promptBoolValue(
+func inputBoolValue(
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
-	def config.ManifestPrompt,
+	def config.ManifestInput,
 ) (any, error) {
 	label := key
-	if def.Prompt != "" {
-		label = def.Prompt
+	if def.Question != "" {
+		label = def.Question
 	}
 	var defaultStr string
 	hasDefault := def.Default != nil
@@ -383,30 +408,30 @@ func promptBoolValue(
 			defaultStr = fmt.Sprint(v)
 		}
 	}
-	var prompt string
+	var text string
 	if hasDefault {
-		prompt = fmt.Sprintf("Enter %s [%s]: ", label, defaultStr)
+		text = fmt.Sprintf("Enter %s [%s]: ", label, defaultStr)
 	} else {
-		prompt = fmt.Sprintf("Enter %s (true/false): ", label)
+		text = fmt.Sprintf("Enter %s (true/false): ", label)
 	}
-	if _, err := fmt.Fprint(stdout, prompt); err != nil {
+	if _, err := fmt.Fprint(stdout, text); err != nil {
 		return nil, err
 	}
-	line, err := readPromptLine(stdin)
+	line, err := readInputLine(stdin)
 	if err != nil && len(line) == 0 {
-		return nil, fmt.Errorf("reading answer for %q: %w", key, err)
+		return nil, fmt.Errorf("reading value for %q: %w", key, err)
 	}
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		if !hasDefault {
 			return nil, fmt.Errorf("missing value for %q", key)
 		}
-		return parseBoolPrompt(strings.TrimSpace(defaultStr), key)
+		return parseBoolInput(strings.TrimSpace(defaultStr), key)
 	}
-	return parseBoolPrompt(trimmed, key)
+	return parseBoolInput(trimmed, key)
 }
 
-func readPromptLine(stdin io.Reader) (string, error) {
+func readInputLine(stdin io.Reader) (string, error) {
 	var buf []byte
 	one := make([]byte, 1)
 	for {
@@ -427,7 +452,7 @@ func readPromptLine(stdin io.Reader) (string, error) {
 	return string(buf), nil
 }
 
-func parseBoolPrompt(s, key string) (bool, error) {
+func parseBoolInput(s, key string) (bool, error) {
 	switch strings.ToLower(s) {
 	case "true", "1", "yes", "y":
 		return true, nil
@@ -438,22 +463,22 @@ func parseBoolPrompt(s, key string) (bool, error) {
 	}
 }
 
-func promptValue(stdout io.Writer, stdin io.Reader, key string) (string, error) {
+func inputValue(stdout io.Writer, stdin io.Reader, key string) (string, error) {
 	if _, err := fmt.Fprintf(stdout, "Enter value for %s: ", key); err != nil {
 		return "", err
 	}
-	line, err := readPromptLine(stdin)
+	line, err := readInputLine(stdin)
 	if err != nil && len(line) == 0 {
-		return "", fmt.Errorf("reading answer for %q: %w", key, err)
+		return "", fmt.Errorf("reading value for %q: %w", key, err)
 	}
 	return strings.TrimSpace(line), nil
 }
 
-func promptConfirm(stdout io.Writer, stdin io.Reader, question string) (bool, error) {
+func askConfirm(stdout io.Writer, stdin io.Reader, question string) (bool, error) {
 	if _, err := fmt.Fprintf(stdout, "%s [y/N]: ", question); err != nil {
 		return false, err
 	}
-	line, _ := readPromptLine(stdin)
+	line, _ := readInputLine(stdin)
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return true, nil
@@ -473,12 +498,23 @@ func manifestConditionals(manifest *config.Manifest) []template.Conditional {
 	return conds
 }
 
-func profileIncludeFunc(manifest *config.Manifest, answers map[string]any) func(string) (bool, error) {
+func profileIncludeFunc(manifest *config.Manifest, profiles []string) func(string) (bool, error) {
 	if manifest == nil || len(manifest.Profiles) == 0 {
 		return nil
 	}
-	enabled := config.NormalizeProfiles(config.GetProfiles(answers))
+	enabled := config.NormalizeProfiles(splitProfilesValue(profiles))
 	return func(slash string) (bool, error) {
 		return manifest.IsIncluded(slash, enabled)
 	}
+}
+
+// renderDataView exposes native profiles as read-only dot `.profiles`
+// alongside input keys. See `go doc text/template` for data, dot, action,
+// pipeline, variable, and function terms.
+// ~keep
+func renderDataView(data map[string]any, profiles []string) map[string]any {
+	view := make(map[string]any, len(data)+1)
+	maps.Copy(view, data)
+	view["profiles"] = config.NormalizeProfiles(splitProfilesValue(profiles))
+	return view
 }

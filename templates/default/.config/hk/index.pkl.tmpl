@@ -1,68 +1,68 @@
 amends "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl"
 
 import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.pkl"
-{{ if contains .enabled_profiles "ai" }}
+{{ if contains .profiles "ai" }}
 import "./ai.pkl" as ai
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
 import "./c.pkl" as c
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
 import "./cloudflare.pkl" as cloudflare
 {{- end }}
 import "./core.pkl" as core
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
 import "./cpp.pkl" as cpp
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
 import "./csharp.pkl" as csharp
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
 import "./custom.pkl" as custom
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
 import "./docker.pkl" as docker
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
 import "./elixir.pkl" as elixir
 {{- end }}
-{{- if contains .enabled_profiles "github" }}
+{{- if contains .profiles "github" }}
 import "./github.pkl" as github
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
 import "./gitlab.pkl" as gitlab
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
 import "./go.pkl" as go
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
 import "./java.pkl" as java
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
 import "./kubernetes.pkl" as kubernetes
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
 import "./php.pkl" as php
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
 import "./python.pkl" as python
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
 import "./r.pkl" as r
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
 import "./ruby.pkl" as ruby
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
 import "./rust-polygot.pkl" as rustPolygot
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
 import "./rust.pkl" as rust
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
 import "./typescript.pkl" as typescript
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
 import "./typst.pkl" as typst
 {{- end }}
 
@@ -70,127 +70,127 @@ hooks {
   ["check"] {
     steps {
       ...core.pre_commit
-{{- if contains .enabled_profiles "ai" }}
+{{- if contains .profiles "ai" }}
       ...ai.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
       ...go.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "github" }}
+{{- if contains .profiles "github" }}
       ...github.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
       ...c.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
       ...cpp.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
       ...csharp.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
       ...cloudflare.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
       ...docker.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
       ...java.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
       ...kubernetes.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
       ...php.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
       ...python.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
       ...r.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
       ...ruby.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
       ...rust.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
       ...rustPolygot.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
       ...custom.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "ai" }}
+{{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
       ...go.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
       ...c.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
       ...cpp.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
       ...csharp.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
       ...cloudflare.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
       ...docker.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
       ...elixir.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
       ...java.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
       ...kubernetes.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
       ...php.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
       ...python.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
       ...r.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
       ...ruby.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
       ...rust.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
       ...rustPolygot.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
       ...typescript.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
       ...custom.pre_push_ci
 {{- end }}
     }
@@ -198,127 +198,127 @@ hooks {
   ["fix"] {
     steps {
       ...core.pre_commit
-{{- if contains .enabled_profiles "ai" }}
+{{- if contains .profiles "ai" }}
       ...ai.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
       ...go.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "github" }}
+{{- if contains .profiles "github" }}
       ...github.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
       ...c.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
       ...cpp.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
       ...csharp.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
       ...cloudflare.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
       ...docker.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
       ...java.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
       ...kubernetes.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
       ...php.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
       ...python.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
       ...r.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
       ...ruby.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
       ...rust.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
       ...rustPolygot.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
       ...custom.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "ai" }}
+{{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
       ...go.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
       ...c.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
       ...cpp.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
       ...csharp.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
       ...cloudflare.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
       ...docker.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
       ...elixir.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
       ...java.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
       ...kubernetes.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
       ...php.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
       ...python.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
       ...r.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
       ...ruby.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
       ...rust.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
       ...rustPolygot.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
       ...typescript.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
       ...custom.pre_push_ci
 {{- end }}
     }
@@ -334,67 +334,67 @@ hooks {
     stash = "git"
     steps {
       ...core.pre_commit
-{{- if contains .enabled_profiles "ai" }}
+{{- if contains .profiles "ai" }}
       ...ai.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
       ...go.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "github" }}
+{{- if contains .profiles "github" }}
       ...github.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
       ...c.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
       ...cpp.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
       ...csharp.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
       ...cloudflare.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
       ...docker.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
       ...java.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
       ...kubernetes.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
       ...php.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
       ...python.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
       ...r.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
       ...ruby.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
       ...rust.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
       ...rustPolygot.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
       ...custom.pre_commit
 {{- end }}
     }
@@ -402,64 +402,64 @@ hooks {
   ["pre-push"] {
     steps {
       ...core.pre_push
-{{- if contains .enabled_profiles "ai" }}
+{{- if contains .profiles "ai" }}
       ...ai.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "go" }}
+{{- if contains .profiles "go" }}
       ...go.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "c" }}
+{{- if contains .profiles "c" }}
       ...c.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "cpp" }}
+{{- if contains .profiles "cpp" }}
       ...cpp.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "csharp" }}
+{{- if contains .profiles "csharp" }}
       ...csharp.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "cloudflare" }}
+{{- if contains .profiles "cloudflare" }}
       ...cloudflare.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "docker" }}
+{{- if contains .profiles "docker" }}
       ...docker.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "elixir" }}
+{{- if contains .profiles "elixir" }}
       ...elixir.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "gitlab" }}
+{{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "java" }}
+{{- if contains .profiles "java" }}
       ...java.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "kubernetes" }}
+{{- if contains .profiles "kubernetes" }}
       ...kubernetes.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "php" }}
+{{- if contains .profiles "php" }}
       ...php.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "python" }}
+{{- if contains .profiles "python" }}
       ...python.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "r" }}
+{{- if contains .profiles "r" }}
       ...r.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "ruby" }}
+{{- if contains .profiles "ruby" }}
       ...ruby.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "rust" }}
+{{- if contains .profiles "rust" }}
       ...rust.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "rust-polygot" }}
+{{- if contains .profiles "rust-polygot" }}
       ...rustPolygot.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
       ...typescript.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "typst" }}
+{{- if contains .profiles "typst" }}
       ...typst.pre_push
 {{- end }}
-{{- if contains .enabled_profiles "custom" }}
+{{- if contains .profiles "custom" }}
       ...custom.pre_push
 {{- end }}
     }

@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
@@ -15,12 +16,14 @@ func newCheckUpdateCmd() *cobra.Command {
 		Short: "Check whether the template has a newer resolvable ref",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			profiles := resolveProfiles(cmd, viper.GetViper(), ".")
 			result, err := scaffold.CheckUpdate(cmd.Context(), ".", scaffold.CheckUpdateOptions{
-				Ref:     ref,
-				Engine:  version,
-				Verbose: appCfg.verbose,
-				Stdout:  cmd.OutOrStdout(),
-				Stderr:  cmd.ErrOrStderr(),
+				Ref:      ref,
+				Engine:   version,
+				Verbose:  appCfg.verbose,
+				Profiles: profiles,
+				Stdout:   cmd.OutOrStdout(),
+				Stderr:   cmd.ErrOrStderr(),
 			})
 			if err != nil {
 				return err

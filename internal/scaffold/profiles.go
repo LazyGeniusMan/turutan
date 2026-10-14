@@ -18,10 +18,11 @@ import (
 // ref override plus engine and verbosity plumbing.
 // ~keep
 type ProfileOptions struct {
-	Ref     string
-	Engine  string
-	Verbose bool
-	Stderr  io.Writer
+	Ref      string
+	Engine   string
+	Verbose  bool
+	Profiles []string
+	Stderr   io.Writer
 }
 
 // ProfileInfo reports the profiles a template offers versus what the
@@ -69,7 +70,11 @@ func ListProfiles(
 		manifest, opts.Engine, opts.Stderr, opts.Verbose); err != nil {
 		return nil, err
 	}
-	enabled := append([]string{}, state.GetProfiles()...)
+	enabled := state.GetProfiles()
+	if len(splitProfilesValue(opts.Profiles)) > 0 {
+		enabled = splitProfilesValue(opts.Profiles)
+	}
+	enabled = append([]string{}, config.NormalizeProfiles(enabled)...)
 	sort.Strings(enabled)
 	return &ProfileInfo{
 		Offered: offeredProfiles(manifest),

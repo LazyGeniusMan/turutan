@@ -3,21 +3,21 @@
   "template": "templates/default",
   "sourceKind": "filesystem",
   "resolvedCommit": "a4514373b90fa03bd953723c87742789dc870e0db5d4ebdee0f150f0ee537565",
-  "answers": {
+  "data": {
     "enabled_ai_agents": [
       "opencode",
       "pi"
     ],
-    "enabled_profiles": [
-      "core",
-      "ai",
-      "go",
-      "github",
-      "custom"
-    ],
     "project_description": "Project template lifecycle manager",
     "project_name": "turutan"
   },
+  "profiles": [
+    "core",
+    "ai",
+    "go",
+    "github",
+    "custom"
+  ],
   "engine": "turutan/dev",
   "templateLicense": "MIT-0"
 }

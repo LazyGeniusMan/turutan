@@ -60,7 +60,7 @@ func testOptions(stdout *strings.Builder) Options {
 }
 
 func TestBootstrapFilesystem(t *testing.T) {
-	t.Run("renders answers writes state and lock", func(t *testing.T) {
+	t.Run("renders data writes state and lock", func(t *testing.T) {
 		src := makeTemplate(t, basicManifest, basicFiles)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
@@ -107,21 +107,21 @@ func TestBootstrapFilesystem(t *testing.T) {
 			t.Errorf("summary missing from stdout: %q", stdout.String())
 		}
 	})
-	t.Run("answers file wins over defaults", func(t *testing.T) {
+	t.Run("data file wins over defaults", func(t *testing.T) {
 		src := makeTemplate(t, basicManifest, basicFiles)
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: fromfile\n"), 0o600); err != nil {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: fromfile\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		opts := testOptions(&strings.Builder{})
-		opts.AnswersFile = answersFile
+		opts.DataFile = dataFile
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "go.mod"))
 		if string(got) != "module fromfile\n\ngo 1.26\n" {
-			t.Errorf("go.mod = %q, want answers-file value", got)
+			t.Errorf("go.mod = %q, want data-file value", got)
 		}
 	})
 	t.Run("subpath scoped", func(t *testing.T) {
@@ -136,12 +136,12 @@ func TestBootstrapFilesystem(t *testing.T) {
 			t.Errorf("expected subpath-scoped render: %v", err)
 		}
 	})
-	t.Run("non-interactive without answers fails", func(t *testing.T) {
+	t.Run("non-interactive without data fails", func(t *testing.T) {
 		src := makeTemplate(t, basicManifest, basicFiles)
 		opts := testOptions(&strings.Builder{})
 		opts.Defaults = false
 		if err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts); err == nil {
-			t.Error("non-interactive bootstrap without answers succeeded, want error")
+			t.Error("non-interactive bootstrap without data succeeded, want error")
 		}
 	})
 	t.Run("missing key names the key", func(t *testing.T) {
@@ -249,7 +249,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 			t.Errorf("accepted hook did not run: %v", err)
 		}
 	})
-	t.Run("interactive prompt supplies missing key", func(t *testing.T) {
+	t.Run("interactive input supplies missing key", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"f.txt.tmpl": "{{.project_name}}-ok\n"})
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
@@ -259,7 +259,7 @@ func TestBootstrapFilesystem(t *testing.T) {
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "f.txt"))
 		if string(got) != "typed-ok\n" {
-			t.Errorf("f.txt = %q, want prompted value", got)
+			t.Errorf("f.txt = %q, want input value", got)
 		}
 	})
 }
@@ -359,7 +359,7 @@ func TestBootstrapLayeredYmlShared(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.AnswersFile = writeProfilesAnswers(t, profiles...)
+		opts.Profiles = append([]string{}, profiles...)
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -405,7 +405,7 @@ func TestBootstrapLayeredIncludesExcludes(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.AnswersFile = writeProfilesAnswers(t, "core", "a", "b")
+	opts.Profiles = []string{"core", "a", "b"}
 	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -491,16 +491,13 @@ func TestBootstrapManifestSourceMismatch(t *testing.T) {
 }
 
 func TestBootstrapConditionalProfiles(t *testing.T) {
-	const condManifest = "prompts:\n" +
-		"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-		"  project_description:\n    prompt: \"Project description\"\n    type: string\n    default: \"\"\n" +
-		"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
-		"    default: [\"core\", \"ai\", \"github\", \"go\"]\n" +
-		"    options: [\"core\", \"ai\", \"github\", \"go\"]\n" +
+	const condManifest = "inputs:\n" +
+		"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+		"  project_description:\n    question: \"Project description\"\n    type: string\n    default: \"\"\n" +
 		"conditionals:\n" +
-		"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
+		"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
 		"    skip: [\"go.mod\", \"go.mod.tmpl\", \"cmd/**\"]\n" +
-		"  - if: '{{ not (contains .enabled_profiles \"github\") }}'\n" +
+		"  - if: '{{ not (contains .profiles \"github\") }}'\n" +
 		"    skip: [\".github/**\"]\n"
 	files := map[string]string{
 		"go.mod.tmpl":         "module {{.project_name}}\n",
@@ -510,11 +507,13 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		"README.md.tmpl":      "# {{.project_name}}\n",
 		".config/miserc.toml": "env\n",
 	}
-	t.Run("defaults keep all profiles", func(t *testing.T) {
+	t.Run("explicit profiles keep all", func(t *testing.T) {
 		src := makeTemplate(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err != nil {
+		opts := testOptions(&stdout)
+		opts.Profiles = []string{"core", "ai", "github", "go"}
+		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		for _, path := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml", "keep.txt"} {
@@ -523,16 +522,16 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 			}
 		}
 	})
-	t.Run("answers file array skips go and github", func(t *testing.T) {
+	t.Run("default profiles skip go and github", func(t *testing.T) {
 		src := makeTemplate(t, condManifest, files)
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: demo\nenabled_profiles:\n  - core\n  - ai\n"), 0o600); err != nil {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.AnswersFile = answersFile
+		opts.DataFile = dataFile
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -545,16 +544,17 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 			t.Errorf("keep.txt missing: %v", err)
 		}
 	})
-	t.Run("comma-separated string answers file normalized", func(t *testing.T) {
+	t.Run("comma-packed profiles normalized", func(t *testing.T) {
 		src := makeTemplate(t, condManifest, files)
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: demo\nenabled_profiles: \"core, ai\"\n"), 0o600); err != nil {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.AnswersFile = answersFile
+		opts.DataFile = dataFile
+		opts.Profiles = []string{"core, ai"}
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -563,31 +563,30 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive missing key names key", func(t *testing.T) {
-		const noDefaultManifest = "prompts:\n" +
-			"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-			"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
-			"    options: [\"core\", \"go\"]\n"
+		const noDefaultManifest = "inputs:\n" +
+			"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+			"  service_name:\n    question: \"Service name\"\n    type: string\n"
 		src := makeTemplate(t, noDefaultManifest, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: demo\n"), 0o600); err != nil {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		opts := testOptions(&strings.Builder{})
 		opts.Defaults = false
-		opts.AnswersFile = answersFile
+		opts.DataFile = dataFile
 		err := Bootstrap(context.Background(), src, filepath.Join(t.TempDir(), "p"), opts)
 		if err == nil {
 			t.Fatal("Bootstrap succeeded, want missing-key error")
 		}
-		if !strings.Contains(err.Error(), `"enabled_profiles"`) {
-			t.Errorf("error = %v, want it to name the missing prompt key", err)
+		if !strings.Contains(err.Error(), `"service_name"`) {
+			t.Errorf("error = %v, want it to name the missing input key", err)
 		}
 	})
-	t.Run("interactive array prompt dedupes and validates", func(t *testing.T) {
+	t.Run("interactive input supplies project fields", func(t *testing.T) {
 		src := makeTemplate(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("demo\ndesc\ncore, go, go\n")}
+		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("demo\ndesc\n"), Profiles: []string{"core", "go"}}
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -645,7 +644,7 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
-		enabled := turutanconfig.NormalizeProfiles(turutanconfig.GetProfiles(map[string]any{"enabled_profiles": manifest.Prompts["enabled_profiles"].Default}))
+		enabled := turutanconfig.NormalizeProfiles(turutanconfig.DefaultProfiles)
 		shouldRender := func(slash string) bool {
 			ok, err := manifest.IsIncluded(slash, enabled)
 			if err != nil {
@@ -915,16 +914,10 @@ func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
 		}
 		return decoded.Recommendations
 	}
-	writeProfilesAnswers := func(t *testing.T, profiles ...string) string {
+	writeDataFile := func(t *testing.T) string {
 		t.Helper()
-		var b strings.Builder
-		b.WriteString("project_name: exttest\n")
-		b.WriteString("enabled_profiles:\n")
-		for _, p := range profiles {
-			b.WriteString("  - " + p + "\n")
-		}
-		path := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		path := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(path, []byte("project_name: exttest\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		return path
@@ -951,7 +944,8 @@ func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.AnswersFile = writeProfilesAnswers(t, "core", "go", "python", "typescript")
+		opts.DataFile = writeDataFile(t)
+		opts.Profiles = []string{"core", "go", "python", "typescript"}
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -966,7 +960,8 @@ func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.AnswersFile = writeProfilesAnswers(t, "core", "go")
+		opts.DataFile = writeDataFile(t)
+		opts.Profiles = []string{"core", "go"}
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -1001,15 +996,15 @@ func TestBootstrapDefaultEnabledPresets(t *testing.T) {
 		t.Fatal("rendered config.toml has no presets line")
 		return ""
 	}
-	t.Run("explicit answers render only the chosen presets", func(t *testing.T) {
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: presettest\nenabled_ai_agents:\n  - pi\n"), 0o600); err != nil {
+	t.Run("explicit data render only the chosen presets", func(t *testing.T) {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: presettest\nenabled_ai_agents:\n  - pi\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.AnswersFile = answersFile
+		opts.DataFile = dataFile
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}

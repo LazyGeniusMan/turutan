@@ -41,14 +41,14 @@ func Bootstrap(
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
-	absTarget, answers, staged, cleanupStage, err := stageBootstrap(
+	absTarget, data, profiles, staged, cleanupStage, err := stageBootstrap(
 		target, fetched, manifest, opts, stdout, stdin)
 	if err != nil {
 		return err
 	}
 	defer cleanupStage()
 	return finishBootstrap(
-		ctx, src, fetched, manifest, absTarget, answers, staged,
+		ctx, src, fetched, manifest, absTarget, data, profiles, staged,
 		opts, engine, stdout, stderr, stdin)
 }
 
@@ -59,10 +59,10 @@ func validateBootstrapOpts(opts Options) error {
 	if err := filter.ValidateGlobs(opts.Skip); err != nil {
 		return fmt.Errorf("bootstrap: bad --skip entry: %w", err)
 	}
-	if opts.NonInteractive && !opts.Defaults && opts.AnswersFile == "" {
+	if opts.NonInteractive && !opts.Defaults && opts.DataFile == "" && len(splitProfilesValue(opts.Profiles)) == 0 {
 		return fmt.Errorf(
 			"bootstrap: non-interactive mode requires " +
-				"--answers-file or --defaults")
+				"--data-file or --defaults")
 	}
 	return nil
 }
@@ -172,27 +172,28 @@ func stageBootstrap(
 	opts Options,
 	stdout io.Writer,
 	stdin io.Reader,
-) (string, map[string]any, string, func(), error) {
+) (string, map[string]any, []string, string, func(), error) {
 	absTarget, err := prepareTarget(target, opts.Force)
 	if err != nil {
-		return "", nil, "", nil, err
+		return "", nil, nil, "", nil, err
 	}
-	answers, err := seedAnswersWithManifest(absTarget, opts, manifest)
+	profiles := normalizeProfilesSelection(opts.Profiles)
+	data, err := seedDataWithManifest(absTarget, opts, manifest)
 	if err != nil {
-		return "", nil, "", nil, err
+		return "", nil, nil, "", nil, err
 	}
-	staged, cleanup, err := renderWithAnswers(
-		fetched.Dir, answers, manifest, opts, stdout, stdin)
+	staged, cleanup, err := renderWithData(
+		fetched.Dir, data, profiles, manifest, opts, stdout, stdin)
 	if err != nil {
-		return "", nil, "", cleanup, err
+		return "", nil, nil, "", cleanup, err
 	}
 	if err := plantLicenseFiles(fetched.Dir, staged, manifest); err != nil {
-		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+		return "", nil, nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
 	}
 	if err := plantDocFiles(staged, manifest); err != nil {
-		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+		return "", nil, nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
 	}
-	return absTarget, answers, staged, cleanup, nil
+	return absTarget, data, profiles, staged, cleanup, nil
 }
 
 func finishBootstrap(
@@ -201,7 +202,8 @@ func finishBootstrap(
 	fetched *template.Fetched,
 	manifest *config.Manifest,
 	absTarget string,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	staged string,
 	opts Options,
 	engine string,
@@ -210,7 +212,7 @@ func finishBootstrap(
 ) error {
 	stored := relativizeForStore(absTarget, src)
 	src = &stored
-	files, err := publish(staged, absTarget, manifest, opts, config.GetProfiles(answers))
+	files, err := publish(staged, absTarget, manifest, opts, profiles)
 	if err != nil {
 		return err
 	}
@@ -222,7 +224,7 @@ func finishBootstrap(
 	license := resolveTemplateLicense(os.DirFS(fetched.Dir), manifest)
 	vlogf(stderr, opts.Verbose, "bootstrap: template license %s", license)
 	if err := writeStateAndLock(
-		absTarget, src, resolved, answers, opts, files, engine, license,
+		absTarget, src, resolved, data, profiles, opts, files, engine, license,
 	); err != nil {
 		return err
 	}
@@ -290,9 +292,10 @@ func prepareTarget(target string, force bool) (string, error) {
 	return abs, nil
 }
 
-func renderWithAnswers(
+func renderWithData(
 	srcDir string,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	manifest *config.Manifest,
 	opts Options,
 	stdout io.Writer,
@@ -303,20 +306,21 @@ func renderWithAnswers(
 		return "", nil, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 	}
 	cleanup := func() { _ = os.RemoveAll(stage) }
-	for range maxPromptAttempts {
-		if err := ensurePromptAnswers(answers, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
+	for range maxInputAttempts {
+		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
 			return "", cleanup, err
 		}
-		normalizeAnswersWithManifest(answers, manifest)
+		normalizeDataWithManifest(data, manifest)
 		conds := manifestConditionals(manifest)
-		include := profileIncludeFunc(manifest, answers)
+		include := profileIncludeFunc(manifest, profiles)
 		if err := os.RemoveAll(stage); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 		}
-		err := template.RenderDirWithConditionals(srcDir, stage, answers, conds, include)
+		view := renderDataView(data, profiles)
+		err := template.RenderDirWithConditionals(srcDir, stage, view, conds, include)
 		if err == nil {
 			return stage, cleanup, nil
 		}
@@ -324,20 +328,23 @@ func renderWithAnswers(
 		if !ok {
 			return "", cleanup, err
 		}
+		if key == "profiles" {
+			return "", cleanup, fmt.Errorf("bootstrap: missing data for key %q: %w", key, err)
+		}
 		if opts.NonInteractive {
 			return "", cleanup, fmt.Errorf(
-				"bootstrap: missing answer for key %q "+"(use --answers-file or --defaults): %w",
+				"bootstrap: missing data for key %q "+"(use --data-file or --defaults): %w",
 				key, err)
 		}
-		if err := promptMissingKey(answers, manifest, stdout, stdin, key); err != nil {
+		if err := inputMissingKey(data, manifest, stdout, stdin, key); err != nil {
 			return "", cleanup, err
 		}
 	}
-	return "", cleanup, fmt.Errorf("bootstrap: too many missing answers (over %d prompts)", maxPromptAttempts)
+	return "", cleanup, fmt.Errorf("bootstrap: too many missing values (over %d inputs)", maxInputAttempts)
 }
 
-func ensurePromptAnswers(
-	answers map[string]any,
+func ensureInputValues(
+	data map[string]any,
 	manifest *config.Manifest,
 	nonInteractive, defaults bool,
 	stdout io.Writer,
@@ -347,51 +354,51 @@ func ensurePromptAnswers(
 	if manifest == nil {
 		return nil
 	}
-	for _, key := range promptOrder(manifest) {
-		if _, ok := answers[key]; ok {
+	for _, key := range inputOrder(manifest) {
+		if _, ok := data[key]; ok {
 			continue
 		}
-		def := manifest.Prompts[key]
+		def := manifest.Inputs[key]
 		if defaults && def.Default != nil {
-			answers[key] = manifestDefaultCopy(def.Default)
+			data[key] = manifestDefaultCopy(def.Default)
 			continue
 		}
 		if nonInteractive {
 			return fmt.Errorf(
-				"%s: missing answer for key %q (use --answers-file or --defaults)",
+				"%s: missing value for key %q (use --data-file or --defaults)",
 				op, key)
 		}
-		value, err := promptForKey(stdout, stdin, key, def)
+		value, err := inputForKey(stdout, stdin, key, def)
 		if err != nil {
 			return err
 		}
-		answers[key] = value
+		data[key] = value
 	}
 	return nil
 }
 
-func promptMissingKey(
-	answers map[string]any,
+func inputMissingKey(
+	data map[string]any,
 	manifest *config.Manifest,
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
 ) error {
 	if manifest != nil {
-		if def, ok := manifest.Prompts[key]; ok {
-			value, err := promptForKey(stdout, stdin, key, def)
+		if def, ok := manifest.Inputs[key]; ok {
+			value, err := inputForKey(stdout, stdin, key, def)
 			if err != nil {
 				return err
 			}
-			answers[key] = value
+			data[key] = value
 			return nil
 		}
 	}
-	value, err := promptValue(stdout, stdin, key)
+	value, err := inputValue(stdout, stdin, key)
 	if err != nil {
 		return err
 	}
-	answers[key] = value
+	data[key] = value
 	return nil
 }
 
@@ -581,7 +588,8 @@ func writeStateAndLock(
 	target string,
 	src *template.Source,
 	resolved string,
-	answers map[string]any,
+	data map[string]any,
+	profiles []string,
 	opts Options,
 	files []config.LockFile,
 	engine, license string,
@@ -593,7 +601,8 @@ func writeStateAndLock(
 		Subpath:         src.Subpath,
 		RequestedRef:    src.RequestedRef,
 		ResolvedCommit:  resolved,
-		Answers:         answers,
+		Data:            data,
+		Profiles:        config.NormalizeProfiles(splitProfilesValue(profiles)),
 		Skip:            opts.Skip,
 		Conflict:        string(opts.Conflict),
 		Engine:          "turutan/" + engine,
@@ -632,7 +641,7 @@ func gateHooks(
 				"bootstrap: template declares hooks %q: refusing in "+"--non-interactive mode without --allow-hooks",
 				hooks)
 		}
-		allow, err := promptConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks))
+		allow, err := askConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks))
 		if err != nil {
 			return err
 		}

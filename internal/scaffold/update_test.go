@@ -623,16 +623,16 @@ func TestUpdateLockAdvances(t *testing.T) {
 	}
 }
 
-func TestUpdateAnswersOverlay(t *testing.T) {
-	t.Run("answers file overlay re-renders", func(t *testing.T) {
+func TestUpdateDataOverlay(t *testing.T) {
+	t.Run("data file overlay re-renders", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"greet.txt.tmpl": "hi {{.project_name}}\n"})
 		projectDir := bootstrapProject(t, src)
 		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
 		if string(got) != "hi proj\n" {
 			t.Fatalf("greet.txt = %q, want defaulted bootstrap render", got)
 		}
-		answersFile := filepath.Join(t.TempDir(), "answers.yml")
-		if err := os.WriteFile(answersFile, []byte("project_name: overlaid\n"), 0o600); err != nil {
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: overlaid\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(src, "greet.txt.tmpl"), []byte("hey {{.project_name}}\n"), 0o600); err != nil {
@@ -641,7 +641,7 @@ func TestUpdateAnswersOverlay(t *testing.T) {
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
-		opts.AnswersFile = answersFile
+		opts.DataFile = dataFile
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -653,11 +653,11 @@ func TestUpdateAnswersOverlay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if state.Answers["project_name"] != "overlaid" {
-			t.Errorf("stored answers = %v, want overlaid project_name", state.Answers)
+		if state.Data["project_name"] != "overlaid" {
+			t.Errorf("stored data = %v, want overlaid project_name", state.Data)
 		}
 	})
-	t.Run("missing key suggests answers file", func(t *testing.T) {
+	t.Run("missing key suggests data file", func(t *testing.T) {
 		src := makeTemplate(t, "", map[string]string{"a.txt": "v1\n"})
 		projectDir := bootstrapProject(t, src)
 		if err := os.WriteFile(filepath.Join(src, "b.txt.tmpl"), []byte("{{.brand_new_key}}\n"), 0o600); err != nil {
@@ -691,9 +691,9 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 		wantFile       string
 	}{
 		{
-			name:     "interactive prompts for new key",
-			stdin:    "prompted\n",
-			wantFile: "prompted\n",
+			name:     "interactive inputs for new key",
+			stdin:    "inputted\n",
+			wantFile: "inputted\n",
 		},
 		{
 			name:           "non-interactive fails with key hint",
@@ -718,8 +718,8 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.wantErr) {
 					t.Errorf("error = %q, want it to name %s", err, tt.wantErr)
 				}
-				if !strings.Contains(err.Error(), "--answers-file") {
-					t.Errorf("error = %q, want the --answers-file hint", err)
+				if !strings.Contains(err.Error(), "--data-file") {
+					t.Errorf("error = %q, want the --data-file hint", err)
 				}
 				return
 			}
@@ -727,17 +727,17 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 				t.Fatalf("Update error: %v", err)
 			}
 			if got, _ := os.ReadFile(filepath.Join(projectDir, "b.txt")); string(got) != tt.wantFile {
-				t.Errorf("b.txt = %q, want prompted render %q", got, tt.wantFile)
+				t.Errorf("b.txt = %q, want input render %q", got, tt.wantFile)
 			}
 			if !strings.Contains(stdout.String(), "Enter value for brand_new_key") {
-				t.Errorf("stdout = %q, want the key-name prompt", stdout.String())
+				t.Errorf("stdout = %q, want the key-name input", stdout.String())
 			}
 			state, err := config.LoadState(os.DirFS(projectDir))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if state.Answers["brand_new_key"] != "prompted" {
-				t.Errorf("stored answers = %v, want prompted brand_new_key", state.Answers)
+			if state.Data["brand_new_key"] != "inputted" {
+				t.Errorf("stored data = %v, want inputted brand_new_key", state.Data)
 			}
 		})
 	}
@@ -938,11 +938,8 @@ func manifestWithConflict(mode string) *config.Manifest {
 	return &config.Manifest{Conflict: mode}
 }
 
-const profileTestManifest = "prompts:\n" +
-	"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-	"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
-	"    default: [\"core\", \"go\", \"github\"]\n" +
-	"    options: [\"core\", \"go\", \"github\"]\n" +
+const profileTestManifest = "inputs:\n" +
+	"  project_name:\n    question: \"Project name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\", \"cmd/**\"]\n" +
 	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
@@ -955,26 +952,12 @@ var profileTestFiles = map[string]string{
 	".github/ci.yml":   "ci\n",
 }
 
-func writeProfilesAnswers(t *testing.T, profiles ...string) string {
-	t.Helper()
-	var b strings.Builder
-	b.WriteString("enabled_profiles:\n")
-	for _, p := range profiles {
-		b.WriteString("  - " + p + "\n")
-	}
-	path := filepath.Join(t.TempDir(), "answers.yml")
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 func bootstrapProfiles(t *testing.T, src string, profiles ...string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.AnswersFile = writeProfilesAnswers(t, profiles...)
+	opts.Profiles = append([]string{}, profiles...)
 	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -987,7 +970,7 @@ func updateProfiles(t *testing.T, projectDir string, profiles ...string) *Update
 	opts := updateTestOptions(&stdout, &stderr)
 	opts.Force = true
 	opts.NonInteractive = true
-	opts.AnswersFile = writeProfilesAnswers(t, profiles...)
+	opts.Profiles = append([]string{}, profiles...)
 	result, err := Update(context.Background(), projectDir, opts)
 	if err != nil {
 		t.Fatalf("Update error: %v", err)
@@ -1001,7 +984,7 @@ func storedProfiles(t *testing.T, projectDir string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return normalizeArrayValue(state.Answers["enabled_profiles"])
+	return append([]string{}, state.GetProfiles()...)
 }
 
 func lockPaths(t *testing.T, projectDir string) []string {
@@ -1071,7 +1054,7 @@ func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
 		t.Errorf("Updated = %v, want it to list the added go.mod", result.Updated)
 	}
 	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-		t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+		t.Errorf("stored profiles = %v, want [core go custom]", got)
 	}
 	assertCheckUpdateQuiet(t, projectDir)
 }
@@ -1098,7 +1081,7 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 			t.Errorf("Updated = %v, want it to list the dropped go.mod", result.Updated)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
+			t.Errorf("stored profiles = %v, want [core custom]", got)
 		}
 		assertCheckUpdateQuiet(t, projectDir)
 	})
@@ -1134,7 +1117,7 @@ func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
 	assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
 	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-		t.Errorf("stored enabled_profiles = %v, want unchanged [core go custom]", got)
+		t.Errorf("stored profiles = %v, want unchanged [core go custom]", got)
 	}
 }
 
@@ -1165,7 +1148,7 @@ func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
 		t.Error("Old == New, want the commit identity to advance")
 	}
 	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-		t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+		t.Errorf("stored profiles = %v, want [core go custom]", got)
 	}
 }
 
@@ -1195,17 +1178,17 @@ func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 		t.Error("Old == New, want the commit identity to advance")
 	}
 	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-		t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
+		t.Errorf("stored profiles = %v, want [core custom]", got)
 	}
 }
 
-func TestUpdateBackfillsNewPromptDefault(t *testing.T) {
+func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
 	projectDir := bootstrapProject(t, src)
 	writeFiles(t, src, map[string]string{
-		".turutan.yml": "prompts:\n" +
-			"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-			"  new_feature:\n    prompt: \"New feature\"\n    type: array\n" +
+		".turutan.yml": "inputs:\n" +
+			"  project_name:\n    question: \"Project name\"\n    type: string\n" +
+			"  new_feature:\n    question: \"New feature\"\n    type: array\n" +
 			"    default: [\"alpha\", \"beta\"]\n",
 		"feat.txt.tmpl": "[{{ range $i, $p := .new_feature }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",
 	})
@@ -1221,9 +1204,9 @@ func TestUpdateBackfillsNewPromptDefault(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := normalizeArrayValue(state.Answers["new_feature"])
+		got := normalizeArrayValue(state.Data["new_feature"])
 		if !slices.Equal(got, []string{"alpha", "beta"}) {
-			t.Errorf("stored new_feature = %v (%T), want [alpha beta]", state.Answers["new_feature"], state.Answers["new_feature"])
+			t.Errorf("stored new_feature = %v (%T), want [alpha beta]", state.Data["new_feature"], state.Data["new_feature"])
 		}
 	})
 	t.Run("diff succeeds on the backfilled checkout", func(t *testing.T) {

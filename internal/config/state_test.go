@@ -21,7 +21,7 @@ func validState() *State {
 		Subpath:         "react",
 		RequestedRef:    "^1.2",
 		ResolvedCommit:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		Answers:         map[string]any{"project_name": "demo"},
+		Data:            map[string]any{"project_name": "demo"},
 		Engine:          "turutan/0.1.0",
 		TemplateLicense: TemplateLicenseMIT0,
 	}
@@ -45,8 +45,8 @@ func TestStateRoundTrip(t *testing.T) {
 		if got.TemplateLicense != TemplateLicenseMIT0 {
 			t.Errorf("TemplateLicense = %q, want %q", got.TemplateLicense, TemplateLicenseMIT0)
 		}
-		if got.Answers["project_name"] != "demo" {
-			t.Errorf("Answers = %v, want project_name=demo", got.Answers)
+		if got.Data["project_name"] != "demo" {
+			t.Errorf("Data = %v, want project_name=demo", got.Data)
 		}
 	})
 	t.Run("filesystem identity accepted", func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestSaveStatePerms0600(t *testing.T) {
 		t.Fatal(err)
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("state perms = %04o, want 0600 (answers may hold secrets)", perm)
+		t.Errorf("state perms = %04o, want 0600 (data may hold secrets)", perm)
 	}
 }
 
@@ -312,7 +312,7 @@ func TestLoadManifestLayeredProfiles(t *testing.T) {
 	})
 	t.Run("explicit conditionals preserved", func(t *testing.T) {
 		t.Parallel()
-		data := []byte("conditionals:\n  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n    skip: [\"custom/**\"]\nprofiles:\n  go:\n    label: Go\n    includes: [\"go.mod\"]\n  github:\n    label: GitHub\n    includes: [\".github/**\"]\n")
+		data := []byte("conditionals:\n  - if: '{{ not (contains .profiles \"go\") }}'\n    skip: [\"custom/**\"]\nprofiles:\n  go:\n    label: Go\n    includes: [\"go.mod\"]\n  github:\n    label: GitHub\n    includes: [\".github/**\"]\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
@@ -320,7 +320,7 @@ func TestLoadManifestLayeredProfiles(t *testing.T) {
 		if len(got.Conditionals) != 1 {
 			t.Fatalf("conditionals = %d, want 1 explicit only", len(got.Conditionals))
 		}
-		if got.Conditionals[0].If != `{{ not (contains .enabled_profiles "go") }}` {
+		if got.Conditionals[0].If != `{{ not (contains .profiles "go") }}` {
 			t.Errorf("conditionals[0].If = %q, want explicit go conditional kept", got.Conditionals[0].If)
 		}
 		if !slices.Equal(got.Conditionals[0].Skip, []string{"custom/**"}) {
@@ -397,36 +397,36 @@ func TestValidateManifestFrom(t *testing.T) {
 	})
 }
 
-func TestValidateManifestPrompts(t *testing.T) {
+func TestValidateManifestInputs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name    string
-		prompts map[string]ManifestPrompt
+		inputs  map[string]ManifestInput
 		wantErr bool
 	}{
-		{name: "empty prompts accepted", prompts: map[string]ManifestPrompt{}, wantErr: false},
-		{name: "string type accepted", prompts: map[string]ManifestPrompt{"project_name": {Type: "string"}}, wantErr: false},
-		{name: "empty type defaults to string", prompts: map[string]ManifestPrompt{"project_name": {}}, wantErr: false},
-		{name: "array type accepted", prompts: map[string]ManifestPrompt{"enabled_profiles": {Type: "array"}}, wantErr: false},
-		{name: "bool type accepted", prompts: map[string]ManifestPrompt{"flag": {Type: "bool"}}, wantErr: false},
-		{name: "unknown type rejected", prompts: map[string]ManifestPrompt{"x": {Type: "number"}}, wantErr: true},
-		{name: "empty option rejected", prompts: map[string]ManifestPrompt{"x": {Type: "array", Options: []string{"a", ""}}}, wantErr: true},
-		{name: "bool with options rejected", prompts: map[string]ManifestPrompt{"x": {Type: "bool", Options: []string{"a"}}}, wantErr: true},
-		{name: "string with options accepted", prompts: map[string]ManifestPrompt{"x": {Type: "string", Options: []string{"a", "b"}}}, wantErr: false},
+		{name: "empty inputs accepted", inputs: map[string]ManifestInput{}, wantErr: false},
+		{name: "string type accepted", inputs: map[string]ManifestInput{"project_name": {Type: "string"}}, wantErr: false},
+		{name: "empty type defaults to string", inputs: map[string]ManifestInput{"project_name": {}}, wantErr: false},
+		{name: "array type accepted", inputs: map[string]ManifestInput{"tags": {Type: "array"}}, wantErr: false},
+		{name: "bool type accepted", inputs: map[string]ManifestInput{"flag": {Type: "bool"}}, wantErr: false},
+		{name: "unknown type rejected", inputs: map[string]ManifestInput{"x": {Type: "number"}}, wantErr: true},
+		{name: "empty option rejected", inputs: map[string]ManifestInput{"x": {Type: "array", Options: []string{"a", ""}}}, wantErr: true},
+		{name: "bool with options rejected", inputs: map[string]ManifestInput{"x": {Type: "bool", Options: []string{"a"}}}, wantErr: true},
+		{name: "string with options accepted", inputs: map[string]ManifestInput{"x": {Type: "string", Options: []string{"a", "b"}}}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateManifest(&Manifest{Prompts: tt.prompts})
+			err := ValidateManifest(&Manifest{Inputs: tt.inputs})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
-	t.Run("empty prompt key rejected", func(t *testing.T) {
+	t.Run("empty input key rejected", func(t *testing.T) {
 		t.Parallel()
-		if err := ValidateManifest(&Manifest{Prompts: map[string]ManifestPrompt{"": {Type: "string"}}}); err == nil {
-			t.Error("ValidateManifest with empty prompt key succeeded, want error")
+		if err := ValidateManifest(&Manifest{Inputs: map[string]ManifestInput{"": {Type: "string"}}}); err == nil {
+			t.Error("ValidateManifest with empty input key succeeded, want error")
 		}
 	})
 }
@@ -439,7 +439,7 @@ func TestValidateManifestConditionals(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "empty accepted", conds: nil, wantErr: false},
-		{name: "valid if skip accepted", conds: []ManifestConditional{{If: `{{ contains .enabled_profiles "go" }}`, Skip: []string{"go.mod"}}}, wantErr: false},
+		{name: "valid if skip accepted", conds: []ManifestConditional{{If: `{{ contains .profiles "go" }}`, Skip: []string{"go.mod"}}}, wantErr: false},
 		{name: "skip without if rejected", conds: []ManifestConditional{{Skip: []string{"a.txt"}}}, wantErr: true},
 		{name: "bad glob rejected", conds: []ManifestConditional{{If: "true", Skip: []string{"/abs"}}}, wantErr: true},
 		{name: "dotdot glob rejected", conds: []ManifestConditional{{If: "true", Skip: []string{"../escape"}}}, wantErr: true},
@@ -700,32 +700,21 @@ func TestNormalizeProfiles(t *testing.T) {
 
 func TestGetProfiles(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name    string
-		answers map[string]any
-		want    []string
-	}{
-		{name: "nil answers", answers: nil, want: nil},
-		{name: "missing key", answers: map[string]any{}, want: nil},
-		{name: "string list", answers: map[string]any{"enabled_profiles": "core, go,go"}, want: []string{"core", "go"}},
-		{name: "string slice", answers: map[string]any{"enabled_profiles": []string{"core", "go"}}, want: []string{"core", "go"}},
-		{name: "any slice", answers: map[string]any{"enabled_profiles": []any{"core", "go"}}, want: []string{"core", "go"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := GetProfiles(tt.answers); !slices.Equal(got, tt.want) {
-				t.Errorf("GetProfiles = %v, want %v", got, tt.want)
-			}
-		})
-	}
-	t.Run("stored profiles win over answers", func(t *testing.T) {
+	t.Run("stored profiles returned", func(t *testing.T) {
 		t.Parallel()
 		state := validState()
-		state.Profiles = []string{"core"}
-		state.Answers = map[string]any{"enabled_profiles": []string{"core", "go"}}
-		if got := state.GetProfiles(); !slices.Equal(got, []string{"core"}) {
-			t.Errorf("GetProfiles = %v, want [core]", got)
+		state.Profiles = []string{"core", "go", "custom"}
+		if got := state.GetProfiles(); !slices.Equal(got, []string{"core", "go", "custom"}) {
+			t.Errorf("GetProfiles = %v, want [core go custom]", got)
+		}
+	})
+	t.Run("empty profiles returns nil", func(t *testing.T) {
+		t.Parallel()
+		state := validState()
+		state.Profiles = nil
+		state.Data = map[string]any{"project_name": "demo"}
+		if got := state.GetProfiles(); got != nil {
+			t.Errorf("GetProfiles = %v, want nil (no data fallback)", got)
 		}
 	})
 	t.Run("nil state", func(t *testing.T) {
@@ -857,40 +846,37 @@ func TestResolveRenames(t *testing.T) {
 func TestDiffProfiles(t *testing.T) {
 	t.Parallel()
 	manifest := &Manifest{
-		Prompts: map[string]ManifestPrompt{
-			"project_name":     {},
-			"enabled_profiles": {Type: "array"},
-			"new_key":          {},
+		Inputs: map[string]ManifestInput{
+			"project_name": {},
+			"new_key":      {},
 		},
 		Profiles: map[string]ManifestProfile{
 			"go":     {Includes: []string{"go.mod"}},
 			"github": {Includes: []string{".github/**"}},
 		},
 	}
-	t.Run("added removed and new prompts", func(t *testing.T) {
+	t.Run("added removed and new inputs", func(t *testing.T) {
 		t.Parallel()
-		old := map[string]any{
-			"project_name":     "demo",
-			"enabled_profiles": []string{"core", "go", "dropped"},
-		}
-		diff := DiffProfiles(old, manifest)
+		oldProfiles := []string{"core", "go", "dropped"}
+		oldData := map[string]any{"project_name": "demo"}
+		diff := DiffProfiles(oldProfiles, oldData, manifest)
 		if !slices.Equal(diff.Added, []string{"github"}) {
 			t.Errorf("Added = %v, want [github]", diff.Added)
 		}
 		if !slices.Equal(diff.Removed, []string{"dropped"}) {
 			t.Errorf("Removed = %v, want [dropped]", diff.Removed)
 		}
-		if !slices.Equal(diff.NewPrompts, []string{"new_key"}) {
-			t.Errorf("NewPrompts = %v, want [new_key]", diff.NewPrompts)
+		if !slices.Equal(diff.NewInputs, []string{"new_key"}) {
+			t.Errorf("NewInputs = %v, want [new_key]", diff.NewInputs)
 		}
 	})
 	t.Run("custom immune from added and removed", func(t *testing.T) {
 		t.Parallel()
-		for _, old := range []map[string]any{
-			{"enabled_profiles": []string{"core", "go"}},
-			{"enabled_profiles": []string{"core", "go", "custom"}},
+		for _, old := range [][]string{
+			{"core", "go"},
+			{"core", "go", "custom"},
 		} {
-			diff := DiffProfiles(old, manifest)
+			diff := DiffProfiles(old, map[string]any{}, manifest)
 			if slices.Contains(diff.Added, "custom") {
 				t.Errorf("Added = %v, want no custom", diff.Added)
 			}
@@ -901,16 +887,15 @@ func TestDiffProfiles(t *testing.T) {
 	})
 	t.Run("core never removed", func(t *testing.T) {
 		t.Parallel()
-		old := map[string]any{"enabled_profiles": []string{"core"}}
-		diff := DiffProfiles(old, manifest)
+		diff := DiffProfiles([]string{"core"}, map[string]any{}, manifest)
 		if slices.Contains(diff.Removed, "core") {
 			t.Errorf("Removed = %v, want no core", diff.Removed)
 		}
 	})
 	t.Run("nil manifest", func(t *testing.T) {
 		t.Parallel()
-		diff := DiffProfiles(map[string]any{"enabled_profiles": []string{"core"}}, nil)
-		if len(diff.Added) != 0 || len(diff.Removed) != 0 || len(diff.NewPrompts) != 0 {
+		diff := DiffProfiles([]string{"core"}, map[string]any{}, nil)
+		if len(diff.Added) != 0 || len(diff.Removed) != 0 || len(diff.NewInputs) != 0 {
 			t.Errorf("DiffProfiles = %+v, want empty", diff)
 		}
 	})

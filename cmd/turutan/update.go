@@ -7,20 +7,21 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
 type updateFlags struct {
-	ref         string
-	conflict    string
-	force       bool
-	answersFile string
-	defaults    bool
-	allowHooks  bool
-	enable      []string
-	disable     []string
-	preview     bool
+	ref        string
+	conflict   string
+	force      bool
+	dataFile   string
+	defaults   bool
+	allowHooks bool
+	enable     []string
+	disable    []string
+	preview    bool
 }
 
 func newUpdateCmd() *cobra.Command {
@@ -39,8 +40,8 @@ Run 'turutan diff' before 'turutan update' to review pending drift.`,
 	cmd.Flags().StringVar(&flags.ref, "ref", "", "override the stored requestedRef for this run")
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej)")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "update even when the tree differs from the lock")
-	cmd.Flags().StringVar(&flags.answersFile, "answers-file", "", "overlay stored answers from a YAML/JSON file")
-	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed project_name when stored answers lack it")
+	cmd.Flags().StringVar(&flags.dataFile, "data-file", "", "overlay stored data from a YAML/JSON file (see go doc text/template for data/dot terms)")
+	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed project_name when stored data lack it")
 	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared migrations")
 	cmd.Flags().StringSliceVar(&flags.enable, "enable", nil, "enable template profiles (repeatable or comma-separated)")
 	cmd.Flags().StringSliceVar(&flags.disable, "disable", nil, "disable template profiles (repeatable or comma-separated)")
@@ -56,11 +57,13 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 			return err
 		}
 	}
+	profiles := resolveProfiles(cmd, viper.GetViper(), ".")
 	_, err := scaffold.Update(cmd.Context(), ".", scaffold.UpdateOptions{
 		Ref:            flags.ref,
 		Conflict:       conflict,
 		Force:          flags.force,
-		AnswersFile:    flags.answersFile,
+		DataFile:       flags.dataFile,
+		Profiles:       profiles,
 		Defaults:       flags.defaults,
 		AllowHooks:     flags.allowHooks,
 		Enable:         flags.enable,

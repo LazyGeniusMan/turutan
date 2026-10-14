@@ -43,12 +43,13 @@ const (
 )
 
 type DiffOptions struct {
-	Ref     string
-	Engine  string
-	NoColor bool
-	Verbose bool
-	What    string
-	Stderr  io.Writer
+	Ref      string
+	Engine   string
+	NoColor  bool
+	Verbose  bool
+	What     string
+	Profiles []string
+	Stderr   io.Writer
 }
 
 type FileDiff struct {
@@ -339,11 +340,17 @@ func renderDiffTemplate(
 		return nil, nil, fmt.Errorf("diff: creating staging dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
-	answers := map[string]any{}
-	maps.Copy(answers, state.Answers)
-	seedMissingDefaults(answers, manifest)
-	normalizeAnswersWithManifest(answers, manifest)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest), profileIncludeFunc(manifest, answers)); err != nil {
+	data := map[string]any{}
+	maps.Copy(data, state.Data)
+	seedMissingDefaults(data, manifest)
+	normalizeDataWithManifest(data, manifest)
+	profiles := state.GetProfiles()
+	if len(splitProfilesValue(opts.Profiles)) > 0 {
+		profiles = splitProfilesValue(opts.Profiles)
+	}
+	profiles = config.NormalizeProfiles(profiles)
+	view := renderDataView(data, profiles)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifestConditionals(manifest), profileIncludeFunc(manifest, profiles)); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
@@ -406,7 +413,7 @@ func diffRenderedOne(
 		}
 		return diff, true, nil
 	}
-	if state != nil && customOwned(manifest, state.Answers, entry.Path) {
+	if state != nil && customOwned(manifest, state.GetProfiles(), entry.Path) {
 		return FileDiff{}, false, nil
 	}
 	diff, changed, err := newFileDiff(entry.Path, local, entry.Data, false, false)

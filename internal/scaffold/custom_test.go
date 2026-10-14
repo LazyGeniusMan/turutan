@@ -13,11 +13,8 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-const customSeedManifest = "prompts:\n" +
-	"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-	"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
-	"    default: [\"core\"]\n" +
-	"    options: [\"core\", \"go\", \"custom\"]\n" +
+const customSeedManifest = "inputs:\n" +
+	"  project_name:\n    question: \"Project name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\"]\n" +
 	"  custom:\n    label: \"Custom\"\n    includes: [\"custom.txt\", \"extra.txt\"]\n"
@@ -52,46 +49,41 @@ func TestOfferedProfilesDeduplicatesCustom(t *testing.T) {
 	}
 }
 
-func TestNormalizeAnswersEnforcesProfileOrder(t *testing.T) {
-	manifest := &config.Manifest{Prompts: map[string]config.ManifestPrompt{
-		"project_name":     {Type: "string"},
-		"enabled_profiles": {Type: "array", Options: []string{"core", "go", "custom"}},
+func TestNormalizeProfilesSelectionOrder(t *testing.T) {
+	manifest := &config.Manifest{Inputs: map[string]config.ManifestInput{
+		"project_name": {Type: "string"},
 	}}
 	tests := []struct {
 		name  string
-		input any
+		input []string
 		want  []string
 	}{
 		{name: "shuffled slice", input: []string{"go", "core"}, want: []string{"core", "go", "custom"}},
 		{name: "custom first", input: []string{"custom", "go"}, want: []string{"core", "go", "custom"}},
-		{name: "any slice", input: []any{"go", "core"}, want: []string{"core", "go", "custom"}},
-		{name: "comma string", input: "go, core", want: []string{"core", "go", "custom"}},
+		{name: "comma packed", input: []string{"go, core"}, want: []string{"core", "go", "custom"}},
+		{name: "empty defaults", input: nil, want: []string{"core", "ai", "custom"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			answers := map[string]any{"project_name": "demo", "enabled_profiles": tt.input}
-			normalizeAnswersWithManifest(answers, manifest)
-			got, ok := answers["enabled_profiles"].([]string)
-			if !ok {
-				t.Fatalf("enabled_profiles = %T, want []string", answers["enabled_profiles"])
-			}
+			_ = manifest
+			got := normalizeProfilesSelection(tt.input)
 			if !slices.Equal(got, tt.want) {
-				t.Errorf("enabled_profiles = %v, want %v", got, tt.want)
+				t.Errorf("profiles = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestMisercOrderWithShuffledAnswers(t *testing.T) {
+func TestMisercOrderWithShuffledProfiles(t *testing.T) {
 	src := makeTemplate(t, customSeedManifest, map[string]string{
-		"env.txt.tmpl": "env = [{{ range $i, $p := .enabled_profiles }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",
+		"env.txt.tmpl": "env = [{{ range $i, $p := .profiles }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",
 		"keep.txt":     "keep\n",
 	})
-	answersPath := writeProfilesAnswers(t, "go", "core")
+	profiles := []string{"go", "core"}
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.AnswersFile = answersPath
+	opts.Profiles = profiles
 	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -109,7 +101,7 @@ func TestCustomBootstrapSeedOnce(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.AnswersFile = writeProfilesAnswers(t, "core")
+	opts.Profiles = []string{"core"}
 	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -118,7 +110,7 @@ func TestCustomBootstrapSeedOnce(t *testing.T) {
 	var reStdout strings.Builder
 	reOpts := testOptions(&reStdout)
 	reOpts.Force = true
-	reOpts.AnswersFile = writeProfilesAnswers(t, "core")
+	reOpts.Profiles = []string{"core"}
 	if err := Bootstrap(context.Background(), src, target, reOpts); err != nil {
 		t.Fatalf("re-bootstrap error: %v", err)
 	}

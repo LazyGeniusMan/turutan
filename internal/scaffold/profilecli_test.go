@@ -13,11 +13,8 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-const profileCLIManifest = "prompts:\n" +
-	"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-	"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
-	"    default: [\"core\"]\n" +
-	"    options: [\"core\", \"go\", \"github\"]\n" +
+const profileCLIManifest = "inputs:\n" +
+	"  project_name:\n    question: \"Project name\"\n    type: string\n" +
 	"profiles:\n" +
 	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\"]\n" +
 	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
@@ -142,7 +139,7 @@ func TestComputeDiffWhat(t *testing.T) {
 }
 
 func TestUpdateEnableDisable(t *testing.T) {
-	t.Run("enable adds profile files and stores answers", func(t *testing.T) {
+	t.Run("enable adds profile files and stores data", func(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
 		projectDir := bootstrapProfiles(t, src, "core")
 		assertProfileAbsent(t, projectDir, "go.mod")
@@ -159,7 +156,7 @@ func TestUpdateEnableDisable(t *testing.T) {
 			t.Errorf("Updated = %v, want it to list go.mod", result.Updated)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+			t.Errorf("stored profiles = %v, want [core go custom]", got)
 		}
 		if !strings.Contains(stderr.String(), "turutan: template offers new profiles:") {
 			t.Errorf("stderr = %q, want the new-profiles report", stderr.String())
@@ -184,7 +181,7 @@ func TestUpdateEnableDisable(t *testing.T) {
 			t.Errorf("Updated = %v, want it to list go.mod", result.Updated)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
+			t.Errorf("stored profiles = %v, want [core custom]", got)
 		}
 	})
 	t.Run("unknown profile errors with offered list", func(t *testing.T) {
@@ -436,12 +433,12 @@ func TestCheckUpdateNewProfiles(t *testing.T) {
 			t.Errorf("stdout = %q, want the new-profiles line", stdout.String())
 		}
 	})
-	t.Run("new prompt reported alongside template change", func(t *testing.T) {
+	t.Run("new input reported alongside template change", func(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
 		projectDir := bootstrapProfiles(t, src, "core")
 		evolveManifest(t, src,
-			"  project_name:\n    prompt: \"Project name\"\n    type: string\n",
-			"  service_name:\n    prompt: \"Service name\"\n    type: string\n")
+			"  project_name:\n    question: \"Project name\"\n    type: string\n",
+			"  service_name:\n    question: \"Service name\"\n    type: string\n")
 		var stdout strings.Builder
 		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
 		if err != nil {
@@ -450,8 +447,8 @@ func TestCheckUpdateNewProfiles(t *testing.T) {
 		if !result.Available {
 			t.Error("Available = false, want true for the template change")
 		}
-		if !strings.Contains(stdout.String(), "turutan: template adds new prompts: service_name") {
-			t.Errorf("stdout = %q, want the new-prompts line", stdout.String())
+		if !strings.Contains(stdout.String(), "turutan: template adds new inputs: service_name") {
+			t.Errorf("stdout = %q, want the new-inputs line", stdout.String())
 		}
 	})
 }
@@ -503,7 +500,7 @@ func TestUpdateDisableValidation(t *testing.T) {
 			t.Fatalf("Update error: %v", err)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go custom] (enable wins)", got)
+			t.Errorf("stored profiles = %v, want [core go custom] (enable wins)", got)
 		}
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	})
@@ -517,7 +514,7 @@ func TestUpdateDisableValidation(t *testing.T) {
 			t.Fatalf("Update error: %v", err)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+			t.Errorf("stored profiles = %v, want [core go custom]", got)
 		}
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	})
@@ -531,7 +528,7 @@ func TestUpdateDisableValidation(t *testing.T) {
 			t.Fatalf("Update error: %v", err)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
+			t.Errorf("stored profiles = %v, want [core custom]", got)
 		}
 		assertProfileAbsent(t, projectDir, "go.mod")
 	})
@@ -547,7 +544,7 @@ func TestUpdateDisableValidation(t *testing.T) {
 			t.Errorf("error = %q, want the always-enabled refusal", err)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want unchanged [core go custom]", got)
+			t.Errorf("stored profiles = %v, want unchanged [core go custom]", got)
 		}
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
 		assertProfileFile(t, projectDir, "keep.txt", "keep v1\n")
@@ -574,7 +571,7 @@ func TestUpdateDisableValidation(t *testing.T) {
 			t.Fatalf("Update error: %v", err)
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core go custom]", got)
+			t.Errorf("stored profiles = %v, want [core go custom]", got)
 		}
 	})
 }
@@ -612,8 +609,8 @@ func TestUpdateDroppedProfilesStderr(t *testing.T) {
 	})
 }
 
-func TestUpdateNewPromptsStderr(t *testing.T) {
-	t.Run("new prompt reported on stderr alongside change", func(t *testing.T) {
+func TestUpdateNewInputsStderr(t *testing.T) {
+	t.Run("new input reported on stderr alongside change", func(t *testing.T) {
 		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
 		projectDir := bootstrapProfiles(t, src, "core")
 		manifest, err := os.ReadFile(filepath.Join(src, ".turutan.yml")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
@@ -621,8 +618,8 @@ func TestUpdateNewPromptsStderr(t *testing.T) {
 			t.Fatal(err)
 		}
 		augmented := strings.Replace(string(manifest),
-			"  project_name:\n    prompt: \"Project name\"\n    type: string\n",
-			"  project_name:\n    prompt: \"Project name\"\n    type: string\n  service_name:\n    prompt: \"Service name\"\n    type: string\n    default: \"svc\"\n", 1)
+			"  project_name:\n    question: \"Project name\"\n    type: string\n",
+			"  project_name:\n    question: \"Project name\"\n    type: string\n  service_name:\n    question: \"Service name\"\n    type: string\n    default: \"svc\"\n", 1)
 		if augmented == string(manifest) {
 			t.Fatal("could not splice the fixture manifest")
 		}
@@ -638,8 +635,8 @@ func TestUpdateNewPromptsStderr(t *testing.T) {
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if !strings.Contains(stderr.String(), "turutan: template adds new prompts: service_name") {
-			t.Errorf("stderr = %q, want the new-prompts line", stderr.String())
+		if !strings.Contains(stderr.String(), "turutan: template adds new inputs: service_name") {
+			t.Errorf("stderr = %q, want the new-inputs line", stderr.String())
 		}
 		assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
 	})
@@ -746,7 +743,7 @@ func TestUpdatePreserveExemptFromPruning(t *testing.T) {
 			t.Error("lock still contains go.mod after --disable go, want it untracked")
 		}
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-			t.Errorf("stored enabled_profiles = %v, want [core custom]", got)
+			t.Errorf("stored profiles = %v, want [core custom]", got)
 		}
 	})
 }

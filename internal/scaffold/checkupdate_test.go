@@ -466,7 +466,7 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			t.Errorf("stdout = %q, want it to name the extra profile", stdout.String())
 		}
 	})
-	t.Run("profile-only answer drift stays quiet on git", func(t *testing.T) {
+	t.Run("profile-only selection drift stays quiet on git", func(t *testing.T) {
 		files := map[string]string{".turutan.yml": profileCLIManifest}
 		for name, content := range profileCLIFiles {
 			files[name] = content
