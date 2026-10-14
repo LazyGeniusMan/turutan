@@ -1,0 +1,4 @@
+# Greeting for {{ .project_name }}
+
+Style: {{ .greeting_style | upper }}
+Profiles: {{ range $i, $p := .profiles }}{{ if $i }}, {{ end }}{{ $p }}{{ end }}

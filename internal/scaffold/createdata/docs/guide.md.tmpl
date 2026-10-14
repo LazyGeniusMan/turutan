@@ -1,0 +1,5 @@
+# {{ .project_name }}
+
+{{ .project_description }}
+
+Features: {{ range $i, $f := .features }}{{ if $i }}, {{ end }}{{ $f }}{{ end }}

@@ -1,0 +1,108 @@
+---
+
+source: "git::https://example.com/org/my-template.git"
+
+min-engine: ">=0.1.0"
+
+license: MIT-0
+# SPDX identifier recorded into state.json as `templateLicense`. When
+# empty, the engine detects SPDX from TEMPLATE_LICENSE, then LICENSE.
+
+license-files:
+  - LICENSE
+# artifacts. See LICENSE.
+
+doc-files:
+  - docs/guide.md
+# same rules as license-files but read AFTER rendering, so list the
+
+conflict: inline
+
+includes:
+  - README.md
+  - LICENSE
+  - hello.txt
+  - greeting.txt.tmpl
+  - docs/guide.md.tmpl
+  - new-name.txt
+  - hooks/post-setup.sh
+
+excludes:
+  - "*.log"
+  - drafts/**
+  - .turutan.yml
+  - .turutan.yaml
+  - .config/turutan/state.json
+  - .config/turutan/lock.json
+  - .config/turutan/templates/**
+
+preserves:
+  - config/local.conf
+  - "**/*.local.*"
+
+hooks:
+  pre:
+    - echo "example pre hook"
+  post:
+    - sh hooks/post-setup.sh
+
+migrations:
+  - from: ">=0.1.0"
+    run:
+      - echo "example migration for templates at >=0.1.0"
+
+inputs:
+  project_name:
+    label: Project Name
+    type: string
+    default: my-app
+    help: Used for module paths and titles.
+  project_description:
+    label: Project Description
+    type: string
+    default: An example project.
+    help: One-line summary rendered into docs.
+  profiles:
+    label: Profiles
+    type: array
+    default: []
+    options: [web, extra, docs]
+    help: Feature sets to enable (comma-separated, validated against options).
+  greeting_style:
+    label: Greeting Style
+    type: string
+    default: casual
+    options: [formal, casual, silly]
+    help: Tone used by greeting.txt (must be one of options).
+  features:
+    label: Extra Features
+    type: array
+    default: []
+    options: [metrics, tracing]
+    help: Optional capabilities (comma-separated, validated against options).
+  enable_extra:
+    label: Enable Extra Banner
+    type: bool
+    default: false
+    help: Answer y/n; renders extra-banner.txt when true.
+  extra_detail:
+    label: Extra Detail
+    type: string
+    default: some detail
+    help: Only asked when the extra banner is enabled.
+    if: '{{ .enable_extra }}'
+
+conditionals:
+  - if: '{{contains .profiles "extra"}}'
+    includes:
+      - optional/**
+    excludes:
+      - optional/skip-*.txt
+    preserves:
+      - optional/local-*.txt
+  - if: '{{ .enable_extra }}'
+    includes:
+      - extra-banner.txt.tmpl
+
+renames:
+  old-name.txt: new-name.txt
