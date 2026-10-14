@@ -2,7 +2,7 @@
   "version": 1,
   "template": "templates/default",
   "sourceKind": "filesystem",
-  "resolvedCommit": "5671e1e9d59da0181991d69352fa04e3a5bfd439b3b0fbe47843625080889180",
+  "resolvedCommit": "1bd0b4c2ab26a0487bb36751456a661ca62e5bab97c3289d8a6a4a787e9177e4",
   "answers": {
     "enabled_ai_agents": [
       "opencode",
