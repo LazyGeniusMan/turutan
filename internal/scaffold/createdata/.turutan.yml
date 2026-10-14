@@ -1,23 +1,38 @@
+# Template-author starter: an example .turutan.yml covering every engine
+# feature plus the live files it references. Copy this directory and edit
+# the values; the comments explain each key. ~keep
 ---
 
+# source is advisory: recorded into state so `turutan update` knows where
+# the template came from. Any git URL or local path works. ~keep
 source: "git::https://example.com/org/my-template.git"
 
+# min-engine is a semver range gate: older turutan binaries refuse to
+# render this template. Bump it when you adopt newer manifest keys. ~keep
 min-engine: ">=0.1.0"
 
+# license is the SPDX identifier recorded into state.yml as
+# `templateLicense`. When empty, the engine detects SPDX from
+# TEMPLATE_LICENSE, then LICENSE. ~keep
 license: MIT-0
-# SPDX identifier recorded into state.yml as `templateLicense`. When
-# empty, the engine detects SPDX from TEMPLATE_LICENSE, then LICENSE.
 
+# license-files are planted verbatim into .config/turutan/ as license
+# artifacts. See LICENSE. ~keep
 license-files:
   - LICENSE
-# artifacts. See LICENSE.
 
+# doc-files use the same rules as license-files but are read AFTER
+# rendering, so list them by rendered name (no .tmpl suffix). ~keep
 doc-files:
   - docs/guide.md
-# same rules as license-files but read AFTER rendering, so list the
 
+# conflict picks the update merge strategy: `inline` writes conflict
+# markers into the file, `rej` writes .rej sidecars instead. ~keep
 conflict: inline
 
+# includes is the whitelist (empty means all files). Both `x.tmpl` and
+# `x` match include/exclude globs; the `.tmpl` suffix is stripped on
+# render. Verbatim files copy byte-for-byte, `.tmpl` files render. ~keep
 includes:
   - README.md
   - LICENSE
@@ -27,6 +42,10 @@ includes:
   - new-name.txt
   - hooks/post-setup.sh
 
+# excludes is the deny layer: `*.log` drops scratch files, `drafts/**`
+# drops work-in-progress. `.git/`, `.config/turutan/**`, and the manifest
+# itself are always skipped. Layers apply in order: a later layer can
+# re-include after an earlier exclude. ~keep
 excludes:
   - "*.log"
   - drafts/**
@@ -36,21 +55,36 @@ excludes:
   - .config/turutan/lock.json
   - .config/turutan/templates/**
 
+# preserves are seed-once files: rendered only when absent, kept as-is on
+# later updates, so per-run user content survives (`init --skip a,b` adds
+# per-run skips on top of preserves). ~keep
 preserves:
   - config/local.conf
   - "**/*.local.*"
 
+# hooks.pre/post run after publish with user consent: an interactive
+# prompt or --allow-hooks, refused in --non-interactive without it. Hook
+# environments filter secrets. ~keep
 hooks:
   pre:
     - echo "example pre hook"
   post:
     - sh hooks/post-setup.sh
 
+# migrations run on `turutan update` when `from` matches the recorded
+# version: a semver range or a 7-64 hex commit prefix (empty matches
+# all). They need the same hook consent as hooks, and additionally see
+# TURUTAN_OLD and TURUTAN_NEW. ~keep
 migrations:
   - from: ">=0.1.0"
     run:
       - echo "example migration for templates at >=0.1.0"
 
+# inputs are prompted (or answered via --data-file / --defaults). Types:
+# `string` with label/default/help/options, `array` with options answered
+# comma-separated, `bool` answered y/n. `if` predicates skip the input
+# unless true. `project_name`, `project_description`, `profiles` are asked
+# first so predicates over `.profiles` see answered values. ~keep
 inputs:
   project_name:
     label: Project Name
@@ -92,6 +126,11 @@ inputs:
     help: Only asked when the extra banner is enabled.
     if: '{{ .enable_extra }}'
 
+# conditionals layer file sets behind `if` predicates: includes, excludes,
+# and preserves apply only when the predicate renders true. Predicates and
+# every `*.tmpl` file render with `missingkey=error` and sprig functions
+# (minus `env`/`expandenv`, plus slice-aware `contains`); `.profiles`
+# defaults to `[]`. See `go doc text/template` for data/dot terms. ~keep
 conditionals:
   - if: '{{contains .profiles "extra"}}'
     includes:
@@ -104,5 +143,7 @@ conditionals:
     includes:
       - extra-banner.txt.tmpl
 
+# renames forward-map recorded paths across releases: a file recorded as
+# old-name.txt is tracked at new-name.txt from here on. ~keep
 renames:
   old-name.txt: new-name.txt
