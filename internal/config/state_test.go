@@ -312,7 +312,7 @@ func TestLoadManifestLayeredProfiles(t *testing.T) {
 	})
 	t.Run("explicit conditionals preserved", func(t *testing.T) {
 		t.Parallel()
-		data := []byte("conditionals:\n  - if: '{{ not (contains .profiles \"go\") }}'\n    skip: [\"custom/**\"]\nprofiles:\n  go:\n    label: Go\n    includes: [\"go.mod\"]\n  github:\n    label: GitHub\n    includes: [\".github/**\"]\n")
+		data := []byte("conditionals:\n  - if: '{{ not (contains .profiles \"go\") }}'\n    excludes: [\"custom/**\"]\nprofiles:\n  go:\n    label: Go\n    includes: [\"go.mod\"]\n  github:\n    label: GitHub\n    includes: [\".github/**\"]\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
@@ -323,8 +323,8 @@ func TestLoadManifestLayeredProfiles(t *testing.T) {
 		if got.Conditionals[0].If != `{{ not (contains .profiles "go") }}` {
 			t.Errorf("conditionals[0].If = %q, want explicit go conditional kept", got.Conditionals[0].If)
 		}
-		if !slices.Equal(got.Conditionals[0].Skip, []string{"custom/**"}) {
-			t.Errorf("conditionals[0].Skip = %v, want [custom/**]", got.Conditionals[0].Skip)
+		if !slices.Equal(got.Conditionals[0].Excludes, []string{"custom/**"}) {
+			t.Errorf("conditionals[0].Excludes = %v, want [custom/**]", got.Conditionals[0].Excludes)
 		}
 	})
 	t.Run("excludes parsed", func(t *testing.T) {
@@ -440,10 +440,16 @@ func TestValidateManifestConditionals(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "empty accepted", conds: nil, wantErr: false},
-		{name: "valid if skip accepted", conds: []ManifestConditional{{If: `{{ contains .profiles "go" }}`, Skip: []string{"go.mod"}}}, wantErr: false},
-		{name: "skip without if rejected", conds: []ManifestConditional{{Skip: []string{"a.txt"}}}, wantErr: true},
-		{name: "bad glob rejected", conds: []ManifestConditional{{If: "true", Skip: []string{"/abs"}}}, wantErr: true},
-		{name: "dotdot glob rejected", conds: []ManifestConditional{{If: "true", Skip: []string{"../escape"}}}, wantErr: true},
+		{name: "valid excludes accepted", conds: []ManifestConditional{{If: `{{ contains .profiles "go" }}`, Excludes: []string{"go.mod"}}}, wantErr: false},
+		{name: "valid includes accepted", conds: []ManifestConditional{{If: "true", Includes: []string{"foo/**"}}}, wantErr: false},
+		{name: "valid includes plus excludes accepted", conds: []ManifestConditional{{If: "true", Includes: []string{"foo/**"}, Excludes: []string{"foo/bar/**"}}}, wantErr: false},
+		{name: "missing if rejected", conds: []ManifestConditional{{Excludes: []string{"a.txt"}}}, wantErr: true},
+		{name: "blank if rejected", conds: []ManifestConditional{{If: "  ", Excludes: []string{"a.txt"}}}, wantErr: true},
+		{name: "neither includes nor excludes rejected", conds: []ManifestConditional{{If: "true"}}, wantErr: true},
+		{name: "bad includes glob rejected", conds: []ManifestConditional{{If: "true", Includes: []string{"/abs"}}}, wantErr: true},
+		{name: "bad excludes glob rejected", conds: []ManifestConditional{{If: "true", Excludes: []string{"/abs"}}}, wantErr: true},
+		{name: "dotdot includes rejected", conds: []ManifestConditional{{If: "true", Includes: []string{"../escape"}}}, wantErr: true},
+		{name: "dotdot excludes rejected", conds: []ManifestConditional{{If: "true", Excludes: []string{"../escape"}}}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

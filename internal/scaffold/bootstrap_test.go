@@ -496,9 +496,9 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		"  project_description:\n    label: \"Project Description\"\n    type: string\n    default: \"\"\n" +
 		"conditionals:\n" +
 		"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
-		"    skip: [\"go.mod\", \"go.mod.tmpl\", \"cmd/**\"]\n" +
+		"    excludes: [\"go.mod\", \"go.mod.tmpl\", \"cmd/**\"]\n" +
 		"  - if: '{{ not (contains .profiles \"github\") }}'\n" +
-		"    skip: [\".github/**\"]\n"
+		"    excludes: [\".github/**\"]\n"
 	files := map[string]string{
 		"go.mod.tmpl":         "module {{.project_name}}\n",
 		"cmd/app/main.go":     "main {{.project_name}}\n",

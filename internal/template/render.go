@@ -28,8 +28,9 @@ func parseMissingKey(err error) string {
 }
 
 type Conditional struct {
-	If   string
-	Skip []string
+	If       string
+	Includes []string
+	Excludes []string
 }
 
 var skippedDirNames = []string{".git"}
@@ -63,7 +64,7 @@ func templateFuncMap() map[string]any {
 }
 
 // EvaluatePredicate evaluates one `if` predicate against view with the same
-// funcs and missingkey=error option as EvaluateSkip. Empty predicates
+// funcs and missingkey=error option as EvaluateConditionalIncludes. Empty predicates
 // report true so callers ask rather than silently skip.
 // ~keep
 func EvaluatePredicate(ifExpr string, view map[string]any) (bool, error) {
@@ -76,12 +77,17 @@ func ParseConditionalBool(s string) (bool, error) {
 	return condition.ParseConditionalBool(s)
 }
 
-// EvaluateSkip evaluates conditional skip globs against data.
+// EvaluateConditionalIncludes evaluates conditional If predicates in order
+// and returns the active layers preserving conditional order.
+// Decisions start neutral-true then narrow per active layer in order,
+// its Includes then Excludes mirroring profile IsIncluded, so a later
+// layer re-includes after an earlier exclude. Empty If skips its
+// conditional. Missing keys return *MissingKeyError for the retry path.
 // ~keep
-func EvaluateSkip(data map[string]any, conds []Conditional) (map[string]bool, error) {
-	skipSet := map[string]bool{}
+func EvaluateConditionalIncludes(data map[string]any, conds []Conditional) ([]Conditional, error) {
+	var active []Conditional
 	for i, cond := range conds {
-		if cond.If == "" {
+		if strings.TrimSpace(cond.If) == "" {
 			continue
 		}
 		tmpl, err := template.New(fmt.Sprintf("conditional[%d]", i)).
@@ -99,60 +105,61 @@ func EvaluateSkip(data map[string]any, conds []Conditional) (map[string]bool, er
 			}
 			return nil, wrapped
 		}
-		enabled, err := parseConditionalBool(strings.TrimSpace(rendered.String()))
+		enabled, err := ParseConditionalBool(strings.TrimSpace(rendered.String()))
 		if err != nil {
 			return nil, fmt.Errorf("evaluating conditional[%d]: %w", i, err)
 		}
 		if !enabled {
 			continue
 		}
-		for _, glob := range cond.Skip {
-			skipSet[glob] = true
-		}
+		active = append(active, cond)
 	}
-	return skipSet, nil
+	return active, nil
 }
 
-func parseConditionalBool(s string) (bool, error) {
-	switch strings.ToLower(s) {
-	case "true", "1", "yes":
-		return true, nil
-	case "false", "0", "", "no":
-		return false, nil
-	default:
-		return false, fmt.Errorf("conditional result %q is not a boolean (want true/false)", s)
-	}
-}
-
-func skipGlobs(skipSet map[string]bool) []string {
-	globs := make([]string, 0, len(skipSet))
-	for glob := range skipSet {
-		globs = append(globs, glob)
-	}
-	slices.Sort(globs)
-	return globs
-}
-
-func matchesSkip(globs []string, slash string) (bool, error) {
-	if len(globs) == 0 {
-		return false, nil
-	}
+func isConditionalIncluded(layers []Conditional, slash string) (bool, error) {
+	included := true
 	stripped := strings.TrimSuffix(slash, tmplSuffix)
-	matched, err := filter.MatchAny(globs, slash)
-	if err != nil {
-		return false, err
-	}
-	if matched {
-		return true, nil
-	}
-	if stripped != slash {
-		matched, err := filter.MatchAny(globs, stripped)
+	matchBoth := func(pattern string) (bool, error) {
+		ok, err := filter.Match(pattern, slash)
 		if err != nil {
 			return false, err
 		}
-		return matched, nil
+		if ok {
+			return true, nil
+		}
+		if stripped != slash {
+			ok, err := filter.Match(pattern, stripped)
+			if err != nil {
+				return false, err
+			}
+			return ok, nil
+		}
+		return false, nil
 	}
-	return false, nil
+	for _, layer := range layers {
+		for _, pattern := range layer.Includes {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				included = true
+				break
+			}
+		}
+		for _, pattern := range layer.Excludes {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				included = false
+				break
+			}
+		}
+	}
+	return included, nil
 }
 
 // RenderFS renders a filesystem template with data.
@@ -161,16 +168,17 @@ func RenderFS(srcFS fs.FS, dstDir string, data map[string]any) error {
 	return RenderFSWithConditionals(srcFS, dstDir, data, nil, nil)
 }
 
-// RenderFSWithConditionals renders srcFS to dstDir, applying explicit
-// conditionals plus the layered profile include decision. A nil include
-// means every non-metadata path is rendered.
+// RenderFSWithConditionals renders srcFS to dstDir, applying layered
+// conditional includes/excludes plus the layered profile include decision
+// conjunctively: a file renders only when the conditional decision (starting
+// neutral-true then narrowing per active layer in conditional order) and the
+// profile include (nil means every non-metadata path) both allow it.
 // ~keep
 func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, conds []Conditional, include func(string) (bool, error)) error {
-	skipSet, err := EvaluateSkip(data, conds)
+	layers, err := EvaluateConditionalIncludes(data, conds)
 	if err != nil {
 		return err
 	}
-	globs := skipGlobs(skipSet)
 	return fs.WalkDir(srcFS, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -185,11 +193,11 @@ func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, c
 			}
 			return nil
 		}
-		skip, err := matchesSkip(globs, slash)
+		condOk, err := isConditionalIncluded(layers, slash)
 		if err != nil {
-			return fmt.Errorf("rendering template: matching conditional skip: %w", err)
+			return fmt.Errorf("rendering template: matching conditional includes: %w", err)
 		}
-		if skip {
+		if !condOk {
 			return nil
 		}
 		if include != nil {
@@ -224,24 +232,25 @@ func RenderDir(srcDir, dstDir string, data map[string]any) error {
 	return RenderDirWithConditionals(srcDir, dstDir, data, nil, nil)
 }
 
-// RenderDirWithConditionals renders srcDir to dstDir, applying explicit
-// conditionals plus the layered profile include decision. A nil include
-// means every non-metadata path is rendered. Directories are never pruned:
-// files are evaluated individually so a later profile can re-include a
-// child of an excluded subtree.
+// RenderDirWithConditionals renders srcDir to dstDir, applying layered
+// conditional includes/excludes plus the layered profile include decision
+// conjunctively: a file renders only when the conditional decision (starting
+// neutral-true then narrowing per active layer in conditional order) and the
+// profile include (nil means every non-metadata path) both allow it.
+// Directories are never pruned: files are evaluated individually so a later
+// layer or profile can re-include a child of an excluded subtree.
 // ~keep
 func RenderDirWithConditionals(srcDir, dstDir string, data map[string]any, conds []Conditional, include func(string) (bool, error)) error {
 	abs, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf("rendering template %q: %w", srcDir, err)
 	}
-	skipSet, err := EvaluateSkip(data, conds)
+	layers, err := EvaluateConditionalIncludes(data, conds)
 	if err != nil {
 		return err
 	}
-	globs := skipGlobs(skipSet)
 	return filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, data, globs, include)
+		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, data, layers, include)
 	})
 }
 
@@ -259,7 +268,7 @@ func renderDirEntryWithConditionals(
 	d fs.DirEntry,
 	walkErr error,
 	data map[string]any,
-	globs []string,
+	layers []Conditional,
 	include func(string) (bool, error),
 ) error {
 	if walkErr != nil {
@@ -279,11 +288,11 @@ func renderDirEntryWithConditionals(
 		}
 		return nil
 	}
-	skip, err := matchesSkip(globs, slash)
+	condOk, err := isConditionalIncluded(layers, slash)
 	if err != nil {
-		return fmt.Errorf("rendering template: matching conditional skip: %w", err)
+		return fmt.Errorf("rendering template: matching conditional includes: %w", err)
 	}
-	if skip {
+	if !condOk {
 		return nil
 	}
 	if include != nil {

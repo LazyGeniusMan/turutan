@@ -530,7 +530,7 @@ func manifestConditionals(manifest *config.Manifest) []template.Conditional {
 	}
 	conds := make([]template.Conditional, 0, len(manifest.Conditionals))
 	for _, c := range manifest.Conditionals {
-		conds = append(conds, template.Conditional{If: c.If, Skip: c.Skip})
+		conds = append(conds, template.Conditional{If: c.If, Includes: c.Includes, Excludes: c.Excludes})
 	}
 	return conds
 }

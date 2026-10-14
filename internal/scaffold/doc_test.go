@@ -98,7 +98,7 @@ func TestBootstrapDocFiles(t *testing.T) {
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 			"conditionals:\n" +
 			"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
-			"    skip: [\"GO.md\", \"GO.md.tmpl\"]\n" +
+			"    excludes: [\"GO.md\", \"GO.md.tmpl\"]\n" +
 			"doc-files: [GO.md]\n"
 		files := map[string]string{
 			"go.mod.tmpl": "module {{.project_name}}\n",

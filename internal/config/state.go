@@ -99,8 +99,9 @@ type ManifestInput struct {
 }
 
 type ManifestConditional struct {
-	If   string   `yaml:"if"`
-	Skip []string `yaml:"skip"`
+	If       string   `yaml:"if"`
+	Includes []string `yaml:"includes"`
+	Excludes []string `yaml:"excludes"`
 }
 
 // ManifestProfile describes one installable feature slice of a template.
@@ -434,11 +435,18 @@ func validateManifestInputs(inputs map[string]ManifestInput) error {
 
 func validateManifestConditionals(conds []ManifestConditional) error {
 	for i, cond := range conds {
-		if len(cond.Skip) > 0 && cond.If == "" {
-			return fmt.Errorf("invalid manifest: conditionals[%d] has skip without if", i)
+		if strings.TrimSpace(cond.If) == "" {
+			return fmt.Errorf("invalid manifest: conditionals[%d] is missing if", i)
 		}
-		if err := filter.ValidateGlobs(cond.Skip); err != nil {
-			return fmt.Errorf("invalid manifest: bad conditional skip pattern: %w", err)
+		if len(cond.Includes) == 0 && len(cond.Excludes) == 0 {
+			return fmt.Errorf(
+				"invalid manifest: conditionals[%d] has neither includes nor excludes: "+"must list at least one pattern", i)
+		}
+		if err := filter.ValidateGlobs(cond.Includes); err != nil {
+			return fmt.Errorf("invalid manifest: bad conditional includes pattern: %w", err)
+		}
+		if err := filter.ValidateGlobs(cond.Excludes); err != nil {
+			return fmt.Errorf("invalid manifest: bad conditional excludes pattern: %w", err)
 		}
 	}
 	return nil
