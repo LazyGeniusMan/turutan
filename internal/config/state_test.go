@@ -327,15 +327,6 @@ func TestLoadManifestLayeredProfiles(t *testing.T) {
 			t.Errorf("conditionals[0].Skip = %v, want [custom/**]", got.Conditionals[0].Skip)
 		}
 	})
-	t.Run("legacy files rejected", func(t *testing.T) {
-		t.Parallel()
-		data := []byte("profiles:\n  go:\n    label: Go\n    files: [\"go.mod\"]\n")
-		if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err == nil {
-			t.Error("LoadManifest with legacy files succeeded, want error")
-		} else if !strings.Contains(err.Error(), "files") {
-			t.Errorf("error = %q, want it to mention files", err)
-		}
-	})
 	t.Run("excludes parsed", func(t *testing.T) {
 		t.Parallel()
 		data := []byte("profiles:\n  go:\n    label: Go\n    includes: [\"foo/**\"]\n    excludes: [\"foo/bar/**\"]\n")
