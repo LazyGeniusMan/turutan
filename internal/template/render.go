@@ -134,15 +134,19 @@ func ActivePreserves(data map[string]any, conds []Conditional) ([]string, error)
 	return out, nil
 }
 
-// IsIncluded reports the layered include decision for slash: start
-// included, exclude on a root excludes match, then apply each active
-// conditional layer in order with its includes setting included and its
-// excludes clearing it, so a later layer re-includes after an earlier
-// exclude. Both slash and its .tmpl-stripped form are matched so template
-// sources and rendered destinations share one decision.
+// IsIncluded reports the layered include decision for slash: empty root
+// includes means include-all-by-default (third-party templates without a
+// root whitelist keep working); non-empty root includes is a whitelist so
+// conditional-only files no longer leak when their `if` is false. Root and
+// active-conditional preserves bypass the includes gate (they seed-once, so
+// they must render without being duplicated in includes) but root excludes
+// still deny. Then each active conditional layer applies in order with its
+// includes and preserves setting included and its excludes clearing it, so
+// a later layer re-includes after an earlier exclude. Both slash and its
+// .tmpl-stripped form are matched so template sources and rendered
+// destinations share one decision.
 // ~keep
-func IsIncluded(rootExcludes []string, layers []Conditional, slash string) (bool, error) {
-	included := true
+func IsIncluded(rootIncludes, rootExcludes, rootPreserves []string, layers []Conditional, slash string) (bool, error) {
 	stripped := strings.TrimSuffix(slash, tmplSuffix)
 	matchBoth := func(pattern string) (bool, error) {
 		ok, err := filter.Match(pattern, slash)
@@ -161,6 +165,39 @@ func IsIncluded(rootExcludes []string, layers []Conditional, slash string) (bool
 		}
 		return false, nil
 	}
+	matchAny := func(patterns []string) (bool, error) {
+		for _, pattern := range patterns {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	var preservesUnion []string
+	preservesUnion = append(preservesUnion, rootPreserves...)
+	for _, layer := range layers {
+		preservesUnion = append(preservesUnion, layer.Preserves...)
+	}
+	included := true
+	if len(rootIncludes) > 0 {
+		listed, err := matchAny(rootIncludes)
+		if err != nil {
+			return false, err
+		}
+		if listed {
+			included = true
+		} else {
+			kept, err := matchAny(preservesUnion)
+			if err != nil {
+				return false, err
+			}
+			included = kept
+		}
+	}
 	for _, pattern := range rootExcludes {
 		matched, err := matchBoth(pattern)
 		if err != nil {
@@ -173,6 +210,16 @@ func IsIncluded(rootExcludes []string, layers []Conditional, slash string) (bool
 	}
 	for _, layer := range layers {
 		for _, pattern := range layer.Includes {
+			matched, err := matchBoth(pattern)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				included = true
+				break
+			}
+		}
+		for _, pattern := range layer.Preserves {
 			matched, err := matchBoth(pattern)
 			if err != nil {
 				return false, err
@@ -199,16 +246,16 @@ func IsIncluded(rootExcludes []string, layers []Conditional, slash string) (bool
 // RenderFS renders a filesystem template with data.
 // ~keep
 func RenderFS(srcFS fs.FS, dstDir string, data map[string]any) error {
-	return RenderFSWithConditionals(srcFS, dstDir, data, nil, nil)
+	return RenderFSWithConditionals(srcFS, dstDir, data, nil, nil, nil, nil)
 }
 
 // RenderFSWithConditionals renders srcFS to dstDir, applying the layered
-// include decision from IsIncluded: start included, narrow on a root
-// excludes match, then apply each active conditional layer in order.
+// include decision from IsIncluded: root-includes whitelist (empty means
+// all), then root excludes, then each active conditional layer in order.
 // Directories are never pruned: files are evaluated individually so a later
 // layer can re-include a child of an excluded subtree.
 // ~keep
-func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, rootExcludes []string, conds []Conditional) error {
+func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, rootIncludes, rootExcludes, rootPreserves []string, conds []Conditional) error {
 	layers, err := EvaluateConditionalIncludes(data, conds)
 	if err != nil {
 		return err
@@ -227,7 +274,7 @@ func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, r
 			}
 			return nil
 		}
-		condOk, err := IsIncluded(rootExcludes, layers, slash)
+		condOk, err := IsIncluded(rootIncludes, rootExcludes, rootPreserves, layers, slash)
 		if err != nil {
 			return fmt.Errorf("rendering template: matching conditional includes: %w", err)
 		}
@@ -254,16 +301,16 @@ func RenderFSWithConditionals(srcFS fs.FS, dstDir string, data map[string]any, r
 // RenderDir renders a directory template with data.
 // ~keep
 func RenderDir(srcDir, dstDir string, data map[string]any) error {
-	return RenderDirWithConditionals(srcDir, dstDir, data, nil, nil)
+	return RenderDirWithConditionals(srcDir, dstDir, data, nil, nil, nil, nil)
 }
 
 // RenderDirWithConditionals renders srcDir to dstDir, applying the layered
-// include decision from IsIncluded: start included, narrow on a root
-// excludes match, then apply each active conditional layer in order.
+// include decision from IsIncluded: root-includes whitelist (empty means
+// all), then root excludes, then each active conditional layer in order.
 // Directories are never pruned: files are evaluated individually so a later
 // layer can re-include a child of an excluded subtree.
 // ~keep
-func RenderDirWithConditionals(srcDir, dstDir string, data map[string]any, rootExcludes []string, conds []Conditional) error {
+func RenderDirWithConditionals(srcDir, dstDir string, data map[string]any, rootIncludes, rootExcludes, rootPreserves []string, conds []Conditional) error {
 	abs, err := filepath.Abs(srcDir)
 	if err != nil {
 		return fmt.Errorf("rendering template %q: %w", srcDir, err)
@@ -273,7 +320,7 @@ func RenderDirWithConditionals(srcDir, dstDir string, data map[string]any, rootE
 		return err
 	}
 	return filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, data, rootExcludes, layers)
+		return renderDirEntryWithConditionals(abs, dstDir, path, d, err, data, rootIncludes, rootExcludes, rootPreserves, layers)
 	})
 }
 
@@ -283,7 +330,7 @@ func renderDirEntry(
 	walkErr error,
 	data map[string]any,
 ) error {
-	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, data, nil, nil)
+	return renderDirEntryWithConditionals(abs, dstDir, path, d, walkErr, data, nil, nil, nil, nil)
 }
 
 func renderDirEntryWithConditionals(
@@ -291,7 +338,7 @@ func renderDirEntryWithConditionals(
 	d fs.DirEntry,
 	walkErr error,
 	data map[string]any,
-	rootExcludes []string,
+	rootIncludes, rootExcludes, rootPreserves []string,
 	layers []Conditional,
 ) error {
 	if walkErr != nil {
@@ -311,7 +358,7 @@ func renderDirEntryWithConditionals(
 		}
 		return nil
 	}
-	condOk, err := IsIncluded(rootExcludes, layers, slash)
+	condOk, err := IsIncluded(rootIncludes, rootExcludes, rootPreserves, layers, slash)
 	if err != nil {
 		return fmt.Errorf("rendering template: matching conditional includes: %w", err)
 	}

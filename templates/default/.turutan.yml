@@ -5,6 +5,26 @@ license: MIT-0
 license-files: [LICENSE]
 doc-files: [README.md]
 conflict: inline
+includes:
+  - ".config/ai-rulez/config.custom.toml"
+  - ".config/ai-rulez/domains/custom/.gitkeep"
+  - ".config/ai-rulez/domains/pkl/.gitkeep"
+  - ".config/fnox.toml"
+  - ".config/hk/core.pkl"
+  - ".config/hk/custom.pkl"
+  - ".config/hk/index.pkl.tmpl"
+  - ".config/hk.pkl"
+  - ".config/mise/config.custom.toml"
+  - ".config/mise/config.toml"
+  - ".config/miserc.toml.tmpl"
+  - ".config/tombi.toml"
+  - ".config/updatecli/mise-core.yaml"
+  - ".gitignore"
+  - ".vscode/extensions.json.tmpl"
+  - ".vscode/settings.json"
+  - "hooks/.gitkeep"
+  - "LICENSE"
+  - "README.md.tmpl"
 excludes:
   - "**/.git/**"
   - "**/node_modules/**"
@@ -174,6 +194,27 @@ inputs:
     label: "Profiles"
     type: array
     default: []
+    options:
+      - "ai"
+      - "c"
+      - "cloudflare"
+      - "cpp"
+      - "csharp"
+      - "docker"
+      - "elixir"
+      - "github"
+      - "gitlab"
+      - "go"
+      - "java"
+      - "kubernetes"
+      - "php"
+      - "python"
+      - "r"
+      - "ruby"
+      - "rust"
+      - "rust-polygot"
+      - "typescript"
+      - "typst"
     help: "Feature sets enabled per project"
   ai_agents:
     label: "AI Agents"

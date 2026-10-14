@@ -513,8 +513,10 @@ func TestValidateManifestRootGlobs(t *testing.T) {
 		wantErr  bool
 	}{
 		{name: "empty accepted", manifest: Manifest{}, wantErr: false},
+		{name: "valid includes accepted", manifest: Manifest{Includes: []string{"a.txt", "gen/**"}}, wantErr: false},
 		{name: "valid excludes accepted", manifest: Manifest{Excludes: []string{"a.txt", "gen/**"}}, wantErr: false},
 		{name: "valid preserves accepted", manifest: Manifest{Preserves: []string{"keep.txt"}}, wantErr: false},
+		{name: "bad includes rejected", manifest: Manifest{Includes: []string{"/abs"}}, wantErr: true},
 		{name: "bad excludes rejected", manifest: Manifest{Excludes: []string{"/abs"}}, wantErr: true},
 		{name: "bad preserves rejected", manifest: Manifest{Preserves: []string{"../escape"}}, wantErr: true},
 	}
@@ -742,6 +744,31 @@ func TestDefaultTemplateConditionals(t *testing.T) {
 	} else if got.Inputs["profiles"].Type != "array" {
 		t.Errorf("profiles input type = %q, want array", got.Inputs["profiles"].Type)
 	}
+	if len(got.Includes) == 0 {
+		t.Error("root includes empty, want the core whitelist so conditional files do not leak")
+	}
+	wantProfiles := []string{"ai", "c", "cloudflare", "cpp", "csharp", "docker", "elixir", "github", "gitlab", "go", "java", "kubernetes", "php", "python", "r", "ruby", "rust", "rust-polygot", "typescript", "typst"}
+	if def, ok := got.Inputs["profiles"]; ok {
+		if !slices.Equal(def.Options, wantProfiles) {
+			t.Errorf("profiles options = %v, want %v in conditional order", def.Options, wantProfiles)
+		}
+	} else {
+		t.Error("inputs lacks profiles, want options check")
+	}
+	var condOrder []string
+	for _, cond := range got.Conditionals {
+		const prefix = `{{contains .profiles "`
+		if rest, ok := strings.CutPrefix(cond.If, prefix); ok {
+			if id, _, ok := strings.Cut(rest, `"}}`); ok {
+				condOrder = append(condOrder, id)
+			}
+		}
+	}
+	if def, ok := got.Inputs["profiles"]; ok {
+		if !slices.Equal(def.Options, condOrder) {
+			t.Errorf("profiles options = %v, want conditional order %v", def.Options, condOrder)
+		}
+	}
 }
 
 func TestDefaultTemplateOwnership(t *testing.T) {
@@ -784,30 +811,15 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 	})
 	t.Run("every file excluded conditional preserved or core", func(t *testing.T) {
 		t.Parallel()
-		coreGlobs := []string{
-			".config/hk/core.pkl",
-			".config/hk/index.pkl.tmpl",
-			".config/mise/config.linux.toml",
-			".config/mise/config.toml",
-			".config/tombi.toml",
-			".config/updatecli/mise-core.yaml",
-			".vscode/**",
-			"hooks/**",
-			".config/miserc.toml.tmpl",
-			".config/ai-rulez/config.toml.tmpl",
-			".config/ai-rulez/domains/index.md",
-			".config/ai-rulez/domains/pkl/.gitkeep",
-			".config/hk.pkl",
-			".config/hk.pkl.tmpl",
+		if len(manifest.Includes) == 0 {
+			t.Fatal("root includes empty, want the core whitelist")
 		}
-		isCore := func(rel string) bool {
-			for _, pattern := range coreGlobs {
-				ok, err := filter.Match(pattern, rel)
-				if err != nil {
-					continue
-				}
-				if ok {
-					return true
+		isCore := func(rel, stripped string) bool {
+			for _, pattern := range manifest.Includes {
+				for _, cand := range []string{rel, stripped} {
+					if ok, err := filter.Match(pattern, cand); err == nil && ok {
+						return true
+					}
 				}
 			}
 			return false
@@ -864,10 +876,10 @@ func TestDefaultTemplateOwnership(t *testing.T) {
 			stripped := strings.TrimSuffix(rel, ".tmpl")
 			licensed := slices.Contains(manifest.LicenseFiles, rel) || slices.Contains(manifest.LicenseFiles, stripped)
 			docced := slices.Contains(manifest.DocFiles, rel) || slices.Contains(manifest.DocFiles, stripped)
-			if excludedHit(rel) || licensed || docced || isCore(rel) || conditionalHit(rel, stripped) || preservedHit(rel) {
+			if excludedHit(rel) || licensed || docced || isCore(rel, stripped) || conditionalHit(rel, stripped) || preservedHit(rel) {
 				return nil
 			}
-			t.Errorf("orphan file %q: not excluded, conditional, preserved, licensed, doc, or core", rel)
+			t.Errorf("orphan file %q: not excluded, conditional, preserved, licensed, doc, or root-includes core", rel)
 			return nil
 		})
 		if err != nil {

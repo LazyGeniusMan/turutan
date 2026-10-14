@@ -301,7 +301,7 @@ func TestConditionalIncludesLayered(t *testing.T) {
 	}
 	mustIncluded := func(t *testing.T, layers []Conditional, path string) bool {
 		t.Helper()
-		ok, err := IsIncluded(nil, layers, path)
+		ok, err := IsIncluded(nil, nil, nil, layers, path)
 		if err != nil {
 			t.Fatalf("IsIncluded(%q) error: %v", path, err)
 		}
@@ -356,24 +356,86 @@ func TestConditionalIncludesLayered(t *testing.T) {
 		is := assert.New(t)
 		root := []string{"gen/**"}
 		layers := mustLayers(t, map[string]any{}, []Conditional{{If: "true", Includes: []string{"gen/keep.txt"}}})
-		ok, err := IsIncluded(root, layers, "gen/drop.txt")
+		ok, err := IsIncluded(nil, root, nil, layers, "gen/drop.txt")
 		is.NoError(err)
 		is.False(ok)
-		ok, err = IsIncluded(root, layers, "gen/keep.txt")
+		ok, err = IsIncluded(nil, root, nil, layers, "gen/keep.txt")
 		is.NoError(err)
 		is.True(ok, "conditional includes re-include after root excludes")
-		ok, err = IsIncluded(root, layers, "other.txt")
+		ok, err = IsIncluded(nil, root, nil, layers, "other.txt")
 		is.NoError(err)
 		is.True(ok)
 	})
 	t.Run("root excludes without layers", func(t *testing.T) {
 		is := assert.New(t)
-		ok, err := IsIncluded([]string{"gen/**"}, nil, "gen/a.txt")
+		ok, err := IsIncluded(nil, []string{"gen/**"}, nil, nil, "gen/a.txt")
 		is.NoError(err)
 		is.False(ok)
-		ok, err = IsIncluded([]string{"gen/**"}, nil, "keep.txt")
+		ok, err = IsIncluded(nil, []string{"gen/**"}, nil, nil, "keep.txt")
 		is.NoError(err)
 		is.True(ok)
+	})
+	t.Run("root includes whitelist gated files stay out", func(t *testing.T) {
+		is := assert.New(t)
+		root := []string{"keep.txt", "core/**"}
+		ok, err := IsIncluded(root, nil, nil, nil, "keep.txt")
+		is.NoError(err)
+		is.True(ok)
+		ok, err = IsIncluded(root, nil, nil, nil, "core/a.md")
+		is.NoError(err)
+		is.True(ok)
+		ok, err = IsIncluded(root, nil, nil, nil, "gated/go.mod")
+		is.NoError(err)
+		is.False(ok, "non-listed files stay out when root includes is non-empty")
+	})
+	t.Run("root includes empty means include-all", func(t *testing.T) {
+		is := assert.New(t)
+		ok, err := IsIncluded(nil, nil, nil, nil, "anything/at/all.txt")
+		is.NoError(err)
+		is.True(ok)
+		ok, err = IsIncluded([]string{}, []string{}, nil, nil, "anything/at/all.txt")
+		is.NoError(err)
+		is.True(ok)
+	})
+	t.Run("root includes plus conditional re-include", func(t *testing.T) {
+		is := assert.New(t)
+		root := []string{"keep.txt"}
+		layers := mustLayers(t, map[string]any{}, []Conditional{{If: "true", Includes: []string{"gated/**"}}})
+		ok, err := IsIncluded(root, nil, nil, layers, "keep.txt")
+		is.NoError(err)
+		is.True(ok)
+		ok, err = IsIncluded(root, nil, nil, layers, "gated/a.md")
+		is.NoError(err)
+		is.True(ok, "conditional includes re-include after root whitelist")
+		ok, err = IsIncluded(root, nil, nil, layers, "other.txt")
+		is.NoError(err)
+		is.False(ok)
+	})
+	t.Run("root includes match tmpl-stripped form", func(t *testing.T) {
+		is := assert.New(t)
+		ok, err := IsIncluded([]string{"go.mod"}, nil, nil, nil, "go.mod.tmpl")
+		is.NoError(err)
+		is.True(ok)
+		ok, err = IsIncluded([]string{"go.mod.tmpl"}, nil, nil, nil, "go.mod.tmpl")
+		is.NoError(err)
+		is.True(ok)
+	})
+	t.Run("preserves bypass the includes gate", func(t *testing.T) {
+		is := assert.New(t)
+		root := []string{"keep.txt"}
+		ok, err := IsIncluded(root, nil, []string{"keep.local"}, nil, "keep.local")
+		is.NoError(err)
+		is.True(ok, "root preserves render without duplicating in includes")
+		ok, err = IsIncluded(root, nil, []string{"keep.local"}, nil, "other.txt")
+		is.NoError(err)
+		is.False(ok)
+		layers := mustLayers(t, map[string]any{}, []Conditional{{If: "true", Preserves: []string{"cond.local"}}})
+		ok, err = IsIncluded(root, nil, nil, layers, "cond.local")
+		is.NoError(err)
+		is.True(ok, "active conditional preserves render without includes")
+		ok, err = IsIncluded(root, []string{"keep.local"}, []string{"keep.local"}, nil, "keep.local")
+		is.NoError(err)
+		is.False(ok, "root excludes still deny preserves")
 	})
 }
 
@@ -412,7 +474,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
 		data := map[string]any{"project_name": "demo", "profiles": []string{"ai"}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, goCond))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, nil, nil, goCond))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))
@@ -425,7 +487,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
 		data := map[string]any{"project_name": "demo", "profiles": []string{"go"}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, goCond))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, nil, nil, goCond))
 		got, err := os.ReadFile(filepath.Join(dst, "go.mod")) // #nosec G304 -- reads file from this test's temp dir
 		is.NoError(err)
 		is.Equal("module demo\n", string(got))
@@ -435,7 +497,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		dst := t.TempDir()
 		data := map[string]any{"project_name": "demo", "profiles": []string{}}
 		conds := []Conditional{{If: "true", Excludes: []string{"go.mod"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, conds))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, nil, nil, conds))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 	})
@@ -444,13 +506,13 @@ func TestRenderFSWithConditionals(t *testing.T) {
 		dst := t.TempDir()
 		data := map[string]any{"project_name": "demo"}
 		conds := []Conditional{{If: "true", Excludes: []string{"github/**"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, conds))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, data, nil, nil, nil, conds))
 		_, err := os.Stat(filepath.Join(dst, "github", "ci.yml"))
 		is.True(os.IsNotExist(err))
 	})
 	t.Run("missing key propagates for input", func(t *testing.T) {
 		conds := []Conditional{{If: `{{ .absent_key }}`, Includes: []string{"a"}}}
-		err := RenderFSWithConditionals(newFixture(), t.TempDir(), map[string]any{}, nil, conds)
+		err := RenderFSWithConditionals(newFixture(), t.TempDir(), map[string]any{}, nil, nil, nil, conds)
 		is := assert.New(t)
 		is.Error(err)
 		is.Contains(err.Error(), `no entry for key "absent_key"`)
@@ -468,7 +530,7 @@ func TestRenderFSWithConditionals(t *testing.T) {
 			{If: "true", Includes: []string{"foo/bar/baz/**"}},
 		}
 		dst := t.TempDir()
-		is.NoError(RenderFSWithConditionals(src, dst, map[string]any{}, nil, conds))
+		is.NoError(RenderFSWithConditionals(src, dst, map[string]any{}, nil, nil, nil, conds))
 		for _, path := range []string{"foo/other.md", "foo/bar/baz/1.md", "keep.txt"} {
 			_, err := os.Stat(filepath.Join(dst, filepath.FromSlash(path)))
 			is.NoError(err, "expected %q rendered", path)
@@ -479,14 +541,33 @@ func TestRenderFSWithConditionals(t *testing.T) {
 	t.Run("root excludes narrow before layers", func(t *testing.T) {
 		is := assert.New(t)
 		dst := t.TempDir()
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, map[string]any{"project_name": "demo"}, []string{"github/**"}, nil))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, map[string]any{"project_name": "demo"}, nil, []string{"github/**"}, nil, nil))
 		_, err := os.Stat(filepath.Join(dst, "github", "ci.yml"))
 		is.True(os.IsNotExist(err), "github/ci.yml denied by root excludes must not render")
 		_, err = os.Stat(filepath.Join(dst, "keep.txt"))
 		is.NoError(err, "keep.txt outside root excludes must render")
 		dst = t.TempDir()
 		reinclude := []Conditional{{If: "true", Includes: []string{"github/**"}}}
-		is.NoError(RenderFSWithConditionals(newFixture(), dst, map[string]any{"project_name": "demo"}, []string{"github/**"}, reinclude))
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, map[string]any{"project_name": "demo"}, nil, []string{"github/**"}, nil, reinclude))
+	})
+	t.Run("root includes whitelist drops gated files", func(t *testing.T) {
+		is := assert.New(t)
+		dst := t.TempDir()
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, map[string]any{"project_name": "demo"}, []string{"keep.txt"}, nil, nil, nil))
+		_, err := os.Stat(filepath.Join(dst, "keep.txt"))
+		is.NoError(err, "keep.txt in root includes must render")
+		_, err = os.Stat(filepath.Join(dst, "go.mod"))
+		is.True(os.IsNotExist(err), "go.mod outside root includes must not render")
+	})
+	t.Run("root includes plus conditional re-include renders", func(t *testing.T) {
+		is := assert.New(t)
+		dst := t.TempDir()
+		reinclude := []Conditional{{If: "true", Includes: []string{"github/**"}}}
+		is.NoError(RenderFSWithConditionals(newFixture(), dst, map[string]any{"project_name": "demo"}, []string{"keep.txt"}, nil, nil, reinclude))
+		_, err := os.Stat(filepath.Join(dst, "github", "ci.yml"))
+		is.NoError(err, "github/ci.yml re-included by conditional must render")
+		_, err = os.Stat(filepath.Join(dst, "go.mod"))
+		is.True(os.IsNotExist(err), "go.mod outside includes and layers must not render")
 		_, err = os.Stat(filepath.Join(dst, "github", "ci.yml"))
 		is.NoError(err, "github/ci.yml re-included by conditional must render")
 	})
@@ -502,7 +583,7 @@ func TestRenderDirWithConditionals(t *testing.T) {
 		dst := t.TempDir()
 		data := map[string]any{"project_name": "demo", "profiles": []string{}}
 		conds := []Conditional{{If: "true", Excludes: []string{"go.mod", "cmd/**"}}}
-		is.NoError(RenderDirWithConditionals(src, dst, data, nil, conds))
+		is.NoError(RenderDirWithConditionals(src, dst, data, nil, nil, nil, conds))
 		_, err := os.Stat(filepath.Join(dst, "go.mod"))
 		is.True(os.IsNotExist(err))
 		_, err = os.Stat(filepath.Join(dst, "cmd", "app", "main.go"))

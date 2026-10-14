@@ -220,11 +220,17 @@ func splitDedupeList(s string) []string {
 	return out
 }
 
+// inputOrder lists inputs with project fields first, then profiles before
+// any input whose `if` may reference `.profiles`. Alphabetical order asked
+// ai_agents before profiles, so renderDataView defaulted `.profiles` to []
+// and ai_agents silently took its default instead of prompting when the
+// user later answered profiles=[ai].
+// ~keep
 func inputOrder(manifest *config.Manifest) []string {
 	if manifest == nil {
 		return nil
 	}
-	priority := []string{"project_name", "project_description"}
+	priority := []string{"project_name", "project_description", "profiles"}
 	var ordered []string
 	seen := map[string]bool{}
 	for _, key := range priority {

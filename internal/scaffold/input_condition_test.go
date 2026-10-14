@@ -26,6 +26,90 @@ func forwardRefManifest() *config.Manifest {
 	}}
 }
 
+func profilesGatingManifest() *config.Manifest {
+	return &config.Manifest{Inputs: map[string]config.ManifestInput{
+		"project_name": {Label: "Project Name", Type: "string"},
+		"profiles":     {Label: "Profiles", Type: "array", Default: []string{}},
+		"ai_agents":    {Label: "AI Agents", Type: "array", Default: []string{"opencode", "pi"}, If: `{{contains .profiles "ai"}}`},
+	}}
+}
+
+// TestProfilesGatesAiAgents guards the profiles-before-dependents ordering:
+// ai_agents must prompt (not silently default) once profiles=[ai] resolves.
+// ~keep
+func TestProfilesGatesAiAgents(t *testing.T) {
+	t.Parallel()
+	t.Run("ask with ai skip without", func(t *testing.T) {
+		t.Parallel()
+		manifest := profilesGatingManifest()
+		ask, err := ShouldAskInput(manifest, "ai_agents", renderDataView(map[string]any{"profiles": []string{"ai"}}))
+		if err != nil {
+			t.Fatalf("ShouldAskInput error = %v", err)
+		}
+		if !ask {
+			t.Error("ShouldAskInput(ai_agents) with profiles=[ai] = false, want true")
+		}
+		skip, err := ShouldAskInput(manifest, "ai_agents", renderDataView(map[string]any{"profiles": []string{}}))
+		if err != nil {
+			t.Fatalf("ShouldAskInput error = %v", err)
+		}
+		if skip {
+			t.Error("ShouldAskInput(ai_agents) with profiles=[] = true, want false")
+		}
+	})
+	t.Run("profiles resolves before ai_agents", func(t *testing.T) {
+		t.Parallel()
+		manifest := profilesGatingManifest()
+		if got := inputOrder(manifest); len(got) != 3 || got[0] != "project_name" || got[1] != "profiles" || got[2] != "ai_agents" {
+			t.Fatalf("inputOrder = %v, want [project_name profiles ai_agents]", got)
+		}
+		data := map[string]any{"project_name": "demo"}
+		var stdout bytes.Buffer
+		stdin := strings.NewReader("ai\nmyagent\n")
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
+			t.Fatalf("ensureInputValues error = %v", err)
+		}
+		if got, ok := data["profiles"].([]string); !ok || len(got) != 1 || got[0] != "ai" {
+			t.Errorf("profiles = %v (%T), want [ai]", data["profiles"], data["profiles"])
+		}
+		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 1 || got[0] != "myagent" {
+			t.Errorf("ai_agents = %v (%T), want prompted [myagent] not the silent default", data["ai_agents"], data["ai_agents"])
+		}
+		out := stdout.String()
+		profilesAt := strings.Index(out, "Profiles")
+		agentsAt := strings.Index(out, "AI Agents")
+		if profilesAt < 0 || agentsAt < 0 || profilesAt > agentsAt {
+			t.Errorf("prompt output %q, want Profiles asked before AI Agents", out)
+		}
+	})
+	t.Run("without ai skips without extra prompt", func(t *testing.T) {
+		t.Parallel()
+		manifest := profilesGatingManifest()
+		data := map[string]any{"project_name": "demo"}
+		var stdout bytes.Buffer
+		stdin := strings.NewReader("go\n")
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
+			t.Fatalf("ensureInputValues error = %v", err)
+		}
+		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
+			t.Errorf("ai_agents = %v, want skipped default [opencode pi]", data["ai_agents"])
+		}
+		if strings.Contains(stdout.String(), "AI Agents") {
+			t.Errorf("prompt output %q, want no AI Agents prompt without ai", stdout.String())
+		}
+	})
+	t.Run("non-interactive with ai requires agents", func(t *testing.T) {
+		t.Parallel()
+		manifest := profilesGatingManifest()
+		data := map[string]any{"project_name": "demo", "profiles": []string{"ai"}}
+		var stdout bytes.Buffer
+		err := ensureInputValues(data, manifest, true, false, &stdout, strings.NewReader(""), "bootstrap")
+		if err == nil || !strings.Contains(err.Error(), "missing value") {
+			t.Errorf("ensureInputValues error = %v, want missing value for ai_agents", err)
+		}
+	})
+}
+
 func TestShouldAskInput(t *testing.T) {
 	t.Parallel()
 	manifest := conditionalInputManifest()

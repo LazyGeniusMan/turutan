@@ -362,8 +362,8 @@ func TestBootstrapDefaultTemplateOffline(t *testing.T) {
 		if !strings.Contains(string(got), "# myapp") {
 			t.Errorf("README.md = %q, want defaulted project name", got)
 		}
-		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); err != nil {
-			t.Errorf("config.go.toml missing, want conditional files to render: %v", err)
+		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Error("config.go.toml exists, want go-gated files kept out of the core-only default")
 		}
 	})
 }
@@ -389,12 +389,15 @@ func TestBootstrapLayeredYmlShared(t *testing.T) {
 		{"ai", "go", "github"},
 		{"docker"},
 		{"kubernetes"},
-		{},
 	} {
 		target := bootstrapWith(t, profiles...)
 		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
 			t.Errorf("yml .gitkeep missing with profiles %v: %v", profiles, err)
 		}
+	}
+	bare := bootstrapWith(t)
+	if _, err := os.Stat(filepath.Join(bare, ymlKeep)); !os.IsNotExist(err) {
+		t.Error("yml .gitkeep exists with no profiles, want yml-gated files kept out of the core-only default")
 	}
 }
 
@@ -629,8 +632,8 @@ func TestBootstrapDefaultREADME(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(target, "README.md")); !os.IsNotExist(err) {
 			t.Error("README.md still at project root, want it planted under .config/turutan only")
 		}
-		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); err != nil {
-			t.Errorf("config.go.toml missing, want conditional files to render: %v", err)
+		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
+			t.Error("config.go.toml exists, want go-gated files kept out of the core-only default")
 		}
 	})
 }
@@ -658,7 +661,7 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 			t.Fatalf("EvaluateConditionalIncludes error: %v", err)
 		}
 		shouldRender := func(slash string) bool {
-			ok, err := turutantemplate.IsIncluded(manifest.Excludes, layers, slash)
+			ok, err := turutantemplate.IsIncluded(manifest.Includes, manifest.Excludes, manifest.Preserves, layers, slash)
 			if err != nil {
 				return false
 			}
@@ -1016,7 +1019,7 @@ func TestBootstrapDefaultEnabledPresets(t *testing.T) {
 	}
 	t.Run("explicit data render only the chosen presets", func(t *testing.T) {
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
-		if err := os.WriteFile(dataFile, []byte("project_name: presettest\nai_agents:\n  - pi\n"), 0o600); err != nil {
+		if err := os.WriteFile(dataFile, []byte("project_name: presettest\nprofiles:\n  - ai\nai_agents:\n  - pi\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		target := filepath.Join(t.TempDir(), "proj")
@@ -1032,8 +1035,14 @@ func TestBootstrapDefaultEnabledPresets(t *testing.T) {
 	})
 	t.Run("defaults render the manifest default", func(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
+		dataFile := filepath.Join(t.TempDir(), "data.yml")
+		if err := os.WriteFile(dataFile, []byte("project_name: presettest\nprofiles:\n  - ai\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), fixture, target, testOptions(&stdout)); err != nil {
+		opts := testOptions(&stdout)
+		opts.DataFile = dataFile
+		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		if got := readPresetsLine(t, target); got != `presets = ["pi", "opencode"]` {

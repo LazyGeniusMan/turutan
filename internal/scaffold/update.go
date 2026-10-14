@@ -1096,7 +1096,7 @@ func renderUpdateWithData(
 			return fmt.Errorf("update: creating staging dir: %w", err)
 		}
 		view := renderDataView(data)
-		err := template.RenderDirWithConditionals(fetchedDir, stage, view, manifest.Excludes, manifestConditionals(manifest))
+		err := template.RenderDirWithConditionals(fetchedDir, stage, view, manifest.Includes, manifest.Excludes, manifest.Preserves, manifestConditionals(manifest))
 		if err == nil {
 			return nil
 		}

@@ -337,7 +337,7 @@ func renderDiffTemplate(
 	seedMissingDefaults(data, manifest)
 	normalizeDataWithManifest(data, manifest)
 	view := renderDataView(data)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifest.Excludes, manifestConditionals(manifest)); err != nil {
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifest.Includes, manifest.Excludes, manifest.Preserves, manifestConditionals(manifest)); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {

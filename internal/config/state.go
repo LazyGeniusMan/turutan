@@ -109,6 +109,7 @@ type Manifest struct {
 	License      string                   `yaml:"license"`
 	LicenseFiles []string                 `yaml:"license-files"`
 	DocFiles     []string                 `yaml:"doc-files"`
+	Includes     []string                 `yaml:"includes"`
 	Excludes     []string                 `yaml:"excludes"`
 	Preserves    []string                 `yaml:"preserves"`
 	Conflict     string                   `yaml:"conflict"`
@@ -274,6 +275,9 @@ func ValidateManifest(manifest *Manifest) error {
 	case "", "inline", "rej":
 	default:
 		return fmt.Errorf("invalid manifest: unknown conflict mode %q", manifest.Conflict)
+	}
+	if err := filter.ValidateGlobs(manifest.Includes); err != nil {
+		return fmt.Errorf("invalid manifest: bad includes pattern: %w", err)
 	}
 	if err := filter.ValidateGlobs(manifest.Excludes); err != nil {
 		return fmt.Errorf("invalid manifest: bad excludes pattern: %w", err)

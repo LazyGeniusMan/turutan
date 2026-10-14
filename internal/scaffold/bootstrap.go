@@ -319,7 +319,7 @@ func renderWithData(
 			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 		}
 		view := renderDataView(data)
-		err := template.RenderDirWithConditionals(srcDir, stage, view, manifest.Excludes, conds)
+		err := template.RenderDirWithConditionals(srcDir, stage, view, manifest.Includes, manifest.Excludes, manifest.Preserves, conds)
 		if err == nil {
 			return stage, cleanup, nil
 		}
