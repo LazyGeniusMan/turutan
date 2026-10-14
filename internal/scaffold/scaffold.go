@@ -31,7 +31,6 @@ type Options struct {
 	Ref            string
 	Subpath        string
 	DataFile       string
-	Profiles       []string
 	Defaults       bool
 	AllowHooks     bool
 	Skip           []string

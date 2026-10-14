@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
@@ -41,14 +40,14 @@ func Bootstrap(
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
-	absTarget, data, profiles, staged, cleanupStage, err := stageBootstrap(
+	absTarget, data, staged, cleanupStage, err := stageBootstrap(
 		target, fetched, manifest, opts, stdout, stdin)
 	if err != nil {
 		return err
 	}
 	defer cleanupStage()
 	return finishBootstrap(
-		ctx, src, fetched, manifest, absTarget, data, profiles, staged,
+		ctx, src, fetched, manifest, absTarget, data, staged,
 		opts, engine, stdout, stderr, stdin)
 }
 
@@ -59,7 +58,7 @@ func validateBootstrapOpts(opts Options) error {
 	if err := filter.ValidateGlobs(opts.Skip); err != nil {
 		return fmt.Errorf("bootstrap: bad --skip entry: %w", err)
 	}
-	if opts.NonInteractive && !opts.Defaults && opts.DataFile == "" && len(splitProfilesValue(opts.Profiles)) == 0 {
+	if opts.NonInteractive && !opts.Defaults && opts.DataFile == "" {
 		return fmt.Errorf(
 			"bootstrap: non-interactive mode requires " +
 				"--data-file or --defaults")
@@ -172,28 +171,27 @@ func stageBootstrap(
 	opts Options,
 	stdout io.Writer,
 	stdin io.Reader,
-) (string, map[string]any, []string, string, func(), error) {
+) (string, map[string]any, string, func(), error) {
 	absTarget, err := prepareTarget(target, opts.Force)
 	if err != nil {
-		return "", nil, nil, "", nil, err
+		return "", nil, "", nil, err
 	}
-	profiles := normalizeProfilesSelection(opts.Profiles)
 	data, err := seedDataWithManifest(absTarget, opts, manifest)
 	if err != nil {
-		return "", nil, nil, "", nil, err
+		return "", nil, "", nil, err
 	}
 	staged, cleanup, err := renderWithData(
-		fetched.Dir, data, profiles, manifest, opts, stdout, stdin)
+		fetched.Dir, data, manifest, opts, stdout, stdin)
 	if err != nil {
-		return "", nil, nil, "", cleanup, err
+		return "", nil, "", cleanup, err
 	}
 	if err := plantLicenseFiles(fetched.Dir, staged, manifest); err != nil {
-		return "", nil, nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
 	}
 	if err := plantDocFiles(staged, manifest); err != nil {
-		return "", nil, nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
+		return "", nil, "", cleanup, fmt.Errorf("bootstrap: %w", err)
 	}
-	return absTarget, data, profiles, staged, cleanup, nil
+	return absTarget, data, staged, cleanup, nil
 }
 
 func finishBootstrap(
@@ -203,7 +201,6 @@ func finishBootstrap(
 	manifest *config.Manifest,
 	absTarget string,
 	data map[string]any,
-	profiles []string,
 	staged string,
 	opts Options,
 	engine string,
@@ -212,7 +209,11 @@ func finishBootstrap(
 ) error {
 	stored := relativizeForStore(absTarget, src)
 	src = &stored
-	files, err := publish(staged, absTarget, manifest, opts, profiles)
+	preserved, err := preservedGlobs(data, manifest)
+	if err != nil {
+		return err
+	}
+	files, err := publish(staged, absTarget, manifest, opts, preserved)
 	if err != nil {
 		return err
 	}
@@ -224,7 +225,7 @@ func finishBootstrap(
 	license := resolveTemplateLicense(os.DirFS(fetched.Dir), manifest)
 	vlogf(stderr, opts.Verbose, "bootstrap: template license %s", license)
 	if err := writeStateAndLock(
-		absTarget, src, resolved, data, profiles, opts, files, engine, license,
+		absTarget, src, resolved, data, opts, files, engine, license,
 	); err != nil {
 		return err
 	}
@@ -295,7 +296,6 @@ func prepareTarget(target string, force bool) (string, error) {
 func renderWithData(
 	srcDir string,
 	data map[string]any,
-	profiles []string,
 	manifest *config.Manifest,
 	opts Options,
 	stdout io.Writer,
@@ -307,20 +307,19 @@ func renderWithData(
 	}
 	cleanup := func() { _ = os.RemoveAll(stage) }
 	for range maxInputAttempts {
-		if err := ensureInputValues(data, manifest, profiles, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, opts.NonInteractive, opts.Defaults, stdout, stdin, "bootstrap"); err != nil {
 			return "", cleanup, err
 		}
 		normalizeDataWithManifest(data, manifest)
 		conds := manifestConditionals(manifest)
-		include := profileIncludeFunc(manifest, profiles)
 		if err := os.RemoveAll(stage); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: resetting staging dir: %w", err)
 		}
 		if err := os.MkdirAll(stage, 0o750); err != nil {
 			return "", cleanup, fmt.Errorf("bootstrap: creating staging dir: %w", err)
 		}
-		view := renderDataView(data, profiles)
-		err := template.RenderDirWithConditionals(srcDir, stage, view, conds, include)
+		view := renderDataView(data)
+		err := template.RenderDirWithConditionals(srcDir, stage, view, manifest.Excludes, conds)
 		if err == nil {
 			return stage, cleanup, nil
 		}
@@ -328,15 +327,12 @@ func renderWithData(
 		if !ok {
 			return "", cleanup, err
 		}
-		if key == "profiles" {
-			return "", cleanup, fmt.Errorf("bootstrap: missing data for key %q: %w", key, err)
-		}
 		if opts.NonInteractive {
 			return "", cleanup, fmt.Errorf(
 				"bootstrap: missing data for key %q "+"(use --data-file or --defaults): %w",
 				key, err)
 		}
-		if err := inputMissingKey(data, manifest, profiles, stdout, stdin, key); err != nil {
+		if err := inputMissingKey(data, manifest, stdout, stdin, key); err != nil {
 			return "", cleanup, err
 		}
 	}
@@ -346,7 +342,6 @@ func renderWithData(
 func ensureInputValues(
 	data map[string]any,
 	manifest *config.Manifest,
-	profiles []string,
 	nonInteractive, defaults bool,
 	stdout io.Writer,
 	stdin io.Reader,
@@ -365,7 +360,7 @@ func ensureInputValues(
 				continue
 			}
 			def := manifest.Inputs[key]
-			ask, err := ShouldAskInput(manifest, key, renderDataView(data, profiles))
+			ask, err := ShouldAskInput(manifest, key, renderDataView(data))
 			if err != nil {
 				if _, ok := AsMissingKey(err); ok {
 					if !force {
@@ -415,18 +410,16 @@ func ensureInputValues(
 func inputMissingKey(
 	data map[string]any,
 	manifest *config.Manifest,
-	profiles []string,
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
 ) error {
-	return inputMissingKeySeen(data, manifest, profiles, stdout, stdin, key, map[string]bool{})
+	return inputMissingKeySeen(data, manifest, stdout, stdin, key, map[string]bool{})
 }
 
 func inputMissingKeySeen(
 	data map[string]any,
 	manifest *config.Manifest,
-	profiles []string,
 	stdout io.Writer,
 	stdin io.Reader,
 	key string,
@@ -438,15 +431,15 @@ func inputMissingKeySeen(
 				return fmt.Errorf("circular input condition involving %q", key)
 			}
 			seen[key] = true
-			ask, err := ShouldAskInput(manifest, key, renderDataView(data, profiles))
+			ask, err := ShouldAskInput(manifest, key, renderDataView(data))
 			if err != nil {
 				if missing, ok := AsMissingKey(err); ok {
 					if _, present := data[missing]; !present {
 						if _, isInput := manifest.Inputs[missing]; isInput {
-							if err := inputMissingKeySeen(data, manifest, profiles, stdout, stdin, missing, seen); err != nil {
+							if err := inputMissingKeySeen(data, manifest, stdout, stdin, missing, seen); err != nil {
 								return err
 							}
-							ask, err = ShouldAskInput(manifest, key, renderDataView(data, profiles))
+							ask, err = ShouldAskInput(manifest, key, renderDataView(data))
 							if err != nil {
 								return err
 							}
@@ -483,12 +476,12 @@ func publish(
 	staged, target string,
 	manifest *config.Manifest,
 	opts Options,
-	enabled []string,
+	preserved []string,
 ) ([]config.LockFile, error) {
 	var files []config.LockFile
 	pub := &publisher{
 		staged: staged, target: target, manifest: manifest, opts: opts,
-		enabled: enabled,
+		preserved: preserved,
 	}
 	err := filepath.WalkDir(staged, func(path string, d fs.DirEntry, err error) error {
 		return pub.publishEntry(path, d, err, &files)
@@ -500,11 +493,11 @@ func publish(
 }
 
 type publisher struct {
-	staged   string
-	target   string
-	manifest *config.Manifest
-	opts     Options
-	enabled  []string
+	staged    string
+	target    string
+	manifest  *config.Manifest
+	opts      Options
+	preserved []string
 }
 
 func (p *publisher) publishEntry(
@@ -524,9 +517,6 @@ func (p *publisher) publishEntry(
 		return nil
 	}
 	slash := filter.ToSlash(rel)
-	if skip, err := p.ignored(slash); err != nil || skip {
-		return err
-	}
 	if _, err := filter.SafeJoin(
 		p.target, filepath.FromSlash(slash)); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
@@ -541,15 +531,6 @@ func (p *publisher) publishEntry(
 		return err
 	}
 	return p.publishFile(path, d, slash, files)
-}
-
-func (p *publisher) ignored(slash string) (bool, error) {
-	ignored, err := filter.MatchAny(p.manifest.Ignore, slash)
-	if err != nil {
-		return false, fmt.Errorf(
-			"bootstrap: matching ignore globs: %w", err)
-	}
-	return ignored, nil
 }
 
 func (p *publisher) publishDir(slash string) error {
@@ -611,7 +592,7 @@ func (p *publisher) keepOrFail(
 	slash string,
 	files *[]config.LockFile,
 ) (bool, error) {
-	kept, err := keepExisting(slash, p.manifest, p.opts, p.enabled)
+	kept, err := keepExisting(slash, p.manifest, p.opts, p.preserved)
 	if err != nil {
 		return false, err
 	}
@@ -630,23 +611,19 @@ func (p *publisher) keepOrFail(
 	return false, nil
 }
 
-func keepExisting(slash string, manifest *config.Manifest, opts Options, enabled []string) (bool, error) {
-	preserved, err := filter.MatchAny(manifest.Preserve, slash)
+func keepExisting(slash string, manifest *config.Manifest, opts Options, preserved []string) (bool, error) {
+	kept, err := isPreservedPath(slash, manifest, preserved)
 	if err != nil {
-		return false, fmt.Errorf("bootstrap: matching preserve globs: %w", err)
+		return false, fmt.Errorf("bootstrap: %w", err)
 	}
-	if preserved {
+	if kept {
 		return true, nil
 	}
 	skipped, err := filter.MatchAny(opts.Skip, slash)
 	if err != nil {
 		return false, fmt.Errorf("bootstrap: matching --skip entries: %w", err)
 	}
-	if skipped {
-		return true, nil
-	}
-	owned := config.NormalizeProfiles(enabled)
-	return slices.Contains(config.ProfilesForPath(manifest, owned, slash), "custom"), nil
+	return skipped, nil
 }
 
 func warnManifestSourceMismatch(stderr io.Writer, manifest *config.Manifest, src *template.Source) {
@@ -666,7 +643,6 @@ func writeStateAndLock(
 	src *template.Source,
 	resolved string,
 	data map[string]any,
-	profiles []string,
 	opts Options,
 	files []config.LockFile,
 	engine, license string,
@@ -679,7 +655,6 @@ func writeStateAndLock(
 		RequestedRef:    src.RequestedRef,
 		ResolvedCommit:  resolved,
 		Data:            data,
-		Profiles:        config.NormalizeProfiles(splitProfilesValue(profiles)),
 		Skip:            opts.Skip,
 		Conflict:        string(opts.Conflict),
 		Engine:          "turutan/" + engine,

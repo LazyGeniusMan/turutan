@@ -43,13 +43,12 @@ const (
 )
 
 type DiffOptions struct {
-	Ref      string
-	Engine   string
-	NoColor  bool
-	Verbose  bool
-	What     string
-	Profiles []string
-	Stderr   io.Writer
+	Ref     string
+	Engine  string
+	NoColor bool
+	Verbose bool
+	What    string
+	Stderr  io.Writer
 }
 
 type FileDiff struct {
@@ -143,13 +142,6 @@ func computeUpstreamDiff(
 	}
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
-		ignored, err := filter.MatchAny(manifest.Ignore, path)
-		if err != nil {
-			return nil, fmt.Errorf("diff: %w", err)
-		}
-		if ignored {
-			continue
-		}
 		diff, changed, err := newFileDiff(
 			path, byNew[path], rendered[path].Data, false, false)
 		if err != nil {
@@ -166,7 +158,7 @@ func computeUpstreamDiff(
 		if _, ok := rendered[path]; ok {
 			continue
 		}
-		ignored, err := filter.MatchAny(manifest.Ignore, path)
+		ignored, err := filter.MatchAny(manifest.Excludes, path)
 		if err != nil {
 			return nil, fmt.Errorf("diff: %w", err)
 		}
@@ -344,13 +336,8 @@ func renderDiffTemplate(
 	maps.Copy(data, state.Data)
 	seedMissingDefaults(data, manifest)
 	normalizeDataWithManifest(data, manifest)
-	profiles := state.GetProfiles()
-	if len(splitProfilesValue(opts.Profiles)) > 0 {
-		profiles = splitProfilesValue(opts.Profiles)
-	}
-	profiles = config.NormalizeProfiles(profiles)
-	view := renderDataView(data, profiles)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifestConditionals(manifest), profileIncludeFunc(manifest, profiles)); err != nil {
+	view := renderDataView(data)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifest.Excludes, manifestConditionals(manifest)); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
@@ -373,9 +360,13 @@ func collectDiffs(
 	manifest *config.Manifest,
 	state *config.State,
 ) ([]FileDiff, error) {
+	preserved, err := preservedGlobs(state.Data, manifest)
+	if err != nil {
+		return nil, err
+	}
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
-		diff, changed, err := diffRenderedOne(projectDir, rendered[path], manifest, state)
+		diff, changed, err := diffRenderedOne(projectDir, rendered[path], manifest, state, preserved)
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +375,7 @@ func collectDiffs(
 		}
 	}
 	for _, entry := range lock.Files {
-		diff, changed, err := diffDroppedOne(projectDir, rendered, manifest, entry)
+		diff, changed, err := diffDroppedOne(projectDir, rendered, manifest, entry, preserved)
 		if err != nil {
 			return nil, err
 		}
@@ -400,6 +391,7 @@ func diffRenderedOne(
 	entry renderedEntry,
 	manifest *config.Manifest,
 	state *config.State,
+	preserved []string,
 ) (FileDiff, bool, error) {
 	local, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 	if err != nil {
@@ -413,8 +405,14 @@ func diffRenderedOne(
 		}
 		return diff, true, nil
 	}
-	if state != nil && customOwned(manifest, state.GetProfiles(), entry.Path) {
-		return FileDiff{}, false, nil
+	if state != nil {
+		owned, err := userOwned(entry.Path, manifest, state, preserved)
+		if err != nil {
+			return FileDiff{}, false, err
+		}
+		if owned {
+			return FileDiff{}, false, nil
+		}
 	}
 	diff, changed, err := newFileDiff(entry.Path, local, entry.Data, false, false)
 	if err != nil {
@@ -428,11 +426,12 @@ func diffDroppedOne(
 	rendered map[string]renderedEntry,
 	manifest *config.Manifest,
 	entry config.LockFile,
+	preserved []string,
 ) (FileDiff, bool, error) {
 	if _, ok := rendered[entry.Path]; ok {
 		return FileDiff{}, false, nil
 	}
-	ignored, err := filter.MatchAny(manifest.Ignore, entry.Path)
+	ignored, err := filter.MatchAny(manifest.Excludes, entry.Path)
 	if err != nil {
 		return FileDiff{}, false, fmt.Errorf("diff: %w", err)
 	}
@@ -446,6 +445,13 @@ func diffDroppedOne(
 		}
 		return FileDiff{}, false, fmt.Errorf(
 			"diff: reading project file %q: %w", entry.Path, err)
+	}
+	kept, err := isPreservedPath(entry.Path, manifest, preserved)
+	if err != nil {
+		return FileDiff{}, false, fmt.Errorf("diff: %w", err)
+	}
+	if kept {
+		return FileDiff{}, false, nil
 	}
 	diff, _, err := newFileDiff(entry.Path, local, nil, false, true)
 	if err != nil {
@@ -483,13 +489,6 @@ func walkRendered(stage string, manifest *config.Manifest) (map[string]renderedE
 			return nil
 		}
 		slash := filter.ToSlash(rel)
-		ignored, err := filter.MatchAny(manifest.Ignore, slash)
-		if err != nil {
-			return fmt.Errorf("matching ignore globs: %w", err)
-		}
-		if ignored {
-			return nil
-		}
 		data, err := os.ReadFile(path) // #nosec G304, G122 -- WalkDir over this run's 0700 staging dir with symlinks skipped; staging is owner-only so no cross-user TOCTOU boundary
 		if err != nil {
 			return err

@@ -312,7 +312,7 @@ func TestUpdateMergeAddedBinary(t *testing.T) {
 
 func TestUpdatePreserve(t *testing.T) {
 	t.Run("preserve globs always prefer local", func(t *testing.T) {
-		src := makeTemplate(t, "preserve:\n  - \"keep.txt\"\n", map[string]string{
+		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt":  "template v1\n",
 			"merge.txt": "a\nb\nc\n",
 		})
@@ -348,7 +348,7 @@ func TestUpdatePreserve(t *testing.T) {
 		}
 	})
 	t.Run("pristine preserved survives template-only change", func(t *testing.T) {
-		src := makeTemplate(t, "preserve:\n  - \"keep.txt\"\n", map[string]string{
+		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt": "template v1\n",
 		})
 		projectDir := bootstrapProject(t, src)
@@ -371,7 +371,7 @@ func TestUpdatePreserve(t *testing.T) {
 		}
 	})
 	t.Run("deleted preserved stays deleted", func(t *testing.T) {
-		src := makeTemplate(t, "preserve:\n  - \"keep.txt\"\n", map[string]string{
+		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt": "template v1\n",
 		})
 		projectDir := bootstrapProject(t, src)
@@ -940,9 +940,10 @@ func manifestWithConflict(mode string) *config.Manifest {
 
 const profileTestManifest = "inputs:\n" +
 	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
-	"profiles:\n" +
-	"  go:\n    label: \"Go\"\n    includes: [\"go.mod\", \"cmd/**\"]\n" +
-	"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n"
+	"  profiles:\n    label: \"Profiles\"\n    type: array\n    default: []\n" +
+	"conditionals:\n" +
+	"  - if: '{{not (contains .profiles \"go\")}}'\n    excludes: [\"go.mod\", \"cmd/**\"]\n" +
+	"  - if: '{{not (contains .profiles \"github\")}}'\n    excludes: [\".github/**\"]\n"
 
 var profileTestFiles = map[string]string{
 	"keep.txt":         "keep v1\n",
@@ -957,7 +958,9 @@ func bootstrapProfiles(t *testing.T, src string, profiles ...string) string {
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.Profiles = append([]string{}, profiles...)
+	if len(profiles) > 0 {
+		opts.DataFile = profilesDataFile(t, profiles...)
+	}
 	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -970,7 +973,9 @@ func updateProfiles(t *testing.T, projectDir string, profiles ...string) *Update
 	opts := updateTestOptions(&stdout, &stderr)
 	opts.Force = true
 	opts.NonInteractive = true
-	opts.Profiles = append([]string{}, profiles...)
+	if len(profiles) > 0 {
+		opts.DataFile = profilesDataFile(t, profiles...)
+	}
 	result, err := Update(context.Background(), projectDir, opts)
 	if err != nil {
 		t.Fatalf("Update error: %v", err)
@@ -984,7 +989,10 @@ func storedProfiles(t *testing.T, projectDir string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return append([]string{}, state.GetProfiles()...)
+	if state.Data == nil || state.Data["profiles"] == nil {
+		return nil
+	}
+	return normalizeArrayValue(state.Data["profiles"])
 }
 
 func lockPaths(t *testing.T, projectDir string) []string {
@@ -1026,7 +1034,7 @@ func assertCheckUpdateQuiet(t *testing.T, projectDir string) {
 		t.Fatalf("CheckUpdate error: %v", err)
 	}
 	if result.Available {
-		t.Error("CheckUpdate reports available after a profile-change update, want up to date")
+		t.Error("CheckUpdate reports available after a profiles-input update, want up to date")
 	}
 }
 
@@ -1053,8 +1061,8 @@ func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
 	if !slices.Contains(result.Updated, "go.mod") {
 		t.Errorf("Updated = %v, want it to list the added go.mod", result.Updated)
 	}
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-		t.Errorf("stored profiles = %v, want [core go custom]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+		t.Errorf("stored profiles = %v, want [core go]", got)
 	}
 	assertCheckUpdateQuiet(t, projectDir)
 }
@@ -1080,8 +1088,8 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 		if !slices.Contains(result.Updated, "go.mod") {
 			t.Errorf("Updated = %v, want it to list the dropped go.mod", result.Updated)
 		}
-		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-			t.Errorf("stored profiles = %v, want [core custom]", got)
+		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
+			t.Errorf("stored profiles = %v, want [core]", got)
 		}
 		assertCheckUpdateQuiet(t, projectDir)
 	})
@@ -1116,8 +1124,8 @@ func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
 	}
 	assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-		t.Errorf("stored profiles = %v, want unchanged [core go custom]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+		t.Errorf("stored profiles = %v, want unchanged [core go]", got)
 	}
 }
 
@@ -1147,8 +1155,8 @@ func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
 	if result.Old == result.New {
 		t.Error("Old == New, want the commit identity to advance")
 	}
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go", "custom"}) {
-		t.Errorf("stored profiles = %v, want [core go custom]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
+		t.Errorf("stored profiles = %v, want [core go]", got)
 	}
 }
 
@@ -1177,8 +1185,8 @@ func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 	if result.Old == result.New {
 		t.Error("Old == New, want the commit identity to advance")
 	}
-	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "custom"}) {
-		t.Errorf("stored profiles = %v, want [core custom]", got)
+	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
+		t.Errorf("stored profiles = %v, want [core]", got)
 	}
 }
 

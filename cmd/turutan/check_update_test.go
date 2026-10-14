@@ -136,10 +136,4 @@ func TestCheckUpdateOffersCmd(t *testing.T) {
 			t.Error("flag --ref missing on check-update")
 		}
 	})
-	t.Run("profiles ref flag registers", func(t *testing.T) {
-		cmd := newProfilesCmd()
-		if cmd.Flags().Lookup("ref") == nil {
-			t.Error("flag --ref missing on profiles")
-		}
-	})
 }

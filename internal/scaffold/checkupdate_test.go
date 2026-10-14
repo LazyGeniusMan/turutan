@@ -262,7 +262,7 @@ func TestCheckUpdateFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("preserved local edit stays up to date", func(t *testing.T) {
-		src := makeTemplate(t, "preserve:\n  - \"keep.txt\"\n", map[string]string{"keep.txt": "template keep\n"})
+		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{"keep.txt": "template keep\n"})
 		projectDir := bootstrapProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -415,7 +415,7 @@ func TestCheckUpdateRemoteNetwork(t *testing.T) {
 }
 
 func TestCheckUpdateGitOffers(t *testing.T) {
-	t.Run("local-git adding profile reports available with offers", func(t *testing.T) {
+	t.Run("local-git adding input reports available with new inputs", func(t *testing.T) {
 		files := map[string]string{".turutan.yml": profileCLIManifest}
 		for name, content := range profileCLIFiles {
 			files[name] = content
@@ -427,21 +427,18 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			t.Fatal(err)
 		}
 		augmented := strings.Replace(string(manifest),
-			"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n",
-			"  github:\n    label: \"GitHub\"\n    includes: [\".github/**\"]\n  extra:\n    label: \"Extra\"\n    includes: [\"extra.txt\"]\n", 1)
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n",
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n  service_name:\n    label: \"Service name\"\n    type: string\n", 1)
 		if augmented == string(manifest) {
 			t.Fatal("could not splice the fixture manifest")
 		}
 		if err := os.WriteFile(filepath.Join(repoDir, ".turutan.yml"), []byte(augmented), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(repoDir, "extra.txt"), []byte("extra\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
 		if err := os.WriteFile(filepath.Join(repoDir, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		fresh := commitAll(t, repoDir, "offer extra profile")
+		fresh := commitAll(t, repoDir, "add service_name input")
 		var stdout strings.Builder
 		result, err := CheckUpdate(context.Background(), projectDir, checkUpdateOptions(&stdout))
 		if err != nil {
@@ -459,14 +456,11 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 		if !strings.Contains(stdout.String(), "update available") {
 			t.Errorf("stdout = %q, want the update-available line", stdout.String())
 		}
-		if !strings.Contains(stdout.String(), "turutan: template offers new profiles:") {
-			t.Errorf("stdout = %q, want the offers line", stdout.String())
-		}
-		if !strings.Contains(stdout.String(), "extra") {
-			t.Errorf("stdout = %q, want it to name the extra profile", stdout.String())
+		if !strings.Contains(stdout.String(), "turutan: template adds new inputs: service_name") {
+			t.Errorf("stdout = %q, want the new-inputs line", stdout.String())
 		}
 	})
-	t.Run("profile-only selection drift stays quiet on git", func(t *testing.T) {
+	t.Run("profiles-input-only drift stays quiet on git", func(t *testing.T) {
 		files := map[string]string{".turutan.yml": profileCLIManifest}
 		for name, content := range profileCLIFiles {
 			files[name] = content
@@ -479,7 +473,7 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			t.Fatalf("CheckUpdate error: %v", err)
 		}
 		if result.Available {
-			t.Error("Available = true, want false: enabling fewer profiles is not drift on git")
+			t.Error("Available = true, want false: stored profiles input is not drift on git")
 		}
 		if result.Old != sha || result.New != sha {
 			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, sha)
@@ -511,7 +505,7 @@ func TestCheckUpdateGitOffers(t *testing.T) {
 			t.Error("Available = false, want true: the commit still advanced despite the broken manifest")
 		}
 		if !strings.Contains(stdout.String(), "update available") {
-			t.Errorf("stdout = %q, want the update-available line without the profile report", stdout.String())
+			t.Errorf("stdout = %q, want the update-available line without the inputs report", stdout.String())
 		}
 	})
 }

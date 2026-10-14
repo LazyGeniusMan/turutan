@@ -72,7 +72,6 @@ func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags)
 		return err
 	}
 	source = resolveBootstrapSource(source, flags.template, dir)
-	profiles := resolveProfiles(cmd, viper.GetViper(), "")
 	return scaffold.Bootstrap(cmd.Context(), source, dir, scaffold.Options{
 		NonInteractive: appCfg.nonInteractive,
 		Force:          flags.force,
@@ -80,7 +79,6 @@ func runBootstrap(cmd *cobra.Command, source, dir string, flags *bootstrapFlags)
 		Ref:            flags.ref,
 		Subpath:        flags.subpath,
 		DataFile:       flags.dataFile,
-		Profiles:       profiles,
 		Defaults:       flags.defaults,
 		AllowHooks:     flags.allowHooks,
 		Skip:           skip,

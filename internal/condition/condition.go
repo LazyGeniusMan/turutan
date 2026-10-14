@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package condition evaluates text/template boolean predicates shared by
-// file conditionals, conditional inputs, and profile diffs. It lives apart
+// file conditionals, conditional inputs, and input diffs. It lives apart
 // from internal/template so internal/config reuses the same funcs without
 // an import cycle.
 // ~keep

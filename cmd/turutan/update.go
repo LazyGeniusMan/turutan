@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
@@ -19,8 +18,6 @@ type updateFlags struct {
 	dataFile   string
 	defaults   bool
 	allowHooks bool
-	enable     []string
-	disable    []string
 	preview    bool
 }
 
@@ -43,9 +40,7 @@ Run 'turutan diff' before 'turutan update' to review pending drift.`,
 	cmd.Flags().StringVar(&flags.dataFile, "data-file", "", "overlay stored data from a YAML/JSON file (see go doc text/template for data/dot terms)")
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed project_name when stored data lack it")
 	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared migrations")
-	cmd.Flags().StringSliceVar(&flags.enable, "enable", nil, "enable template profiles (repeatable or comma-separated)")
-	cmd.Flags().StringSliceVar(&flags.disable, "disable", nil, "disable template profiles (repeatable or comma-separated)")
-	cmd.Flags().BoolVar(&flags.preview, "preview", false, "print the per-profile file plan without writing")
+	cmd.Flags().BoolVar(&flags.preview, "preview", false, "print the per-path file plan without writing")
 	return cmd
 }
 
@@ -57,17 +52,13 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 			return err
 		}
 	}
-	profiles := resolveProfiles(cmd, viper.GetViper(), ".")
 	_, err := scaffold.Update(cmd.Context(), ".", scaffold.UpdateOptions{
 		Ref:            flags.ref,
 		Conflict:       conflict,
 		Force:          flags.force,
 		DataFile:       flags.dataFile,
-		Profiles:       profiles,
 		Defaults:       flags.defaults,
 		AllowHooks:     flags.allowHooks,
-		Enable:         flags.enable,
-		Disable:        flags.disable,
 		Preview:        flags.preview,
 		NonInteractive: appCfg.nonInteractive,
 		Engine:         version,

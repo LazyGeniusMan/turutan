@@ -17,6 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/filter"
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
@@ -60,13 +61,11 @@ func LoadDataFile(path string) (map[string]any, error) {
 		if err := json.Unmarshal(raw, &data); err != nil {
 			return nil, fmt.Errorf("parsing data file %q: %w", path, err)
 		}
-		delete(data, "profiles")
 		return data, nil
 	}
 	if err := yaml.Unmarshal(raw, &data); err != nil {
 		return nil, fmt.Errorf("parsing data file %q: %w", path, err)
 	}
-	delete(data, "profiles")
 	return data, nil
 }
 
@@ -82,7 +81,6 @@ func seedData(target string, opts Options) (map[string]any, error) {
 		}
 		maps.Copy(data, fileData)
 	}
-	delete(data, "profiles")
 	return data, nil
 }
 
@@ -128,7 +126,6 @@ func normalizeDataWithManifest(data map[string]any, manifest *config.Manifest) {
 		}
 		data[key] = normalizeArrayValue(val)
 	}
-	delete(data, "profiles")
 }
 
 func isArrayInput(def config.ManifestInput) bool {
@@ -221,28 +218,6 @@ func splitDedupeList(s string) []string {
 		out = append(out, trimmed)
 	}
 	return out
-}
-
-func splitProfilesValue(ids []string) []string {
-	var out []string
-	for _, id := range ids {
-		for _, part := range strings.Split(id, ",") {
-			trimmed := strings.TrimSpace(part)
-			if trimmed == "" {
-				continue
-			}
-			out = append(out, trimmed)
-		}
-	}
-	return out
-}
-
-func normalizeProfilesSelection(ids []string) []string {
-	expanded := splitProfilesValue(ids)
-	if len(expanded) == 0 {
-		expanded = append([]string{}, config.DefaultProfiles...)
-	}
-	return config.NormalizeProfiles(expanded)
 }
 
 func inputOrder(manifest *config.Manifest) []string {
@@ -530,30 +505,55 @@ func manifestConditionals(manifest *config.Manifest) []template.Conditional {
 	}
 	conds := make([]template.Conditional, 0, len(manifest.Conditionals))
 	for _, c := range manifest.Conditionals {
-		conds = append(conds, template.Conditional{If: c.If, Includes: c.Includes, Excludes: c.Excludes})
+		conds = append(conds, template.Conditional{If: c.If, Includes: c.Includes, Excludes: c.Excludes, Preserves: c.Preserves})
 	}
 	return conds
 }
 
-func profileIncludeFunc(manifest *config.Manifest, profiles []string) func(string) (bool, error) {
-	if manifest == nil || len(manifest.Profiles) == 0 {
-		return nil
-	}
-	enabled := config.NormalizeProfiles(splitProfilesValue(profiles))
-	return func(slash string) (bool, error) {
-		return manifest.IsIncluded(slash, enabled)
-	}
-}
-
-// renderDataView exposes native profiles as read-only dot `.profiles`
-// alongside input keys. See `go doc text/template` for data, dot, action,
-// pipeline, variable, and function terms.
+// renderDataView exposes input keys as dot data for templates, defaulting
+// dot `.profiles` to an empty list when no profiles input was answered.
+// See `go doc text/template` for data, dot, action, pipeline, variable,
+// and function terms.
 // ~keep
-func renderDataView(data map[string]any, profiles []string) map[string]any {
+func renderDataView(data map[string]any) map[string]any {
 	view := make(map[string]any, len(data)+1)
 	maps.Copy(view, data)
-	view["profiles"] = config.NormalizeProfiles(splitProfilesValue(profiles))
+	if _, ok := view["profiles"]; !ok {
+		view["profiles"] = []any{}
+	}
 	return view
+}
+
+// preservedGlobs reports the preserves union for data: the root preserves
+// plus the preserves of every conditional whose `if` evaluates true.
+// Sync paths treat union-preserved paths as "only sync if not exists yet
+// in target": keep local content, record its hash, never overwrite, never
+// delete when present, and hide them from diff noise.
+// ~keep
+func preservedGlobs(data map[string]any, manifest *config.Manifest) ([]string, error) {
+	if manifest == nil {
+		return nil, nil
+	}
+	active, err := template.ActivePreserves(renderDataView(data), manifestConditionals(manifest))
+	if err != nil {
+		return nil, err
+	}
+	return append(append([]string{}, manifest.Preserves...), active...), nil
+}
+
+// isPreservedPath reports whether slash matches the preserves union.
+// ~keep
+func isPreservedPath(slash string, manifest *config.Manifest, activePreserves []string) (bool, error) {
+	var globs []string
+	if manifest != nil {
+		globs = append(globs, manifest.Preserves...)
+	}
+	globs = append(globs, activePreserves...)
+	preserved, err := filter.MatchAny(globs, slash)
+	if err != nil {
+		return false, fmt.Errorf("matching preserves globs: %w", err)
+	}
+	return preserved, nil
 }
 
 // ShouldAskInput reports whether input key must be prompted, evaluating its

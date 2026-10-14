@@ -5,7 +5,7 @@ license: MIT-0
 license-files: [LICENSE]
 doc-files: [README.md]
 conflict: inline
-ignore:
+excludes:
   - "**/.git/**"
   - "**/node_modules/**"
   - ".config/turutan/state.json"
@@ -14,8 +14,153 @@ ignore:
   - ".config/ai-rulez/.generated-manifest*.json"
   - ".turutan.yml"
   - ".turutan.yaml"
-preserve:
+preserves:
   - "**/*.local.*"
+  - ".config/mise/config.custom.toml"
+  - ".config/ai-rulez/config.custom.toml"
+  - ".config/ai-rulez/domains/custom/**"
+  - ".config/fnox.toml"
+  - ".config/hk/custom.pkl"
+  - ".gitignore"
+conditionals:
+  - if: '{{contains .profiles "ai"}}'
+    includes:
+      - ".config/ai-rulez/config.toml"
+      - ".config/ai-rulez/config.ai.toml"
+      - ".config/ai-rulez/domains/core/**"
+      - ".config/ai-rulez/domains/ai/**"
+      - ".config/basemind/**"
+      - ".uncomment.toml"
+      - ".config/mise/config.ai.toml"
+      - ".config/updatecli/mise-ai.yaml"
+      - ".config/hk/ai.pkl"
+  - if: '{{contains .profiles "c"}}'
+    includes:
+      - ".config/mise/config.c.toml"
+      - ".config/ai-rulez/config.c.toml"
+      - ".config/ai-rulez/domains/c/**"
+      - ".config/hk/c.pkl"
+  - if: '{{contains .profiles "cloudflare"}}'
+    includes:
+      - ".config/mise/config.cloudflare.toml"
+      - ".config/ai-rulez/config.cloudflare.toml"
+      - ".config/ai-rulez/domains/cloudflare/**"
+      - ".config/hk/cloudflare.pkl"
+  - if: '{{contains .profiles "cpp"}}'
+    includes:
+      - ".config/mise/config.cpp.toml"
+      - ".config/ai-rulez/config.cpp.toml"
+      - ".config/ai-rulez/domains/cpp/**"
+      - ".config/hk/cpp.pkl"
+  - if: '{{contains .profiles "csharp"}}'
+    includes:
+      - ".config/mise/config.csharp.toml"
+      - ".config/ai-rulez/config.csharp.toml"
+      - ".config/ai-rulez/domains/csharp/**"
+      - ".config/hk/csharp.pkl"
+  - if: '{{contains .profiles "docker"}}'
+    includes:
+      - ".config/mise/config.docker.toml"
+      - ".config/ai-rulez/config.docker.toml"
+      - ".config/ai-rulez/domains/docker/**"
+      - ".config/ai-rulez/domains/yml/**"
+      - ".config/hk/docker.pkl"
+  - if: '{{contains .profiles "elixir"}}'
+    includes:
+      - ".config/mise/config.elixir.toml"
+      - ".config/ai-rulez/config.elixir.toml"
+      - ".config/ai-rulez/domains/elixir/**"
+      - ".config/hk/elixir.pkl"
+  - if: '{{contains .profiles "github"}}'
+    includes:
+      - ".github/**"
+      - ".github/jactionlint.yaml"
+      - ".config/mise/config.github.toml"
+      - ".config/ai-rulez/config.github.toml"
+      - ".config/ai-rulez/domains/github/**"
+      - ".config/ai-rulez/domains/yml/**"
+      - ".config/ryl.toml"
+      - ".config/updatecli/github-actions.yaml"
+      - ".config/updatecli/mise-github.yaml"
+      - ".config/hk/github.pkl"
+  - if: '{{contains .profiles "gitlab"}}'
+    includes:
+      - ".config/mise/config.gitlab.toml"
+      - ".config/ai-rulez/config.gitlab.toml"
+      - ".config/ai-rulez/domains/gitlab/**"
+      - ".config/hk/gitlab.pkl"
+  - if: '{{contains .profiles "go"}}'
+    includes:
+      - ".golangci.yml"
+      - ".config/golangci-lint/**"
+      - ".config/goreleaser.yml"
+      - ".config/mise/config.go.toml"
+      - ".config/ai-rulez/config.go.toml"
+      - ".config/ai-rulez/domains/go/**"
+      - ".config/updatecli/go-version.yaml"
+      - ".config/updatecli/mise-go.yaml"
+      - ".config/hk/go.pkl"
+  - if: '{{contains .profiles "java"}}'
+    includes:
+      - ".config/mise/config.java.toml"
+      - ".config/ai-rulez/config.java.toml"
+      - ".config/ai-rulez/domains/java/**"
+      - ".config/hk/java.pkl"
+  - if: '{{contains .profiles "kubernetes"}}'
+    includes:
+      - ".config/mise/config.kubernetes.toml"
+      - ".config/ai-rulez/config.kubernetes.toml"
+      - ".config/ai-rulez/domains/kubernetes/**"
+      - ".config/ai-rulez/domains/yml/**"
+      - ".config/hk/kubernetes.pkl"
+  - if: '{{contains .profiles "php"}}'
+    includes:
+      - ".config/mise/config.php.toml"
+      - ".config/ai-rulez/config.php.toml"
+      - ".config/ai-rulez/domains/php/**"
+      - ".config/hk/php.pkl"
+  - if: '{{contains .profiles "python"}}'
+    includes:
+      - ".config/mise/config.python.toml"
+      - ".config/ai-rulez/config.python.toml"
+      - ".config/ai-rulez/domains/python/**"
+      - ".config/hk/python.pkl"
+  - if: '{{contains .profiles "r"}}'
+    includes:
+      - ".config/mise/config.r.toml"
+      - ".config/ai-rulez/config.r.toml"
+      - ".config/ai-rulez/domains/r/**"
+      - ".config/hk/r.pkl"
+  - if: '{{contains .profiles "ruby"}}'
+    includes:
+      - ".config/mise/config.ruby.toml"
+      - ".config/ai-rulez/config.ruby.toml"
+      - ".config/ai-rulez/domains/ruby/**"
+      - ".config/hk/ruby.pkl"
+  - if: '{{contains .profiles "rust"}}'
+    includes:
+      - ".config/mise/config.rust.toml"
+      - ".config/ai-rulez/config.rust.toml"
+      - ".config/ai-rulez/domains/rust/**"
+      - ".config/hk/rust.pkl"
+  - if: '{{contains .profiles "rust-polygot"}}'
+    includes:
+      - ".config/mise/config.rust-polygot.toml"
+      - ".config/ai-rulez/config.rust-polygot.toml"
+      - ".config/ai-rulez/domains/rust-polygot/**"
+      - ".config/hk/rust-polygot.pkl"
+  - if: '{{contains .profiles "typescript"}}'
+    includes:
+      - ".config/mise/config.typescript.toml"
+      - ".config/ai-rulez/config.typescript.toml"
+      - ".config/ai-rulez/domains/typescript/**"
+      - ".config/hk/typescript.pkl"
+  - if: '{{contains .profiles "typst"}}'
+    includes:
+      - ".config/mise/config.typst.toml"
+      - ".config/ai-rulez/config.typst.toml"
+      - ".config/ai-rulez/domains/typst/**"
+      - ".config/hk/typst.pkl"
 inputs:
   project_name:
     label: "Project Name"
@@ -25,6 +170,11 @@ inputs:
     label: "Project Description"
     type: string
     default: "This project is generated by turutan"
+  profiles:
+    label: "Profiles"
+    type: array
+    default: []
+    help: "Feature sets enabled per project"
   ai_agents:
     label: "AI Agents"
     if: '{{contains .profiles "ai"}}'
@@ -86,171 +236,3 @@ inputs:
       - "zoocode"
       - "okf"
       - "llms-txt"
-profiles:
-  ai:
-    label: "AI"
-    includes:
-      - ".config/ai-rulez/config.toml"
-      - ".config/ai-rulez/config.ai.toml"
-      - ".config/ai-rulez/domains/core/**"
-      - ".config/ai-rulez/domains/ai/**"
-      - ".config/basemind/**"
-      - ".uncomment.toml"
-      - ".config/mise/config.ai.toml"
-      - ".config/updatecli/mise-ai.yaml"
-      - ".config/hk/ai.pkl"
-  c:
-    label: "C"
-    includes:
-      - ".config/mise/config.c.toml"
-      - ".config/ai-rulez/config.c.toml"
-      - ".config/ai-rulez/domains/c/**"
-      - ".config/hk/c.pkl"
-  cloudflare:
-    label: "Cloudflare"
-    includes:
-      - ".config/mise/config.cloudflare.toml"
-      - ".config/ai-rulez/config.cloudflare.toml"
-      - ".config/ai-rulez/domains/cloudflare/**"
-      - ".config/hk/cloudflare.pkl"
-  cpp:
-    label: "C++"
-    includes:
-      - ".config/mise/config.cpp.toml"
-      - ".config/ai-rulez/config.cpp.toml"
-      - ".config/ai-rulez/domains/cpp/**"
-      - ".config/hk/cpp.pkl"
-  csharp:
-    label: "C#"
-    includes:
-      - ".config/mise/config.csharp.toml"
-      - ".config/ai-rulez/config.csharp.toml"
-      - ".config/ai-rulez/domains/csharp/**"
-      - ".config/hk/csharp.pkl"
-  custom:
-    label: "Custom — your overrides, never overwritten"
-    includes:
-      - ".config/mise/config.custom.toml"
-      - ".config/ai-rulez/config.custom.toml"
-      - ".config/ai-rulez/domains/custom/**"
-      - ".config/fnox.toml"
-      - ".config/hk/custom.pkl"
-      - ".gitignore"
-  docker:
-    label: "Docker"
-    includes:
-      - ".config/mise/config.docker.toml"
-      - ".config/ai-rulez/config.docker.toml"
-      - ".config/ai-rulez/domains/docker/**"
-      - ".config/ai-rulez/domains/yml/**"
-      - ".config/hk/docker.pkl"
-  elixir:
-    label: "Elixir"
-    includes:
-      - ".config/mise/config.elixir.toml"
-      - ".config/ai-rulez/config.elixir.toml"
-      - ".config/ai-rulez/domains/elixir/**"
-      - ".config/hk/elixir.pkl"
-  github:
-    label: "GitHub"
-    includes:
-      - ".github/**"
-      - ".github/jactionlint.yaml"
-      - ".config/mise/config.github.toml"
-      - ".config/ai-rulez/config.github.toml"
-      - ".config/ai-rulez/domains/github/**"
-      - ".config/ai-rulez/domains/yml/**"
-      - ".config/ryl.toml"
-      - ".config/updatecli/github-actions.yaml"
-      - ".config/updatecli/mise-github.yaml"
-      - ".config/hk/github.pkl"
-  gitlab:
-    label: "GitLab"
-    includes:
-      - ".config/mise/config.gitlab.toml"
-      - ".config/ai-rulez/config.gitlab.toml"
-      - ".config/ai-rulez/domains/gitlab/**"
-      - ".config/hk/gitlab.pkl"
-  go:
-    label: "Go"
-    includes:
-      - ".golangci.yml"
-      - ".config/golangci-lint/**"
-      - ".config/goreleaser.yml"
-      - ".config/mise/config.go.toml"
-      - ".config/ai-rulez/config.go.toml"
-      - ".config/ai-rulez/domains/go/**"
-      - ".config/updatecli/go-version.yaml"
-      - ".config/updatecli/mise-go.yaml"
-      - ".config/hk/go.pkl"
-  java:
-    label: "Java"
-    includes:
-      - ".config/mise/config.java.toml"
-      - ".config/ai-rulez/config.java.toml"
-      - ".config/ai-rulez/domains/java/**"
-      - ".config/hk/java.pkl"
-  kubernetes:
-    label: "Kubernetes"
-    includes:
-      - ".config/mise/config.kubernetes.toml"
-      - ".config/ai-rulez/config.kubernetes.toml"
-      - ".config/ai-rulez/domains/kubernetes/**"
-      - ".config/ai-rulez/domains/yml/**"
-      - ".config/hk/kubernetes.pkl"
-  php:
-    label: "PHP"
-    includes:
-      - ".config/mise/config.php.toml"
-      - ".config/ai-rulez/config.php.toml"
-      - ".config/ai-rulez/domains/php/**"
-      - ".config/hk/php.pkl"
-  python:
-    label: "Python"
-    includes:
-      - ".config/mise/config.python.toml"
-      - ".config/ai-rulez/config.python.toml"
-      - ".config/ai-rulez/domains/python/**"
-      - ".config/hk/python.pkl"
-  r:
-    label: "R"
-    includes:
-      - ".config/mise/config.r.toml"
-      - ".config/ai-rulez/config.r.toml"
-      - ".config/ai-rulez/domains/r/**"
-      - ".config/hk/r.pkl"
-  ruby:
-    label: "Ruby"
-    includes:
-      - ".config/mise/config.ruby.toml"
-      - ".config/ai-rulez/config.ruby.toml"
-      - ".config/ai-rulez/domains/ruby/**"
-      - ".config/hk/ruby.pkl"
-  rust:
-    label: "Rust"
-    includes:
-      - ".config/mise/config.rust.toml"
-      - ".config/ai-rulez/config.rust.toml"
-      - ".config/ai-rulez/domains/rust/**"
-      - ".config/hk/rust.pkl"
-  rust-polygot:
-    label: "Rust Polygot"
-    includes:
-      - ".config/mise/config.rust-polygot.toml"
-      - ".config/ai-rulez/config.rust-polygot.toml"
-      - ".config/ai-rulez/domains/rust-polygot/**"
-      - ".config/hk/rust-polygot.pkl"
-  typescript:
-    label: "TypeScript"
-    includes:
-      - ".config/mise/config.typescript.toml"
-      - ".config/ai-rulez/config.typescript.toml"
-      - ".config/ai-rulez/domains/typescript/**"
-      - ".config/hk/typescript.pkl"
-  typst:
-    label: "Typst"
-    includes:
-      - ".config/mise/config.typst.toml"
-      - ".config/ai-rulez/config.typst.toml"
-      - ".config/ai-rulez/domains/typst/**"
-      - ".config/hk/typst.pkl"

@@ -137,7 +137,7 @@ func TestComputeDiff(t *testing.T) {
 		}
 	})
 	t.Run("ignored paths are skipped", func(t *testing.T) {
-		src := makeTemplate(t, "ignore:\n  - \"gen/**\"\n", map[string]string{"gen/out.txt": "v1\n", "hello.txt": "v1\n"})
+		src := makeTemplate(t, "excludes:\n  - \"gen/**\"\n", map[string]string{"gen/out.txt": "v1\n", "hello.txt": "v1\n"})
 		projectDir := bootstrapProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)

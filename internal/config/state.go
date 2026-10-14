@@ -54,7 +54,6 @@ type State struct {
 	ResolvedCommit  string         `json:"resolvedCommit"`
 	Data            map[string]any `json:"data,omitempty"`
 	DataSchema      int            `json:"dataSchema,omitempty"`
-	Profiles        []string       `json:"profiles,omitempty"`
 	Skip            []string       `json:"skip,omitempty"`
 	Conflict        string         `json:"conflict,omitempty"`
 	Engine          string         `json:"engine"`
@@ -62,10 +61,9 @@ type State struct {
 }
 
 type LockFile struct {
-	Path    string `json:"path"`
-	SHA256  string `json:"sha256"`
-	Bytes   int64  `json:"bytes"`
-	Profile string `json:"profile,omitempty"`
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Bytes  int64  `json:"bytes"`
 }
 
 type Lock struct {
@@ -99,37 +97,26 @@ type ManifestInput struct {
 }
 
 type ManifestConditional struct {
-	If       string   `yaml:"if"`
-	Includes []string `yaml:"includes"`
-	Excludes []string `yaml:"excludes"`
-}
-
-// ManifestProfile describes one installable feature slice of a template.
-// Templates use profiles to ship optional file sets behind a single opt-in
-// id so projects only render the variants selected via native profiles.
-// ~keep
-type ManifestProfile struct {
-	Label       string   `yaml:"label"`
-	Description string   `yaml:"description"`
-	Includes    []string `yaml:"includes"`
-	Excludes    []string `yaml:"excludes"`
+	If        string   `yaml:"if"`
+	Includes  []string `yaml:"includes"`
+	Excludes  []string `yaml:"excludes"`
+	Preserves []string `yaml:"preserves"`
 }
 
 type Manifest struct {
-	Source       string                     `yaml:"source"`
-	MinEngine    string                     `yaml:"min-engine"`
-	License      string                     `yaml:"license"`
-	LicenseFiles []string                   `yaml:"license-files"`
-	DocFiles     []string                   `yaml:"doc-files"`
-	Ignore       []string                   `yaml:"ignore"`
-	Preserve     []string                   `yaml:"preserve"`
-	Conflict     string                     `yaml:"conflict"`
-	Hooks        ManifestHooks              `yaml:"hooks"`
-	Migrations   []ManifestMigration        `yaml:"migrations"`
-	Inputs       map[string]ManifestInput   `yaml:"inputs"`
-	Conditionals []ManifestConditional      `yaml:"conditionals"`
-	Renames      map[string]string          `yaml:"renames"`
-	Profiles     map[string]ManifestProfile `yaml:"profiles"`
+	Source       string                   `yaml:"source"`
+	MinEngine    string                   `yaml:"min-engine"`
+	License      string                   `yaml:"license"`
+	LicenseFiles []string                 `yaml:"license-files"`
+	DocFiles     []string                 `yaml:"doc-files"`
+	Excludes     []string                 `yaml:"excludes"`
+	Preserves    []string                 `yaml:"preserves"`
+	Conflict     string                   `yaml:"conflict"`
+	Hooks        ManifestHooks            `yaml:"hooks"`
+	Migrations   []ManifestMigration      `yaml:"migrations"`
+	Inputs       map[string]ManifestInput `yaml:"inputs"`
+	Conditionals []ManifestConditional    `yaml:"conditionals"`
+	Renames      map[string]string        `yaml:"renames"`
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
@@ -288,19 +275,16 @@ func ValidateManifest(manifest *Manifest) error {
 	default:
 		return fmt.Errorf("invalid manifest: unknown conflict mode %q", manifest.Conflict)
 	}
-	if err := filter.ValidateGlobs(manifest.Ignore); err != nil {
-		return fmt.Errorf("invalid manifest: bad ignore pattern: %w", err)
+	if err := filter.ValidateGlobs(manifest.Excludes); err != nil {
+		return fmt.Errorf("invalid manifest: bad excludes pattern: %w", err)
 	}
-	if err := filter.ValidateGlobs(manifest.Preserve); err != nil {
-		return fmt.Errorf("invalid manifest: bad preserve pattern: %w", err)
+	if err := filter.ValidateGlobs(manifest.Preserves); err != nil {
+		return fmt.Errorf("invalid manifest: bad preserves pattern: %w", err)
 	}
 	if err := validateManifestInputs(manifest.Inputs); err != nil {
 		return err
 	}
 	if err := validateManifestConditionals(manifest.Conditionals); err != nil {
-		return err
-	}
-	if err := validateManifestProfiles(manifest.Profiles); err != nil {
 		return err
 	}
 	if err := validateManifestRenames(manifest.Renames); err != nil {
@@ -438,9 +422,9 @@ func validateManifestConditionals(conds []ManifestConditional) error {
 		if strings.TrimSpace(cond.If) == "" {
 			return fmt.Errorf("invalid manifest: conditionals[%d] is missing if", i)
 		}
-		if len(cond.Includes) == 0 && len(cond.Excludes) == 0 {
+		if len(cond.Includes) == 0 && len(cond.Excludes) == 0 && len(cond.Preserves) == 0 {
 			return fmt.Errorf(
-				"invalid manifest: conditionals[%d] has neither includes nor excludes: "+"must list at least one pattern", i)
+				"invalid manifest: conditionals[%d] has neither includes nor excludes nor preserves: "+"must list at least one pattern", i)
 		}
 		if err := filter.ValidateGlobs(cond.Includes); err != nil {
 			return fmt.Errorf("invalid manifest: bad conditional includes pattern: %w", err)
@@ -448,20 +432,8 @@ func validateManifestConditionals(conds []ManifestConditional) error {
 		if err := filter.ValidateGlobs(cond.Excludes); err != nil {
 			return fmt.Errorf("invalid manifest: bad conditional excludes pattern: %w", err)
 		}
-	}
-	return nil
-}
-
-func validateManifestProfiles(profiles map[string]ManifestProfile) error {
-	for id, profile := range profiles {
-		if id == "" {
-			return fmt.Errorf("invalid manifest: profile with empty id")
-		}
-		if err := filter.ValidateGlobs(profile.Includes); err != nil {
-			return fmt.Errorf("invalid manifest: bad profile %q includes pattern: %w", id, err)
-		}
-		if err := filter.ValidateGlobs(profile.Excludes); err != nil {
-			return fmt.Errorf("invalid manifest: bad profile %q excludes pattern: %w", id, err)
+		if err := filter.ValidateGlobs(cond.Preserves); err != nil {
+			return fmt.Errorf("invalid manifest: bad conditional preserves pattern: %w", err)
 		}
 	}
 	return nil
@@ -492,161 +464,38 @@ func validateMigrationFrom(from string) error {
 	return fmt.Errorf("bad migration from %q: must be a semver range or a 7-64 hex commit prefix", from)
 }
 
-// NormalizeProfiles deduplicates ids (keeping the first occurrence),
-// forces core first and custom last, injecting both when missing.
-// Bootstrap and update funnel every profiles value through it so
-// the always-enabled pair stays ordered no matter the selection path.
+// DiffInputs compares stored data against a new manifest and reports input
+// keys the project has never answered. Sync uses it to ask only for
+// genuinely new inputs instead of replaying every prompt on each sync.
 // ~keep
-func NormalizeProfiles(ids []string) []string {
-	seen := map[string]bool{}
-	rest := []string{}
-	for _, id := range ids {
-		trimmed := strings.TrimSpace(id)
-		if trimmed == "" || seen[trimmed] {
-			continue
-		}
-		seen[trimmed] = true
-		if trimmed == "core" || trimmed == "custom" {
-			continue
-		}
-		rest = append(rest, trimmed)
-	}
-	return append(append([]string{"core"}, rest...), "custom")
-}
-
-// DefaultProfiles is the code default when no selection layer provides one.
-// The manifest offers the full set via its profiles map; core stays implicit
-// and NormalizeProfiles injects the always-enabled pair.
-// ~keep
-var DefaultProfiles = []string{"core", "ai"}
-
-// GetProfiles reports the profiles recorded for this project.
-// State carries Profiles natively; there is no fallback into data.
-// ~keep
-func (s *State) GetProfiles() []string {
-	if s == nil || len(s.Profiles) == 0 {
+func DiffInputs(oldData map[string]any, newManifest *Manifest) []string {
+	if newManifest == nil {
 		return nil
 	}
-	out := make([]string, len(s.Profiles))
-	copy(out, s.Profiles)
-	return out
-}
-
-// ProfilesForPath reports which of the given profiles include path.
-// Update and diff output attribute drift to profiles, so they need the
-// owning ids without reimplementing manifest glob matching each time.
-// ~keep
-func ProfilesForPath(manifest *Manifest, profiles []string, path string) []string {
-	if manifest == nil || len(manifest.Profiles) == 0 {
-		return nil
+	view := make(map[string]any, len(oldData)+1)
+	for key, val := range oldData {
+		view[key] = val
 	}
-	ids := profiles
-	if ids == nil {
-		ids = make([]string, 0, len(manifest.Profiles))
-		for id := range manifest.Profiles {
-			ids = append(ids, id)
-		}
+	if _, ok := view["profiles"]; !ok {
+		view["profiles"] = []any{}
 	}
-	slash := filter.ToSlash(path)
-	var matched []string
-	for _, id := range ids {
-		profile, ok := manifest.Profiles[id]
-		if !ok {
-			continue
-		}
-		for _, pattern := range profile.Includes {
-			ok, err := filter.Match(pattern, slash)
-			if err != nil {
+	var out []string
+	for key, def := range newManifest.Inputs {
+		if oldData != nil {
+			if _, ok := oldData[key]; ok {
 				continue
 			}
-			if ok {
-				matched = append(matched, id)
-				break
+		}
+		if strings.TrimSpace(def.If) != "" {
+			ask, err := condition.EvaluatePredicate(def.If, view)
+			if err == nil && !ask {
+				continue
 			}
 		}
+		out = append(out, key)
 	}
-	slices.Sort(matched)
-	return matched
-}
-
-// IsIncluded reports the layered profile decision for path.
-// Files matched by zero includes across all profiles are core-always and
-// return true. Otherwise start excluded and apply each enabled profile in
-// order: its includes in order set included, then its excludes in order
-// clear it. Only enabled profiles participate; disabled ones are ignored.
-// Both slash and its .tmpl-stripped form are matched so template sources
-// and rendered destinations share one decision.
-// ~keep
-func (m *Manifest) IsIncluded(path string, enabled []string) (bool, error) {
-	if m == nil || len(m.Profiles) == 0 {
-		return true, nil
-	}
-	slash := filter.ToSlash(path)
-	stripped := strings.TrimSuffix(slash, ".tmpl")
-	matchBoth := func(pattern string) (bool, error) {
-		ok, err := filter.Match(pattern, slash)
-		if err != nil {
-			return false, err
-		}
-		if ok {
-			return true, nil
-		}
-		if stripped != slash {
-			ok, err := filter.Match(pattern, stripped)
-			if err != nil {
-				return false, err
-			}
-			return ok, nil
-		}
-		return false, nil
-	}
-	core := true
-	for _, profile := range m.Profiles {
-		for _, pattern := range profile.Includes {
-			matched, err := matchBoth(pattern)
-			if err != nil {
-				return false, err
-			}
-			if matched {
-				core = false
-				break
-			}
-		}
-		if !core {
-			break
-		}
-	}
-	if core {
-		return true, nil
-	}
-	included := false
-	for _, id := range enabled {
-		profile, ok := m.Profiles[id]
-		if !ok {
-			continue
-		}
-		for _, pattern := range profile.Includes {
-			matched, err := matchBoth(pattern)
-			if err != nil {
-				return false, err
-			}
-			if matched {
-				included = true
-				break
-			}
-		}
-		for _, pattern := range profile.Excludes {
-			matched, err := matchBoth(pattern)
-			if err != nil {
-				return false, err
-			}
-			if matched {
-				included = false
-				break
-			}
-		}
-	}
-	return included, nil
+	slices.Sort(out)
+	return out
 }
 
 // ResolveRenames follows the manifest renames chain for an old path.
@@ -671,89 +520,6 @@ func ResolveRenames(old string, renames map[string]string) string {
 		cur = next
 	}
 	return cur
-}
-
-// ProfileDiff summarizes how the profile and input surface changed.
-// Update uses it to ask only for genuinely new inputs instead of
-// replaying every prompt on each template sync.
-// ~keep
-type ProfileDiff struct {
-	Added     []string
-	Removed   []string
-	NewInputs []string
-}
-
-// DiffProfiles compares previously selected profiles and stored data against a new manifest.
-// Sync needs the added/removed profile ids plus unseen input keys to decide
-// what to ask and what to warn about before re-rendering.
-// ~keep
-func DiffProfiles(oldProfiles []string, oldData map[string]any, newManifest *Manifest) ProfileDiff {
-	var diff ProfileDiff
-	if newManifest == nil {
-		return diff
-	}
-	oldSet := map[string]bool{}
-	for _, id := range oldProfiles {
-		oldSet[strings.TrimSpace(id)] = true
-	}
-	newSet := map[string]bool{"core": true, "custom": true}
-	for id := range newManifest.Profiles {
-		newSet[id] = true
-	}
-	for id := range newSet {
-		if id == "custom" || oldSet[id] {
-			continue
-		}
-		diff.Added = append(diff.Added, id)
-	}
-	for id := range oldSet {
-		if id == "custom" || newSet[id] {
-			continue
-		}
-		diff.Removed = append(diff.Removed, id)
-	}
-	slices.Sort(diff.Added)
-	slices.Sort(diff.Removed)
-	view := inputPredicateView(oldData, oldProfiles)
-	for key, def := range newManifest.Inputs {
-		if oldData != nil {
-			if _, ok := oldData[key]; ok {
-				continue
-			}
-		}
-		if strings.TrimSpace(def.If) != "" {
-			ask, err := condition.EvaluatePredicate(def.If, view)
-			if err == nil && !ask {
-				continue
-			}
-		}
-		diff.NewInputs = append(diff.NewInputs, key)
-	}
-	slices.Sort(diff.NewInputs)
-	return diff
-}
-
-func inputPredicateView(data map[string]any, profiles []string) map[string]any {
-	view := make(map[string]any, len(data)+1)
-	for key, val := range data {
-		view[key] = val
-	}
-	view["profiles"] = NormalizeProfiles(splitProfileIDs(profiles))
-	return view
-}
-
-func splitProfileIDs(ids []string) []string {
-	var out []string
-	for _, id := range ids {
-		for _, part := range strings.Split(id, ",") {
-			trimmed := strings.TrimSpace(part)
-			if trimmed == "" {
-				continue
-			}
-			out = append(out, trimmed)
-		}
-	}
-	return out
 }
 
 func writeJSON(dir, name string, value any) error {

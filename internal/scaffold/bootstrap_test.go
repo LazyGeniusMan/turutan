@@ -15,6 +15,7 @@ import (
 
 	turutanconfig "github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
+	turutantemplate "github.com/LazyGeniusMan/turutan/internal/template"
 	git "github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing/object"
@@ -40,7 +41,7 @@ func makeTemplate(t *testing.T, manifest string, files map[string]string) string
 	return dir
 }
 
-const basicManifest = "source: \"test\"\nmin-engine: \">=0.1.0\"\nconflict: inline\nignore:\n  - \"ignored/**\"\npreserve:\n  - \"keep.txt\"\n"
+const basicManifest = "source: \"test\"\nmin-engine: \">=0.1.0\"\nconflict: inline\nexcludes:\n  - \"ignored/**\"\npreserves:\n  - \"keep.txt\"\n"
 
 var basicFiles = map[string]string{
 	"go.mod.tmpl":      "module {{.project_name}}\n\ngo 1.26\n",
@@ -57,6 +58,24 @@ func testOptions(stdout *strings.Builder) Options {
 		Stderr:         &strings.Builder{},
 		Stdin:          strings.NewReader(""),
 	}
+}
+
+func profilesDataFile(t *testing.T, profiles ...string) string {
+	t.Helper()
+	var b strings.Builder
+	if len(profiles) == 0 {
+		b.WriteString("profiles: []\n")
+	} else {
+		b.WriteString("profiles:\n")
+	}
+	for _, id := range profiles {
+		b.WriteString("  - \"" + id + "\"\n")
+	}
+	path := filepath.Join(t.TempDir(), "profiles.yml")
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestBootstrapFilesystem(t *testing.T) {
@@ -343,8 +362,8 @@ func TestBootstrapDefaultTemplateOffline(t *testing.T) {
 		if !strings.Contains(string(got), "# myapp") {
 			t.Errorf("README.md = %q, want defaulted project name", got)
 		}
-		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
-			t.Errorf("config.go.toml present with default profiles, want it skipped (go not in defaults)")
+		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); err != nil {
+			t.Errorf("config.go.toml missing, want conditional files to render: %v", err)
 		}
 	})
 }
@@ -359,43 +378,31 @@ func TestBootstrapLayeredYmlShared(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.Profiles = append([]string{}, profiles...)
+		opts.DataFile = profilesDataFile(t, profiles...)
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
 		return target
 	}
 	ymlKeep := filepath.Join(".config", "ai-rulez", "domains", "yml", ".gitkeep")
-	t.Run("github owner suffices", func(t *testing.T) {
-		target := bootstrapWith(t, "core", "ai", "go", "github")
+	for _, profiles := range [][]string{
+		{"ai", "go", "github"},
+		{"docker"},
+		{"kubernetes"},
+		{},
+	} {
+		target := bootstrapWith(t, profiles...)
 		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
-			t.Errorf("yml .gitkeep missing with github enabled: %v", err)
+			t.Errorf("yml .gitkeep missing with profiles %v: %v", profiles, err)
 		}
-	})
-	t.Run("docker-only copies shared yml", func(t *testing.T) {
-		target := bootstrapWith(t, "core", "docker")
-		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
-			t.Errorf("yml .gitkeep missing with docker-only: %v", err)
-		}
-	})
-	t.Run("k8s-only copies shared yml", func(t *testing.T) {
-		target := bootstrapWith(t, "core", "kubernetes")
-		if _, err := os.Stat(filepath.Join(target, ymlKeep)); err != nil {
-			t.Errorf("yml .gitkeep missing with k8s-only: %v", err)
-		}
-	})
-	t.Run("no yml owner drops shared file", func(t *testing.T) {
-		target := bootstrapWith(t, "core", "ai", "go")
-		if _, err := os.Stat(filepath.Join(target, ymlKeep)); !os.IsNotExist(err) {
-			t.Errorf("yml .gitkeep present without a yml owner, want it dropped")
-		}
-	})
+	}
 }
 
 func TestBootstrapLayeredIncludesExcludes(t *testing.T) {
-	const manifest = "profiles:\n" +
-		"  a:\n    label: A\n    includes: [\"foo/**\"]\n    excludes: [\"foo/bar/**\"]\n" +
-		"  b:\n    label: B\n    includes: [\"foo/bar/baz/**\"]\n    excludes: [\"foo/bar/baz/2.md\"]\n"
+	const manifest = "excludes:\n  - \"foo/bar/**\"\n" +
+		"conditionals:\n" +
+		"  - if: \"true\"\n    includes: [\"foo/**\"]\n" +
+		"  - if: '{{contains .profiles \"b\"}}'\n    includes: [\"foo/bar/baz/**\"]\n    excludes: [\"foo/bar/baz/2.md\"]\n"
 	files := map[string]string{
 		"foo/bar/baz/1.md": "one\n",
 		"foo/bar/baz/2.md": "two\n",
@@ -405,7 +412,7 @@ func TestBootstrapLayeredIncludesExcludes(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
-	opts.Profiles = []string{"core", "a", "b"}
+	opts.DataFile = profilesDataFile(t, "b")
 	if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 		t.Fatalf("Bootstrap error: %v", err)
 	}
@@ -512,7 +519,7 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.Profiles = []string{"core", "ai", "github", "go"}
+		opts.DataFile = profilesDataFile(t, "ai", "github", "go")
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -554,7 +561,6 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.DataFile = dataFile
-		opts.Profiles = []string{"core, ai"}
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -586,7 +592,7 @@ func TestBootstrapConditionalProfiles(t *testing.T) {
 		src := makeTemplate(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("demo\ndesc\n"), Profiles: []string{"core", "go"}}
+		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("demo\ndesc\n"), DataFile: profilesDataFile(t, "go")}
 		if err := Bootstrap(context.Background(), src, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -623,8 +629,8 @@ func TestBootstrapDefaultREADME(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(target, "README.md")); !os.IsNotExist(err) {
 			t.Error("README.md still at project root, want it planted under .config/turutan only")
 		}
-		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); !os.IsNotExist(err) {
-			t.Errorf("config.go.toml present with default profiles, want it skipped (go not in defaults)")
+		if _, err := os.Stat(filepath.Join(target, ".config", "mise", "config.go.toml")); err != nil {
+			t.Errorf("config.go.toml missing, want conditional files to render: %v", err)
 		}
 	})
 }
@@ -644,9 +650,15 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
-		enabled := turutanconfig.NormalizeProfiles(turutanconfig.DefaultProfiles)
+		layers, err := turutantemplate.EvaluateConditionalIncludes(
+			map[string]any{"profiles": []any{}},
+			manifestConditionals(manifest),
+		)
+		if err != nil {
+			t.Fatalf("EvaluateConditionalIncludes error: %v", err)
+		}
 		shouldRender := func(slash string) bool {
-			ok, err := manifest.IsIncluded(slash, enabled)
+			ok, err := turutantemplate.IsIncluded(manifest.Excludes, layers, slash)
 			if err != nil {
 				return false
 			}
@@ -709,10 +721,10 @@ func TestBootstrapDefaultFileSet(t *testing.T) {
 			if !shouldRender(slash) && !shouldRender(filepath.ToSlash(rel)) {
 				return nil
 			}
-			if ignored, err := filter.MatchAny(manifest.Ignore, slash); err == nil && ignored {
+			if ignored, err := filter.MatchAny(manifest.Excludes, slash); err == nil && ignored {
 				return nil
 			}
-			if ignored, err := filter.MatchAny(manifest.Ignore, filepath.ToSlash(rel)); err == nil && ignored {
+			if ignored, err := filter.MatchAny(manifest.Excludes, filepath.ToSlash(rel)); err == nil && ignored {
 				return nil
 			}
 			if plantedSrc[slash] || plantedSrc[filepath.ToSlash(rel)] {
@@ -914,10 +926,18 @@ func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
 		}
 		return decoded.Recommendations
 	}
-	writeDataFile := func(t *testing.T) string {
+	writeDataFile := func(t *testing.T, profiles ...string) string {
 		t.Helper()
+		var b strings.Builder
+		b.WriteString("project_name: exttest\n")
+		if len(profiles) > 0 {
+			b.WriteString("profiles:\n")
+			for _, id := range profiles {
+				b.WriteString("  - \"" + id + "\"\n")
+			}
+		}
 		path := filepath.Join(t.TempDir(), "data.yml")
-		if err := os.WriteFile(path, []byte("project_name: exttest\n"), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		return path
@@ -944,8 +964,7 @@ func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.DataFile = writeDataFile(t)
-		opts.Profiles = []string{"core", "go", "python", "typescript"}
+		opts.DataFile = writeDataFile(t, "go", "python", "typescript")
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}
@@ -960,8 +979,7 @@ func TestBootstrapDefaultExtensionsConditional(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		opts.DataFile = writeDataFile(t)
-		opts.Profiles = []string{"core", "go"}
+		opts.DataFile = writeDataFile(t, "go")
 		if err := Bootstrap(context.Background(), fixture, target, opts); err != nil {
 			t.Fatalf("Bootstrap error: %v", err)
 		}

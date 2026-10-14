@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 	"github.com/LazyGeniusMan/turutan/internal/tui"
@@ -34,15 +33,13 @@ func newDiffCmd() *cobra.Command {
 
 func runDiff(cmd *cobra.Command, ref string, noPager bool, what string) error {
 	stdout := cmd.OutOrStdout()
-	profiles := resolveProfiles(cmd, viper.GetViper(), ".")
 	diffs, err := scaffold.ComputeDiff(cmd.Context(), ".", scaffold.DiffOptions{
-		Ref:      ref,
-		Engine:   version,
-		NoColor:  appCfg.noColor,
-		Verbose:  appCfg.verbose,
-		What:     what,
-		Profiles: profiles,
-		Stderr:   cmd.ErrOrStderr(),
+		Ref:     ref,
+		Engine:  version,
+		NoColor: appCfg.noColor,
+		Verbose: appCfg.verbose,
+		What:    what,
+		Stderr:  cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return err

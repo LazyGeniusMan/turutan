@@ -30,25 +30,25 @@ func TestShouldAskInput(t *testing.T) {
 	t.Parallel()
 	manifest := conditionalInputManifest()
 	tests := []struct {
-		name     string
-		key      string
-		data     map[string]any
-		profiles []string
-		want     bool
-		wantErr  string
+		name    string
+		key     string
+		data    map[string]any
+		want    bool
+		wantErr string
 	}{
-		{name: "no if asks", key: "project_name", data: map[string]any{}, profiles: []string{"core"}, want: true},
-		{name: "ai in asks", key: "ai_agents", data: map[string]any{}, profiles: []string{"core", "ai"}, want: true},
-		{name: "ai out skips", key: "ai_agents", data: map[string]any{}, profiles: []string{"core", "go"}, want: false},
-		{name: "data eq true asks", key: "nick", data: map[string]any{"project_name": "x"}, profiles: []string{"core"}, want: true},
-		{name: "data eq false skips", key: "nick", data: map[string]any{"project_name": "y"}, profiles: []string{"core"}, want: false},
-		{name: "missing dep retries", key: "nick", data: map[string]any{}, profiles: []string{"core"}, wantErr: `no entry for key "project_name"`},
-		{name: "unknown key asks", key: "absent", data: map[string]any{}, profiles: []string{"core"}, want: true},
+		{name: "no if asks", key: "project_name", data: map[string]any{"profiles": []string{"core"}}, want: true},
+		{name: "ai in asks", key: "ai_agents", data: map[string]any{"profiles": []string{"core", "ai"}}, want: true},
+		{name: "ai out skips", key: "ai_agents", data: map[string]any{"profiles": []string{"core", "go"}}, want: false},
+		{name: "absent profiles skips", key: "ai_agents", data: map[string]any{}, want: false},
+		{name: "data eq true asks", key: "nick", data: map[string]any{"project_name": "x", "profiles": []string{"core"}}, want: true},
+		{name: "data eq false skips", key: "nick", data: map[string]any{"project_name": "y", "profiles": []string{"core"}}, want: false},
+		{name: "missing dep retries", key: "nick", data: map[string]any{"profiles": []string{"core"}}, wantErr: `no entry for key "project_name"`},
+		{name: "unknown key asks", key: "absent", data: map[string]any{"profiles": []string{"core"}}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := ShouldAskInput(manifest, tt.key, renderDataView(tt.data, tt.profiles))
+			got, err := ShouldAskInput(manifest, tt.key, renderDataView(tt.data))
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("ShouldAskInput error = %v, want containing %q", err, tt.wantErr)
@@ -77,7 +77,7 @@ func TestShouldAskInput(t *testing.T) {
 		bad := &config.Manifest{Inputs: map[string]config.ManifestInput{
 			"x": {If: `{{contains .profiles}`},
 		}}
-		if _, err := ShouldAskInput(bad, "x", renderDataView(map[string]any{}, []string{"core"})); err == nil {
+		if _, err := ShouldAskInput(bad, "x", renderDataView(map[string]any{})); err == nil {
 			t.Error("ShouldAskInput with bad predicate succeeded, want error")
 		}
 	})
@@ -86,7 +86,7 @@ func TestShouldAskInput(t *testing.T) {
 		bad := &config.Manifest{Inputs: map[string]config.ManifestInput{
 			"x": {If: `{{.project_name}}`},
 		}}
-		view := renderDataView(map[string]any{"project_name": "demo"}, []string{"core"})
+		view := renderDataView(map[string]any{"project_name": "demo"})
 		if _, err := ShouldAskInput(bad, "x", view); err == nil ||
 			!strings.Contains(err.Error(), "not a boolean") {
 			t.Errorf("ShouldAskInput non-bool error = %v, want not-a-boolean", err)
@@ -99,10 +99,10 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 	t.Run("skipped takes default with no prompt", func(t *testing.T) {
 		t.Parallel()
 		manifest := conditionalInputManifest()
-		data := map[string]any{"project_name": "demo"}
+		data := map[string]any{"project_name": "demo", "profiles": []string{"core", "go"}}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("")
-		if err := ensureInputValues(data, manifest, []string{"core", "go"}, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 || got[0] != "opencode" || got[1] != "pi" {
@@ -121,10 +121,10 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 	t.Run("asked prompts as before", func(t *testing.T) {
 		t.Parallel()
 		manifest := conditionalInputManifest()
-		data := map[string]any{"project_name": "demo"}
+		data := map[string]any{"project_name": "demo", "profiles": []string{"core", "ai"}}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("\n\n")
-		if err := ensureInputValues(data, manifest, []string{"core", "ai"}, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, manifest, false, false, &stdout, stdin, "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
@@ -142,7 +142,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		data := map[string]any{}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("x\nhello\n")
-		if err := ensureInputValues(data, forwardRefManifest(), []string{"core"}, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, forwardRefManifest(), false, false, &stdout, stdin, "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if data["zzz_base"] != "x" || data["aaa_dep"] != "hello" {
@@ -154,7 +154,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		data := map[string]any{}
 		var stdout bytes.Buffer
 		stdin := strings.NewReader("y\n")
-		if err := ensureInputValues(data, forwardRefManifest(), []string{"core"}, false, false, &stdout, stdin, "bootstrap"); err != nil {
+		if err := ensureInputValues(data, forwardRefManifest(), false, false, &stdout, stdin, "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v", err)
 		}
 		if data["zzz_base"] != "y" {
@@ -166,9 +166,9 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 	})
 	t.Run("non-interactive skipped takes default", func(t *testing.T) {
 		t.Parallel()
-		data := map[string]any{"project_name": "demo"}
+		data := map[string]any{"project_name": "demo", "profiles": []string{"core", "go"}}
 		var stdout bytes.Buffer
-		if err := ensureInputValues(data, conditionalInputManifest(), []string{"core", "go"}, true, false, &stdout, strings.NewReader(""), "bootstrap"); err != nil {
+		if err := ensureInputValues(data, conditionalInputManifest(), true, false, &stdout, strings.NewReader(""), "bootstrap"); err != nil {
 			t.Fatalf("ensureInputValues error = %v, want skipped default without missing-value error", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
@@ -177,9 +177,9 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 	})
 	t.Run("non-interactive asked still errors", func(t *testing.T) {
 		t.Parallel()
-		data := map[string]any{}
+		data := map[string]any{"profiles": []string{"core", "ai"}}
 		var stdout bytes.Buffer
-		err := ensureInputValues(data, conditionalInputManifest(), []string{"core", "ai"}, true, false, &stdout, strings.NewReader(""), "bootstrap")
+		err := ensureInputValues(data, conditionalInputManifest(), true, false, &stdout, strings.NewReader(""), "bootstrap")
 		if err == nil || !strings.Contains(err.Error(), "missing value") {
 			t.Errorf("ensureInputValues error = %v, want missing value", err)
 		}
@@ -191,7 +191,7 @@ func TestEnsureInputValuesConditional(t *testing.T) {
 		}}
 		data := map[string]any{"project_name": "demo"}
 		var stdout bytes.Buffer
-		if err := ensureInputValues(data, bad, []string{"core"}, false, false, &stdout, strings.NewReader(""), "bootstrap"); err == nil {
+		if err := ensureInputValues(data, bad, false, false, &stdout, strings.NewReader(""), "bootstrap"); err == nil {
 			t.Error("ensureInputValues with non-bool predicate succeeded, want error")
 		}
 	})
@@ -201,9 +201,9 @@ func TestInputMissingKeyConditional(t *testing.T) {
 	t.Parallel()
 	t.Run("skipped with default fills without prompt", func(t *testing.T) {
 		t.Parallel()
-		data := map[string]any{"project_name": "demo"}
+		data := map[string]any{"project_name": "demo", "profiles": []string{"core"}}
 		var stdout bytes.Buffer
-		if err := inputMissingKey(data, conditionalInputManifest(), []string{"core"}, &stdout, strings.NewReader(""), "ai_agents"); err != nil {
+		if err := inputMissingKey(data, conditionalInputManifest(), &stdout, strings.NewReader(""), "ai_agents"); err != nil {
 			t.Fatalf("inputMissingKey error = %v", err)
 		}
 		if got, ok := data["ai_agents"].([]string); !ok || len(got) != 2 {
@@ -212,9 +212,9 @@ func TestInputMissingKeyConditional(t *testing.T) {
 	})
 	t.Run("skipped without default errors", func(t *testing.T) {
 		t.Parallel()
-		data := map[string]any{"project_name": "demo"}
+		data := map[string]any{"project_name": "demo", "profiles": []string{"core"}}
 		var stdout bytes.Buffer
-		err := inputMissingKey(data, conditionalInputManifest(), []string{"core"}, &stdout, strings.NewReader(""), "opt_no_default")
+		err := inputMissingKey(data, conditionalInputManifest(), &stdout, strings.NewReader(""), "opt_no_default")
 		if err == nil || !strings.Contains(err.Error(), "skipped by its `if`") {
 			t.Errorf("inputMissingKey error = %v, want skipped-condition error", err)
 		}
@@ -223,7 +223,7 @@ func TestInputMissingKeyConditional(t *testing.T) {
 		t.Parallel()
 		data := map[string]any{"project_name": "x"}
 		var stdout bytes.Buffer
-		if err := inputMissingKey(data, conditionalInputManifest(), []string{"core"}, &stdout, strings.NewReader("bob\n"), "nick"); err != nil {
+		if err := inputMissingKey(data, conditionalInputManifest(), &stdout, strings.NewReader("bob\n"), "nick"); err != nil {
 			t.Fatalf("inputMissingKey error = %v", err)
 		}
 		if data["nick"] != "bob" {
@@ -234,7 +234,7 @@ func TestInputMissingKeyConditional(t *testing.T) {
 		t.Parallel()
 		data := map[string]any{}
 		var stdout bytes.Buffer
-		if err := inputMissingKey(data, forwardRefManifest(), []string{"core"}, &stdout, strings.NewReader("x\nval\n"), "aaa_dep"); err != nil {
+		if err := inputMissingKey(data, forwardRefManifest(), &stdout, strings.NewReader("x\nval\n"), "aaa_dep"); err != nil {
 			t.Fatalf("inputMissingKey error = %v", err)
 		}
 		if data["zzz_base"] != "x" || data["aaa_dep"] != "val" {

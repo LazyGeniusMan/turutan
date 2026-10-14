@@ -20,12 +20,11 @@ import (
 const shortSHALen = 12
 
 type CheckUpdateOptions struct {
-	Ref      string
-	Engine   string
-	Verbose  bool
-	Profiles []string
-	Stdout   io.Writer
-	Stderr   io.Writer
+	Ref     string
+	Engine  string
+	Verbose bool
+	Stdout  io.Writer
+	Stderr  io.Writer
 }
 
 type CheckUpdateResult struct {
@@ -52,17 +51,13 @@ func CheckUpdate(
 		ref = opts.Ref
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: stored ref %q commit %s", state.RequestedRef, state.ResolvedCommit)
-	effectiveProfiles := state.GetProfiles()
-	if len(splitProfilesValue(opts.Profiles)) > 0 {
-		effectiveProfiles = splitProfilesValue(opts.Profiles)
-	}
-	fresh, changed, profiles, err := reresolve(
-		ctx, state, effectiveProfiles, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
+	fresh, changed, newInputs, err := reresolve(
+		ctx, state, ref, projectDir, opts.Engine, opts.Stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
-	if changed && len(profiles.Added)+len(profiles.Removed)+len(profiles.NewInputs) == 0 {
-		profiles = fetchProfileDiff(ctx, projectDir, state, effectiveProfiles, ref, opts.Engine, opts.Stderr, opts.Verbose)
+	if changed && len(newInputs) == 0 {
+		newInputs = fetchNewInputs(ctx, projectDir, state, ref, opts.Engine, opts.Stderr, opts.Verbose)
 	}
 	vlogf(opts.Stderr, opts.Verbose, "check-update: fresh commit %s available %v", fresh, changed)
 	result := &CheckUpdateResult{Old: state.ResolvedCommit, New: fresh, Available: changed}
@@ -75,122 +70,111 @@ func CheckUpdate(
 			return nil, err
 		}
 	}
-	if err := reportProfileDiff(stdout, profiles); err != nil {
-		return nil, err
-	}
+	reportNewInputs(stdout, newInputs)
 	return result, nil
 }
 
 func reresolve(
 	ctx context.Context,
 	state *config.State,
-	effectiveProfiles []string,
 	ref, projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
-) (string, bool, config.ProfileDiff, error) {
+) (string, bool, []string, error) {
 	switch template.SourceKind(state.SourceKind) {
 	case template.KindRemoteGit:
 		src, err := parseStoredSource(projectDir, state.Template)
 		if err != nil {
-			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check-update: %w", err)
 		}
 		sha, err := git.ResolveRemoteRef(ctx, src.Repo, ref)
 		if err != nil {
-			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check-update: %w", err)
 		}
-		return sha, sha != state.ResolvedCommit, config.ProfileDiff{}, nil
+		return sha, sha != state.ResolvedCommit, nil, nil
 	case template.KindLocalGit:
 		src, err := parseStoredSource(projectDir, state.Template)
 		if err != nil {
-			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check-update: %w", err)
 		}
 		sha, err := git.ResolveLocal(src.Repo, ref)
 		if err != nil {
-			return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: %w", err)
+			return "", false, nil, fmt.Errorf("check-update: %w", err)
 		}
-		return sha, sha != state.ResolvedCommit, config.ProfileDiff{}, nil
+		return sha, sha != state.ResolvedCommit, nil, nil
 	case template.KindFilesystem:
-		return reresolveFilesystem(ctx, state, effectiveProfiles, ref, projectDir, engine, stderr, verbose)
+		return reresolveFilesystem(ctx, state, ref, projectDir, engine, stderr, verbose)
 	default:
-		return "", false, config.ProfileDiff{}, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
+		return "", false, nil, fmt.Errorf("check-update: unknown sourceKind %q", state.SourceKind)
 	}
 }
 
-func fetchProfileDiff(
+func fetchNewInputs(
 	ctx context.Context,
 	projectDir string,
 	state *config.State,
-	effectiveProfiles []string,
 	ref, engine string,
 	stderr io.Writer,
 	verbose bool,
-) config.ProfileDiff {
+) []string {
 	src, err := parseStoredSource(projectDir, state.Template)
 	if err != nil {
-		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
-		return config.ProfileDiff{}
+		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		return nil
 	}
 	if ref != "" {
 		src.RequestedRef = ref
 	}
 	fetched, err := template.Fetch(ctx, src)
 	if err != nil {
-		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
-		return config.ProfileDiff{}
+		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		return nil
 	}
 	if fetched.Cleanup != nil {
 		defer fetched.Cleanup()
 	}
 	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
 	if err != nil {
-		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
-		return config.ProfileDiff{}
+		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		return nil
 	}
 	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
-		vlogf(stderr, verbose, "check-update: skipping profile report: %v", err)
-		return config.ProfileDiff{}
+		vlogf(stderr, verbose, "check-update: skipping inputs report: %v", err)
+		return nil
 	}
-	_ = effectiveProfiles
-	profiles := state.GetProfiles()
-	if len(effectiveProfiles) > 0 {
-		profiles = effectiveProfiles
-	}
-	return relevantProfileDiff(manifest, config.DiffProfiles(profiles, state.Data, manifest))
+	return config.DiffInputs(state.Data, manifest)
 }
 
 func reresolveFilesystem(
 	ctx context.Context,
 	state *config.State,
-	effectiveProfiles []string,
 	ref, projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
-) (string, bool, config.ProfileDiff, error) {
+) (string, bool, []string, error) {
 	if ref != "" {
-		return "", false, config.ProfileDiff{}, fmt.Errorf(
+		return "", false, nil, fmt.Errorf(
 			"check-update: ref %q is not supported "+
 				"for filesystem sources",
 			ref)
 	}
 	lock, _, manifest, stage, err := prepareFilesystemReresolve(
-		ctx, state, effectiveProfiles, projectDir, engine, stderr, verbose)
+		ctx, state, projectDir, engine, stderr, verbose)
 	if err != nil {
-		return "", false, config.ProfileDiff{}, err
+		return "", false, nil, err
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
-	profiles := relevantProfileDiff(manifest, config.DiffProfiles(effectiveProfiles, state.Data, manifest))
+	newInputs := config.DiffInputs(state.Data, manifest)
 	fresh, changed, err := compareFilesystemHashes(projectDir, stage, manifest, state, lock)
 	if err != nil {
-		return "", false, config.ProfileDiff{}, err
+		return "", false, nil, err
 	}
-	return fresh, changed, profiles, nil
+	return fresh, changed, newInputs, nil
 }
 
 func prepareFilesystemReresolve(
 	ctx context.Context,
 	state *config.State,
-	effectiveProfiles []string,
 	projectDir, engine string,
 	stderr io.Writer,
 	verbose bool,
@@ -228,13 +212,8 @@ func prepareFilesystemReresolve(
 	}
 	seedMissingDefaults(data, manifest)
 	normalizeDataWithManifest(data, manifest)
-	profiles := state.GetProfiles()
-	if len(effectiveProfiles) > 0 {
-		profiles = effectiveProfiles
-	}
-	profiles = config.NormalizeProfiles(splitProfilesValue(profiles))
-	view := renderDataView(data, profiles)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifestConditionals(manifest), profileIncludeFunc(manifest, profiles)); err != nil {
+	view := renderDataView(data)
+	if err := template.RenderDirWithConditionals(fetched.Dir, stage, view, manifest.Excludes, manifestConditionals(manifest)); err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, nil, nil, "", fmt.Errorf("check-update: %w", err)
 	}
@@ -255,20 +234,24 @@ func compareFilesystemHashes(
 	state *config.State,
 	lock *config.Lock,
 ) (string, bool, error) {
-	rendered, err := renderedEntries(stage, manifest, state, false)
+	preserved, err := preservedGlobs(state.Data, manifest)
 	if err != nil {
 		return "", false, fmt.Errorf("check-update: %w", err)
 	}
-	display, err := renderedEntries(stage, manifest, state, true)
+	rendered, err := renderedEntries(stage, manifest, state, preserved, false)
 	if err != nil {
 		return "", false, fmt.Errorf("check-update: %w", err)
 	}
-	locked, err := filterLockEntries(lock.Files, manifest, state)
+	display, err := renderedEntries(stage, manifest, state, preserved, true)
 	if err != nil {
 		return "", false, fmt.Errorf("check-update: %w", err)
 	}
-	rendered = withoutPresentCustom(projectDir, rendered, manifest, state)
-	locked = withoutPresentCustom(projectDir, locked, manifest, state)
+	locked, err := filterLockEntries(lock.Files, manifest, state, preserved)
+	if err != nil {
+		return "", false, fmt.Errorf("check-update: %w", err)
+	}
+	rendered = withoutPresentPreserved(projectDir, rendered, manifest, state, preserved)
+	locked = withoutPresentPreserved(projectDir, locked, manifest, state, preserved)
 	changed := config.ComputeManifestHash(rendered) !=
 		config.ComputeManifestHash(locked)
 	if !changed {
@@ -279,18 +262,20 @@ func compareFilesystemHashes(
 	return fresh, true, nil
 }
 
-func withoutPresentCustom(
+func withoutPresentPreserved(
 	projectDir string,
 	files []config.LockFile,
 	manifest *config.Manifest,
 	state *config.State,
+	preserved []string,
 ) []config.LockFile {
 	if state == nil {
 		return files
 	}
 	kept := files[:0]
 	for _, file := range files {
-		if customOwned(manifest, state.GetProfiles(), file.Path) && filePresent(projectDir, file.Path) {
+		owned, err := userOwned(file.Path, manifest, state, preserved)
+		if err == nil && owned && filePresent(projectDir, file.Path) {
 			continue
 		}
 		kept = append(kept, file)
@@ -302,11 +287,13 @@ func renderedEntries(
 	stage string,
 	manifest *config.Manifest,
 	state *config.State,
+	preserved []string,
 	includeUserOwned bool,
 ) ([]config.LockFile, error) {
 	var files []config.LockFile
 	collector := &renderCollector{
 		stage: stage, manifest: manifest, state: state,
+		preserved:        preserved,
 		includeUserOwned: includeUserOwned,
 	}
 	err := filepath.WalkDir(stage, func(path string, d fs.DirEntry, err error) error {
@@ -322,6 +309,7 @@ type renderCollector struct {
 	stage            string
 	manifest         *config.Manifest
 	state            *config.State
+	preserved        []string
 	includeUserOwned bool
 }
 
@@ -371,17 +359,10 @@ func skipStagedEntry(d fs.DirEntry) (bool, error) {
 }
 
 func (c *renderCollector) skipListed(slash string) (bool, error) {
-	ignored, err := filter.MatchAny(c.manifest.Ignore, slash)
-	if err != nil {
-		return false, fmt.Errorf("matching ignore globs: %w", err)
-	}
-	if ignored {
-		return true, nil
-	}
 	if c.includeUserOwned {
 		return false, nil
 	}
-	owned, err := userOwned(slash, c.manifest, c.state)
+	owned, err := userOwned(slash, c.manifest, c.state, c.preserved)
 	if err != nil {
 		return false, err
 	}
@@ -392,10 +373,11 @@ func filterLockEntries(
 	files []config.LockFile,
 	manifest *config.Manifest,
 	state *config.State,
+	preserved []string,
 ) ([]config.LockFile, error) {
 	var kept []config.LockFile
 	for _, file := range files {
-		owned, err := userOwned(file.Path, manifest, state)
+		owned, err := userOwned(file.Path, manifest, state, preserved)
 		if err != nil {
 			return nil, err
 		}
@@ -406,12 +388,12 @@ func filterLockEntries(
 	return kept, nil
 }
 
-func userOwned(slash string, manifest *config.Manifest, state *config.State) (bool, error) {
-	preserved, err := filter.MatchAny(manifest.Preserve, slash)
+func userOwned(slash string, manifest *config.Manifest, state *config.State, activePreserves []string) (bool, error) {
+	kept, err := isPreservedPath(slash, manifest, activePreserves)
 	if err != nil {
-		return false, fmt.Errorf("matching preserve globs: %w", err)
+		return false, err
 	}
-	if preserved {
+	if kept {
 		return true, nil
 	}
 	skipped, err := filter.MatchAny(state.Skip, slash)

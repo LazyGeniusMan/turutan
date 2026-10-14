@@ -1,2 +1,2 @@
-env = [{{ range $i, $p := .profiles }}{{ if $i }}, {{ end }}"{{ $p }}"{{ end }}]
+env = ["core"{{range .profiles}}, "{{.}}"{{end}}, "custom"]
 auto_env = true

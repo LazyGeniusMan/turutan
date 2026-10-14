@@ -18,47 +18,38 @@ func conditionalInputsManifest() *Manifest {
 	}}
 }
 
-func TestDiffProfilesConditionalInputs(t *testing.T) {
+func TestDiffInputsConditionalInputs(t *testing.T) {
 	t.Parallel()
 	manifest := conditionalInputsManifest()
 	t.Run("ai absent excludes agents", func(t *testing.T) {
 		t.Parallel()
-		diff := DiffProfiles([]string{"core", "go"}, map[string]any{"project_name": "demo"}, manifest)
-		if slices.Contains(diff.NewInputs, "ai_agents") {
-			t.Errorf("NewInputs = %v, want no skipped ai_agents", diff.NewInputs)
-		}
-		if slices.Contains(diff.NewInputs, "nick") {
-			t.Errorf("NewInputs = %v, want no skipped nick", diff.NewInputs)
-		}
-		if len(diff.NewInputs) != 0 {
-			t.Errorf("NewInputs = %v, want empty", diff.NewInputs)
+		data := map[string]any{"project_name": "demo", "profiles": []string{"go"}}
+		if got := DiffInputs(data, manifest); len(got) != 0 {
+			t.Errorf("DiffInputs = %v, want empty", got)
 		}
 	})
 	t.Run("ai present includes agents only", func(t *testing.T) {
 		t.Parallel()
-		diff := DiffProfiles([]string{"core", "ai"}, map[string]any{"project_name": "demo"}, manifest)
-		if !slices.Equal(diff.NewInputs, []string{"ai_agents"}) {
-			t.Errorf("NewInputs = %v, want [ai_agents]", diff.NewInputs)
+		data := map[string]any{"project_name": "demo", "profiles": []string{"ai"}}
+		if got := DiffInputs(data, manifest); !slices.Equal(got, []string{"ai_agents"}) {
+			t.Errorf("DiffInputs = %v, want [ai_agents]", got)
 		}
 	})
 	t.Run("data predicate true includes nick", func(t *testing.T) {
 		t.Parallel()
-		diff := DiffProfiles([]string{"core"}, map[string]any{"project_name": "x"}, manifest)
-		if !slices.Equal(diff.NewInputs, []string{"nick"}) {
-			t.Errorf("NewInputs = %v, want [nick]", diff.NewInputs)
+		data := map[string]any{"project_name": "x", "profiles": []string{}}
+		if got := DiffInputs(data, manifest); !slices.Equal(got, []string{"nick"}) {
+			t.Errorf("DiffInputs = %v, want [nick]", got)
 		}
 	})
 	t.Run("undecidable predicate stays included", func(t *testing.T) {
 		t.Parallel()
-		diff := DiffProfiles([]string{"core"}, nil, manifest)
-		if !slices.Contains(diff.NewInputs, "project_name") {
-			t.Errorf("NewInputs = %v, want project_name", diff.NewInputs)
-		}
-		if !slices.Contains(diff.NewInputs, "nick") {
-			t.Errorf("NewInputs = %v, want undecidable nick still reported", diff.NewInputs)
-		}
-		if slices.Contains(diff.NewInputs, "ai_agents") {
-			t.Errorf("NewInputs = %v, want no skipped ai_agents", diff.NewInputs)
+		if got := DiffInputs(nil, manifest); !slices.Contains(got, "project_name") {
+			t.Errorf("DiffInputs = %v, want project_name", got)
+		} else if !slices.Contains(got, "nick") {
+			t.Errorf("DiffInputs = %v, want undecidable nick still reported", got)
+		} else if slices.Contains(got, "ai_agents") {
+			t.Errorf("DiffInputs = %v, want no skipped ai_agents", got)
 		}
 	})
 }
@@ -92,18 +83,18 @@ func TestDefaultTemplateConditionalInputs(t *testing.T) {
 	if len(def.Options) == 0 {
 		t.Error("ai_agents lost options")
 	}
-	diff := DiffProfiles([]string{"core", "go"}, map[string]any{
-		"project_name": "demo", "ai_agents": []string{"opencode", "pi"},
+	stored := DiffInputs(map[string]any{
+		"project_name": "demo", "profiles": []string{"go"}, "ai_agents": []string{"opencode", "pi"},
 	}, got)
-	if slices.Contains(diff.NewInputs, "ai_agents") {
-		t.Errorf("NewInputs = %v, want stored agents kept without ai", diff.NewInputs)
+	if slices.Contains(stored, "ai_agents") {
+		t.Errorf("DiffInputs = %v, want stored agents kept without ai", stored)
 	}
-	fresh := DiffProfiles([]string{"core", "go"}, map[string]any{"project_name": "demo"}, got)
-	if slices.Contains(fresh.NewInputs, "ai_agents") {
-		t.Errorf("NewInputs = %v, want skipped agents excluded without ai", fresh.NewInputs)
+	fresh := DiffInputs(map[string]any{"project_name": "demo", "profiles": []string{"go"}}, got)
+	if slices.Contains(fresh, "ai_agents") {
+		t.Errorf("DiffInputs = %v, want skipped agents excluded without ai", fresh)
 	}
-	asked := DiffProfiles([]string{"core", "ai"}, map[string]any{"project_name": "demo"}, got)
-	if !slices.Contains(asked.NewInputs, "ai_agents") {
-		t.Errorf("NewInputs = %v, want agents reported with ai", asked.NewInputs)
+	asked := DiffInputs(map[string]any{"project_name": "demo", "profiles": []string{"ai"}}, got)
+	if !slices.Contains(asked, "ai_agents") {
+		t.Errorf("DiffInputs = %v, want agents reported with ai", asked)
 	}
 }
