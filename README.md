@@ -80,7 +80,8 @@ rebuild the pinned release in place, then re-check:
 ```sh
 mise run turutan:release  # registry release default same fs --force:
                           # archive templates/default/releases/<v>.tar.gz,
-                          # single-version manifest/<v>.json, index history updated
+                          # single-version manifest/<v>.json, index history updated;
+                          # also restores missing dogfood state/lock/base on fresh clones
 TURUTAN_TEMPLATE=local/default@<v> turutan diff --ref <v>
 ```
 
