@@ -19,33 +19,46 @@ mise run pre-push:all
 ```sh
 mise run pre-push:all   # release-style static binary with version ldflags
 
-# Scaffold from the built-in default (a remote-git source in this repo).
-turutan init git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=main ./myapp --defaults
-# Bare source resolves the same remote default; a local path works offline.
-turutan init ./templates/default ./myapp --defaults
+# Author a registry, scaffold a starter template, cut a release.
+turutan registry init --author "Jane Doe <jane@example.com>" --name acme
+turutan registry create foo
+turutan registry release foo minor fs
+# manifest: templates/foo/manifest/0.2.0.yml, index releases prepended.
+
+# Point a name at the registry (fs/http/s3/git/oci URIs accepted).
+turutan registry add acme ./registry-dir
+
+# Scaffold from a registry template (default turutan/default at latest).
+turutan init ./myapp --template acme/foo --defaults
+turutan init ./myapp --template acme/foo@0.2.0 --defaults  # pinned release
 
 cd myapp
 turutan check   # exit 0 up-to-date, 2 update available
-turutan diff           # exit 0 no drift, 2 drift found
-turutan update         # merge template changes (--conflict rej for .rej files)
-turutan state sync     # re-render hand-edited state.yml inputs at the pinned commit (no upstream check)
-turutan state input    # re-answer every input, then re-render at the pinned commit
-turutan create ./tpl   # scaffold a new template-authoring project
+turutan diff           # exit 0 no drift, 2 drift found (add --ref <version> to preview a release)
+turutan update         # merge the index-latest release (--ref <version> to pin, --conflict rej for .rej files)
+turutan state sync     # re-render hand-edited state.yml inputs at the pinned release (no upstream check)
+turutan state input    # re-answer every input, then re-render at the pinned release
 turutan version        # version/commit/date plus license notice
 ```
 
 ## Remote authentication
 
-Git transport credentials come from the environment only and are never
-logged. SSH remotes try `TURUTAN_SSH_KEY` (PEM content or key-file path),
-then `TURUTAN_SSH_PASSWORD`, then the ssh-agent; HTTPS remotes use
-`GITHUB_TOKEN` as `x-access-token` credentials when set. Host-key (`known_hosts`)
-and TLS verification is strict by default; `TURUTAN_INSECURE_SKIP_VERIFY=1`
-disables it with a loud warning (never in production).
+Registry credentials come from the environment only and are never
+logged. Per-registry overrides use `TURUTAN_REGISTRY_<NAME>_USER`,
+`_PASS`, `_TOKEN` and `_ENDPOINT`; scheme defaults cover S3-compatible
+(`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL`,
+`AWS_REGION`), git (`GITHUB_TOKEN`, `TURUTAN_SSH_KEY`) and OCI
+(`TURUTAN_OCI_USER`, `TURUTAN_OCI_PASSWORD`, `TURUTAN_OCI_TOKEN`).
+Host-key (`known_hosts`) and TLS verification is strict by default;
+`TURUTAN_INSECURE_SKIP_VERIFY=1` disables it with a loud warning
+(never in production).
 
 ## License
 
 Dual-licensed: the CLI and all engine code is Apache-2.0 (root `LICENSE`);
-the default template and files generated from it are MIT-0
-(`templates/default/LICENSE`; generated `.config/turutan/state.yml` records
-`templateLicense: "MIT-0"`).
+template content carries its own license: each release records the
+template `.turutan.yml` license, and generated
+`.config/turutan/state.yml` records it as `templateLicense`
+(e.g. `"MIT-0"`). The registry is the source of truth for templates —
+there is no bundled live template; author with
+`registry init/create/release`.

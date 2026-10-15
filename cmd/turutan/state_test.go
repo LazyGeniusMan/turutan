@@ -28,7 +28,7 @@ func TestStateCmdRegistered(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"create", "state", "init", "check", "diff", "update", "version"} {
+	for _, want := range []string{"state", "init", "check", "diff", "update", "registry", "version"} {
 		if !names[want] {
 			t.Errorf("subcommand %q missing from root", want)
 		}
@@ -100,15 +100,16 @@ func TestStateSyncCmd(t *testing.T) {
 	defer func() { appCfg = oldCfg }()
 
 	t.Run("sync re-renders hand-edited inputs", func(t *testing.T) {
-		src := writeTemplate(t, map[string]string{
+		_, regs, flag := makeCmdRegistry(t, "", map[string]string{
 			"greet.txt.tmpl": "hi {{.project_name}}\n",
 		})
+		useCmdRegistryConfig(t, regs)
 		dst := filepath.Join(t.TempDir(), "proj")
 		var initOut bytes.Buffer
 		initCmd := newInitCmd()
 		initCmd.SetOut(&initOut)
 		initCmd.SetErr(&bytes.Buffer{})
-		initCmd.SetArgs([]string{src, dst, "--defaults"})
+		initCmd.SetArgs([]string{"--template", flag, dst, "--defaults"})
 		if err := initCmd.Execute(); err != nil {
 			t.Fatalf("init error: %v", err)
 		}
@@ -138,7 +139,7 @@ func TestStateSyncCmd(t *testing.T) {
 		}
 	})
 	t.Run("invalid conflict mode fails", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		runInProject(t, dst)
 		cmd := newStateSyncCmd()
 		cmd.SetOut(&bytes.Buffer{})
@@ -172,18 +173,23 @@ func TestStateSyncCmd(t *testing.T) {
 	})
 }
 
-func TestCreateCmdRegistered(t *testing.T) {
-	t.Run("create scaffolds authoring project", func(t *testing.T) {
-		cmd := newCreateCmd()
-		cmd.SetOut(&bytes.Buffer{})
-		cmd.SetErr(&bytes.Buffer{})
-		dir := filepath.Join(t.TempDir(), "tpl")
-		cmd.SetArgs([]string{dir})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("create error: %v", err)
+func TestCreateCmdGone(t *testing.T) {
+	resetRootFlags(t)
+	isolateConfigCandidates(t)
+	cmd := newRootCmd(viper.New())
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("help error: %v", err)
+	}
+	if strings.Contains(stdout.String(), "create") {
+		t.Errorf("help mentions a create command, want it gone:\n%s", stdout.String())
+	}
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "create" {
+			t.Error("create subcommand still registered, want it removed")
 		}
-		if _, err := os.Stat(filepath.Join(dir, ".turutan.yml")); err != nil {
-			t.Errorf("create did not write .turutan.yml: %v", err)
-		}
-	})
+	}
 }

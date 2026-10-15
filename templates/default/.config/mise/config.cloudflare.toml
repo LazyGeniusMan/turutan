@@ -1,5 +1,0 @@
-[settings]
-npm.package_manager = "bun"
-
-[tools]
-"npm:cf" = { version = "v1", prerelease = true }

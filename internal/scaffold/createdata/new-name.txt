@@ -1,1 +1,0 @@
-Current name after rename (manifest `renames` maps old-name.txt here).

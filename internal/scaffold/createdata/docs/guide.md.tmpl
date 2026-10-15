@@ -1,7 +1,0 @@
-{{/* Rendered doc example: listed in doc-files by rendered name
-(docs/guide.md), planted after rendering. Uses range over .features. ~keep */ -}}
-# {{ .project_name }}
-
-{{ .project_description }}
-
-Features: {{ range $i, $f := .features }}{{ if $i }}, {{ end }}{{ $f }}{{ end }}

@@ -60,12 +60,12 @@ func TestMigrationEnvRedactsSecretsKeepsIdentity(t *testing.T) {
 }
 
 func TestMissingKeyTyped(t *testing.T) {
-	src := makeTemplate(
+	regs, ref := makeTestRegistry(
 		t, "", map[string]string{"f.txt.tmpl": "{{.absent_key}}\n"},
 	)
 	target := filepath.Join(t.TempDir(), "proj")
 	opts := testOptions(&strings.Builder{})
-	err := Init(context.Background(), src, target, opts)
+	err := Init(context.Background(), target, ref, regs, opts)
 	if err == nil {
 		t.Fatal("Init succeeded, want missing-key error")
 	}

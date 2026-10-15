@@ -269,36 +269,28 @@ func TestViperBindsCobraFlags(t *testing.T) {
 	})
 }
 
-func TestResolveInitSourceWithViper(t *testing.T) {
+func TestResolveInitTemplateLayers(t *testing.T) {
 	tests := []struct {
-		name        string
-		arg         string
-		flag        string
-		env         string
-		user        string
-		withProject bool
-		want        string
+		name string
+		flag string
+		env  string
+		user string
+		want string
 	}{
-		{name: "explicit arg wins over all", arg: "./a", flag: "./b", env: "./c", user: "./e", withProject: true, want: "./a"},
-		{name: "flag wins over env project user", flag: "./b", env: "./c", user: "./e", withProject: true, want: "./b"},
-		{name: "env wins over project and user", env: "./c", user: "./e", withProject: true, want: "./c"},
-		{name: "project wins over user", user: "./e", withProject: true, want: "./from-project"},
-		{name: "user config from isolated viper", user: "./e", want: "./e"},
-		{name: "empty means built-in default", want: ""},
+		{name: "flag wins over env and user", flag: "a/t@1.0.0", env: "b/u@1.0.0", user: "c/v@1.0.0", want: "a/t@1.0.0"},
+		{name: "env wins over user", env: "b/u@2.0.0", user: "c/v@1.0.0", want: "b/u@2.0.0"},
+		{name: "user config used when above empty", user: "c/v", want: "c/v"},
+		{name: "empty means turutan default", want: "turutan/default"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv(config.EnvTemplateOverride, tt.env)
-			v := viper.New()
-			if tt.user != "" {
-				v.Set(config.TemplateConfigKey, tt.user)
-			}
-			dir := t.TempDir()
-			if tt.withProject {
-				writeProjectState(t, dir, "./from-project")
-			}
-			if got := resolveInitSourceWithViper(v, tt.arg, tt.flag, dir); got != tt.want {
-				t.Errorf("source = %q, want %q", got, tt.want)
+			v := viper.GetViper()
+			v.Set(config.TemplateConfigKey, tt.user)
+			t.Cleanup(func() { v.Set(config.TemplateConfigKey, "") })
+			cmd := newInitCmd()
+			if got := resolveInitTemplate(cmd, tt.flag); got.String() != tt.want {
+				t.Errorf("template = %q, want %q", got.String(), tt.want)
 			}
 		})
 	}
@@ -306,10 +298,11 @@ func TestResolveInitSourceWithViper(t *testing.T) {
 
 func verboseTemplate(t *testing.T) string {
 	t.Helper()
-	return writeTemplate(t, map[string]string{
-		".turutan.yml": "min-engine: \">=0.1.0\"\n",
-		"go.mod.tmpl":  "module {{.project_name}}\n",
+	_, regs, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
+		"go.mod.tmpl": "module {{.project_name}}\n",
 	})
+	useCmdRegistryConfig(t, regs)
+	return flag
 }
 
 func TestVerboseInitLogs(t *testing.T) {
@@ -321,11 +314,11 @@ func TestVerboseInitLogs(t *testing.T) {
 	cmd.SetOut(&bytes.Buffer{})
 	var stderr bytes.Buffer
 	cmd.SetErr(&stderr)
-	cmd.SetArgs([]string{verboseTemplate(t), filepath.Join(t.TempDir(), "proj"), "--defaults"})
+	cmd.SetArgs([]string{"--template", verboseTemplate(t), filepath.Join(t.TempDir(), "proj"), "--defaults"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init error: %v", err)
 	}
-	for _, want := range []string{"init: source", "init: fetched", "init: wrote"} {
+	for _, want := range []string{"init: template", "init: wrote"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Errorf("verbose stderr missing %q:\n%s", want, stderr.String())
 		}
@@ -341,7 +334,7 @@ func TestQuietInitSilent(t *testing.T) {
 	cmd.SetOut(&bytes.Buffer{})
 	var stderr bytes.Buffer
 	cmd.SetErr(&stderr)
-	cmd.SetArgs([]string{verboseTemplate(t), filepath.Join(t.TempDir(), "proj"), "--defaults"})
+	cmd.SetArgs([]string{"--template", verboseTemplate(t), filepath.Join(t.TempDir(), "proj"), "--defaults"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init error: %v", err)
 	}
@@ -355,7 +348,7 @@ func TestVerboseCheckLogs(t *testing.T) {
 	appCfg.nonInteractive, appCfg.verbose = true, true
 	defer func() { appCfg = oldCfg }()
 
-	_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+	_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 	runInProject(t, dst)
 	cmd := newCheckCmd()
 	var stdout, stderr bytes.Buffer
@@ -377,7 +370,7 @@ func TestNoColorDiffPlain(t *testing.T) {
 	appCfg.nonInteractive, appCfg.noColor, appCfg.verbose = true, true, false
 	defer func() { appCfg = oldCfg }()
 
-	_, dst := initTestProject(t, map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
+	_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
 	if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("aaa\nBBB\nccc\nddd\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

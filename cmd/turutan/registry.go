@@ -24,7 +24,7 @@ func newRegistryCmd() *cobra.Command {
 		Use:   "registry",
 		Short: "Manage template registries",
 		Long: `Manage template registries: author a registry in the current
-directory (init, create) or store named registry references in the user
+directory (init, create, release) or store named registry references in the user
 config (add). The "turutan" registry resolves to its default OCI address
 without an explicit add.
 
@@ -35,7 +35,7 @@ reading).`,
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newRegistryInitCmd(), newRegistryCreateCmd(), newRegistryAddCmd())
+	cmd.AddCommand(newRegistryInitCmd(), newRegistryCreateCmd(), newRegistryAddCmd(), newRegistryReleaseCmd())
 	return cmd
 }
 

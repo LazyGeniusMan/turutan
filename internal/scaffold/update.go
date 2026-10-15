@@ -21,15 +21,15 @@ import (
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
+	"github.com/LazyGeniusMan/turutan/internal/registry"
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
-
-const updateDeepenDepth = 50
 
 const maxDirtyShown = 5
 
 type UpdateOptions struct {
 	Ref            string
+	Registries     map[string]string
 	Conflict       ConflictMode
 	Force          bool
 	DataFile       string
@@ -52,6 +52,14 @@ type UpdateResult struct {
 	Migrations []string
 }
 
+type fetchedBundle struct {
+	dir     string
+	uri     string
+	version string
+	digest  string
+	cleanup func()
+}
+
 func Update(
 	ctx context.Context,
 	projectDir string,
@@ -62,22 +70,22 @@ func Update(
 	if err != nil {
 		return nil, err
 	}
-	src, wantRef, fetched, manifest, err := fetchUpdateTemplate(
-		ctx, projectDir, state, opts, stderr)
+	bundle, manifest, err := fetchUpdateTemplate(
+		ctx, state, opts, stderr)
 	if err != nil {
 		return nil, err
 	}
-	if fetched.Cleanup != nil {
-		defer fetched.Cleanup()
+	if bundle.cleanup != nil {
+		defer bundle.cleanup()
 	}
 	reportNewInputs(stderr, config.DiffInputs(data, manifest))
 	if opts.Preview {
 		return previewUpdate(
-			projectDir, state, lock, fetched, manifest, data,
+			projectDir, state, lock, bundle, manifest, data,
 			opts, stdout, stderr, stdin)
 	}
 	rendered, old, fresh, merger, skipMigrations, stage, err := stageUpdate(
-		projectDir, state, fetched, manifest, data,
+		projectDir, state, bundle, manifest, data,
 		opts, stdout, stderr, stdin)
 	if err != nil {
 		return nil, err
@@ -100,7 +108,7 @@ func Update(
 		}
 	}
 	return finishUpdate(
-		projectDir, state, lock, src, wantRef, data, fresh,
+		projectDir, state, lock, bundle, data, fresh,
 		rendered, stage, manifest, stdout, updated, conflicts, migrated, old)
 }
 
@@ -133,7 +141,7 @@ func previewUpdate(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	fetched *template.Fetched,
+	bundle *fetchedBundle,
 	manifest *config.Manifest,
 	data map[string]any,
 	opts UpdateOptions,
@@ -147,7 +155,7 @@ func previewUpdate(
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
 	rendered, err := renderStaged(
-		fetched, stage, manifest, data, opts, stdout, stdin)
+		bundle, stage, manifest, data, opts, stdout, stdin)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +164,7 @@ func previewUpdate(
 		return nil, err
 	}
 	old := state.ResolvedCommit
-	fresh := fetched.ResolvedCommit
+	fresh := bundle.digest
 	if fresh == "" {
 		fresh = strings.TrimPrefix(
 			config.ComputeManifestHash(templateLockEntries(rendered)),
@@ -290,8 +298,7 @@ func finishUpdate(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	src *template.Source,
-	wantRef string,
+	bundle *fetchedBundle,
 	data map[string]any,
 	fresh string,
 	rendered map[string]renderedEntry,
@@ -302,7 +309,7 @@ func finishUpdate(
 	old string,
 ) (*UpdateResult, error) {
 	if err := refreshStateLock(
-		projectDir, state, lock, src, wantRef, data, fresh, rendered,
+		projectDir, state, lock, bundle, data, fresh, rendered,
 	); err != nil {
 		return nil, err
 	}
@@ -362,51 +369,78 @@ func guardCleanTree(projectDir string, lock *config.Lock, manifest *config.Manif
 
 func fetchUpdateTemplate(
 	ctx context.Context,
-	projectDir string,
 	state *config.State,
 	opts UpdateOptions,
 	stderr io.Writer,
-) (*template.Source, string, *template.Fetched, *config.Manifest, error) {
+) (*fetchedBundle, *config.Manifest, error) {
 	vlogf(stderr, opts.Verbose,
-		"update: stored commit %s requested ref %q",
-		state.ResolvedCommit, state.RequestedRef)
-	src, err := parseStoredSource(projectDir, state.Template)
-	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("update: %w", err)
+		"update: stored template %q version %q digest %s",
+		state.Template, state.RequestedRef, state.ResolvedCommit)
+	if state.SourceKind != "registry" {
+		return nil, nil, fmt.Errorf("update: unknown sourceKind %q", state.SourceKind)
 	}
-	wantRef := state.RequestedRef
-	if opts.Ref != "" {
-		wantRef = opts.Ref
-		src.RequestedRef = opts.Ref
+	registryName := strings.TrimSpace(state.Registry)
+	templateName := ""
+	if registryName == "" {
+		var version string
+		registryName, templateName, version = ResolveRegistryName(state.Template)
+		_ = version
+	} else {
+		_, templateName, _ = splitStoredRef(state.Template)
 	}
-	fetched, err := fetchWithDeepen(ctx, src)
-	if err != nil {
-		return nil, "", nil, nil, err
+	if templateName == "" {
+		return nil, nil, fmt.Errorf("update: stored template %q has no template name", state.Template)
 	}
-	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
+	rr, err := ResolveRegistry(ctx, opts.Registries, registryName)
 	if err != nil {
-		if fetched.Cleanup != nil {
-			fetched.Cleanup()
+		return nil, nil, fmt.Errorf("update: %w", err)
+	}
+	want := strings.TrimSpace(opts.Ref)
+	if want == "" {
+		entry, err := rr.Idx.FindTemplate(templateName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("update: %w", err)
 		}
-		return nil, "", nil, nil, fmt.Errorf("update: %w", err)
+		want = entry.Version
+	}
+	templateManifest, err := ResolveTemplateManifest(rr, templateName, want)
+	if err != nil {
+		return nil, nil, fmt.Errorf("update: %w", err)
+	}
+	bundleDir, bundleURI, cleanup, err := FetchTemplateBundle(ctx, rr, templateManifest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("update: %w", err)
+	}
+	manifest, err := config.LoadManifest(os.DirFS(bundleDir))
+	if err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("update: %w", err)
 	}
 	if _, err := checkMinEngine(
 		manifest, opts.Engine, stderr, opts.Verbose); err != nil {
-		if fetched.Cleanup != nil {
-			fetched.Cleanup()
-		}
-		return nil, "", nil, nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	if opts.Conflict != "" {
 		state.Conflict = string(opts.Conflict)
 	}
-	return src, wantRef, fetched, manifest, nil
+	digest := strings.TrimSpace(templateManifest.Digest)
+	if digest == "" {
+		if computed, err := registry.DigestDir(bundleDir); err == nil {
+			digest = computed
+		}
+	}
+	digestHex := strings.TrimPrefix(digest, "sha256:")
+	return &fetchedBundle{
+		dir: bundleDir, uri: bundleURI, version: templateManifest.Version,
+		digest: digestHex, cleanup: cleanup,
+	}, manifest, nil
 }
 
 func stageUpdate(
 	projectDir string,
 	state *config.State,
-	fetched *template.Fetched,
+	bundle *fetchedBundle,
 	manifest *config.Manifest,
 	data map[string]any,
 	opts UpdateOptions,
@@ -419,7 +453,7 @@ func stageUpdate(
 			"update: creating staging dir: %w", err)
 	}
 	rendered, err := renderStaged(
-		fetched, stage, manifest, data, opts, stdout, stdin)
+		bundle, stage, manifest, data, opts, stdout, stdin)
 	if err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, "", "", nil, false, "", err
@@ -430,7 +464,7 @@ func stageUpdate(
 		return nil, "", "", nil, false, "", err
 	}
 	old := state.ResolvedCommit
-	fresh := fetched.ResolvedCommit
+	fresh := bundle.digest
 	if fresh == "" {
 		fresh = strings.TrimPrefix(
 			config.ComputeManifestHash(templateLockEntries(rendered)),
@@ -447,7 +481,7 @@ func stageUpdate(
 }
 
 func renderStaged(
-	fetched *template.Fetched,
+	bundle *fetchedBundle,
 	stage string,
 	manifest *config.Manifest,
 	data map[string]any,
@@ -457,10 +491,10 @@ func renderStaged(
 ) (map[string]renderedEntry, error) {
 	normalizeUpdateData(data, manifest, opts)
 	if err := renderUpdateWithData(
-		fetched.Dir, stage, data, manifest, opts, stdout, stdin); err != nil {
+		bundle.dir, stage, data, manifest, opts, stdout, stdin); err != nil {
 		return nil, err
 	}
-	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
+	if err := plantLicenseFiles(bundle.dir, stage, manifest); err != nil {
 		return nil, fmt.Errorf("update: %w", err)
 	}
 	if err := plantDocFiles(stage, manifest); err != nil {
@@ -583,26 +617,11 @@ func firstN(paths []string, n int) []string {
 	return paths[:n]
 }
 
-func fetchWithDeepen(
-	ctx context.Context,
-	src *template.Source,
-) (*template.Fetched, error) {
-	fetched, err := template.Fetch(ctx, src)
-	if err == nil {
-		return fetched, nil
+func withDigestPrefix(fresh string) string {
+	if strings.HasPrefix(fresh, "sha256:") {
+		return fresh
 	}
-	if src.Kind != template.KindRemoteGit && src.Kind != template.KindLocalGit {
-		return nil, fmt.Errorf("update: %w", err)
-	}
-	if src.Depth != template.DefaultDepth {
-		return nil, fmt.Errorf("update: %w (template history is shallow; fetch with ?depth= to reach further back)", err)
-	}
-	retry := *src
-	retry.Depth = updateDeepenDepth
-	if refetched, retryErr := template.Fetch(ctx, &retry); retryErr == nil {
-		return refetched, nil
-	}
-	return nil, fmt.Errorf("update: %w (template history is shallow; fetch with ?depth= to reach further back)", err)
+	return "sha256:" + fresh
 }
 
 func effectiveConflict(flag ConflictMode, manifest *config.Manifest, state *config.State) ConflictMode {
@@ -1227,8 +1246,7 @@ func refreshStateLock(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	src *template.Source,
-	wantRef string,
+	bundle *fetchedBundle,
 	data map[string]any,
 	fresh string,
 	rendered map[string]renderedEntry,
@@ -1249,18 +1267,22 @@ func refreshStateLock(
 		}
 		final = append(final, config.FileEntry(path, data))
 	}
-	state.RequestedRef = wantRef
+	_, templateName, _ := ResolveRegistryName(state.Template)
+	state.RequestedRef = bundle.version
 	state.ResolvedCommit = fresh
 	state.Data = data
-	stored := relativizeForStore(projectDir, src)
-	state.Template = stored.String()
+	state.Template = RegistryStateRef(state.Registry, templateName, bundle.version)
+	state.TemplateURI = bundle.uri
+	state.TemplateDigest = withDigestPrefix(fresh)
 	if err := config.SaveState(projectDir, state); err != nil {
 		return fmt.Errorf("update: %w", err)
 	}
 	lock.Source = state.Template
-	lock.Ref = wantRef
+	lock.Ref = bundle.version
 	lock.ResolvedSHA = fresh
-	lock.Subpath = src.Subpath
+	lock.Registry = state.Registry
+	lock.URI = bundle.uri
+	lock.Digest = withDigestPrefix(fresh)
 	lock.Files = final
 	if err := config.SaveLock(projectDir, lock); err != nil {
 		return fmt.Errorf("update: %w", err)

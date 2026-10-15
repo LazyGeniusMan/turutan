@@ -13,13 +13,14 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-func updateTestOptions(stdout, stderr *strings.Builder) UpdateOptions {
+func updateTestOptions(stdout, stderr *strings.Builder, regs map[string]string) UpdateOptions {
 	return UpdateOptions{
-		Force:  false,
-		Engine: "0.1.0",
-		Stdout: stdout,
-		Stderr: stderr,
-		Stdin:  strings.NewReader(""),
+		Force:      false,
+		Engine:     "0.1.0",
+		Registries: regs,
+		Stdout:     stdout,
+		Stderr:     stderr,
+		Stdin:      strings.NewReader(""),
 	}
 }
 
@@ -37,15 +38,14 @@ func TestUpdateDirtyGuard(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-			projectDir := initProject(t, src)
+			projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 			if tt.makeDirty {
 				if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("local edit\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
 			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
+			opts := updateTestOptions(&stdout, &stderr, regs)
 			opts.Force = tt.force
 			_, err := Update(context.Background(), projectDir, opts)
 			if tt.wantErr {
@@ -65,86 +65,48 @@ func TestUpdateDirtyGuard(t *testing.T) {
 }
 
 func TestUpdateMerge(t *testing.T) {
-	tests := []struct {
-		name string
-		git  bool
-	}{
-		{name: "filesystem old to new", git: false},
-		{name: "local-git old to new", git: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var src, projectDir string
-			var updateRepo func(name, content string)
-			if tt.git {
-				var repoDir string
-				repoDir, _ = initTemplateRepo(t, map[string]string{
-					"take.txt": "old\n",
-					"keep.txt": "base\n",
-					"drop.txt": "bye\n",
-					"stay.txt": "hi\n",
-				})
-				src = repoDir
-				projectDir = initProject(t, src)
-				updateRepo = func(name, content string) {
-					updateTemplateFile(t, repoDir, name, content)
-				}
-			} else {
-				src = makeTemplate(t, "", map[string]string{
-					"take.txt": "old\n",
-					"keep.txt": "base\n",
-					"drop.txt": "bye\n",
-					"stay.txt": "hi\n",
-				})
-				projectDir = initProject(t, src)
-				updateRepo = func(name, content string) {
-					if err := os.WriteFile(filepath.Join(src, name), []byte(content), 0o600); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-			if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			updateRepo("take.txt", "new\n")
-			updateRepo("new.txt", "fresh\n")
-			if tt.git {
-				if err := os.Remove(filepath.Join(src, "drop.txt")); err != nil {
-					t.Fatal(err)
-				}
-				commitAll(t, src, "drop")
-			} else {
-				if err := os.Remove(filepath.Join(src, "drop.txt")); err != nil {
-					t.Fatal(err)
-				}
-			}
-			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
-			opts.Force = true
-			result, err := Update(context.Background(), projectDir, opts)
-			if err != nil {
-				t.Fatalf("Update error: %v", err)
-			}
-			if got, err := os.ReadFile(filepath.Join(projectDir, "take.txt")); err != nil || string(got) != "new\n" {
-				t.Errorf("take.txt = %q, want template-new content", got)
-			}
-			if got, err := os.ReadFile(filepath.Join(projectDir, "keep.txt")); err != nil || string(got) != "local keep\n" {
-				t.Errorf("keep.txt = %q, want local content kept", got)
-			}
-			if got, err := os.ReadFile(filepath.Join(projectDir, "new.txt")); err != nil || string(got) != "fresh\n" {
-				t.Errorf("new.txt = %q, want new template file written", got)
-			}
-			if _, err := os.Stat(filepath.Join(projectDir, "drop.txt")); !os.IsNotExist(err) {
-				t.Error("drop.txt still exists, want it deleted (unchanged local copy)")
-			}
-			if result.Old == result.New {
-				t.Error("Old == New, want the identity to advance")
-			}
-			if len(result.Conflicts) != 0 {
-				t.Errorf("Conflicts = %v, want none for disjoint changes", result.Conflicts)
-			}
+	t.Run("registry old to new", func(t *testing.T) {
+		projectDir, regs := initRegistryProject(t, "", map[string]string{
+			"take.txt": "old\n",
+			"keep.txt": "base\n",
+			"drop.txt": "bye\n",
+			"stay.txt": "hi\n",
 		})
-	}
+		updateRepo := func(name, content string) {
+			updateTestTemplateFile(t, regs, testRegistryTemplate, name, content)
+		}
+		if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		updateRepo("take.txt", "new\n")
+		updateRepo("new.txt", "fresh\n")
+		removeTestTemplateFile(t, regs, testRegistryTemplate, "drop.txt")
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts.Force = true
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if got, err := os.ReadFile(filepath.Join(projectDir, "take.txt")); err != nil || string(got) != "new\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
+			t.Errorf("take.txt = %q, want template-new content", got)
+		}
+		if got, err := os.ReadFile(filepath.Join(projectDir, "keep.txt")); err != nil || string(got) != "local keep\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
+			t.Errorf("keep.txt = %q, want local content kept", got)
+		}
+		if got, err := os.ReadFile(filepath.Join(projectDir, "new.txt")); err != nil || string(got) != "fresh\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
+			t.Errorf("new.txt = %q, want new template file written", got)
+		}
+		if _, err := os.Stat(filepath.Join(projectDir, "drop.txt")); !os.IsNotExist(err) {
+			t.Error("drop.txt still exists, want it deleted (unchanged local copy)")
+		}
+		if result.Old == result.New {
+			t.Error("Old == New, want the identity to advance")
+		}
+		if len(result.Conflicts) != 0 {
+			t.Errorf("Conflicts = %v, want none for disjoint changes", result.Conflicts)
+		}
+	})
 }
 
 func TestUpdateConflicts(t *testing.T) {
@@ -157,16 +119,13 @@ func TestUpdateConflicts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := makeTemplate(t, "", map[string]string{"conflict.txt": "a\nb\nc\n"})
-			projectDir := initProject(t, src)
+			projectDir, regs := initRegistryProject(t, "", map[string]string{"conflict.txt": "a\nb\nc\n"})
 			if err := os.WriteFile(filepath.Join(projectDir, "conflict.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(src, "conflict.txt"), []byte("a\nREMOTE\nc\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
+			updateTestTemplateFile(t, regs, testRegistryTemplate, "conflict.txt", "a\nREMOTE\nc\n")
 			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
+			opts := updateTestOptions(&stdout, &stderr, regs)
 			opts.Force = true
 			opts.Conflict = tt.conflict
 			result, err := Update(context.Background(), projectDir, opts)
@@ -176,7 +135,7 @@ func TestUpdateConflicts(t *testing.T) {
 			if len(result.Conflicts) != 1 || result.Conflicts[0] != "conflict.txt" {
 				t.Fatalf("Conflicts = %v, want [conflict.txt]", result.Conflicts)
 			}
-			got, err := os.ReadFile(filepath.Join(projectDir, "conflict.txt"))
+			got, err := os.ReadFile(filepath.Join(projectDir, "conflict.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -193,7 +152,7 @@ func TestUpdateConflicts(t *testing.T) {
 				if string(got) != "a\nLOCAL\nc\n" {
 					t.Errorf("rej mode file = %q, want local body kept", got)
 				}
-				rej, err := os.ReadFile(filepath.Join(projectDir, "conflict.txt.rej"))
+				rej, err := os.ReadFile(filepath.Join(projectDir, "conflict.txt.rej")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 				if err != nil {
 					t.Fatalf("reading .rej: %v", err)
 				}
@@ -212,25 +171,22 @@ func TestUpdateBinary(t *testing.T) {
 	binaryNew := "GIF89a\x00new"
 	binaryLocal := "GIF89a\x00local"
 	t.Run("both changed keeps local with .new", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"img.bin": binaryOld})
-		projectDir := initProject(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"img.bin": binaryOld})
 		if err := os.WriteFile(filepath.Join(projectDir, "img.bin"), []byte(binaryLocal), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(src, "img.bin"), []byte(binaryNew), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "img.bin", string(binaryNew))
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryLocal {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryLocal { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("img.bin = %q, want local binary kept", got)
 		}
-		if got, err := os.ReadFile(filepath.Join(projectDir, "img.bin.new")); err != nil || string(got) != binaryNew {
+		if got, err := os.ReadFile(filepath.Join(projectDir, "img.bin.new")); err != nil || string(got) != binaryNew { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("img.bin.new = %q, want template-new sidecar", got)
 		}
 		if len(result.Conflicts) != 1 {
@@ -241,18 +197,15 @@ func TestUpdateBinary(t *testing.T) {
 		}
 	})
 	t.Run("template only takes new without sidecar", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"img.bin": binaryOld})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "img.bin"), []byte(binaryNew), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"img.bin": binaryOld})
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "img.bin", string(binaryNew))
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryNew {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryNew { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("img.bin = %q, want template-new content", got)
 		}
 		if _, err := os.Stat(filepath.Join(projectDir, "img.bin.new")); !os.IsNotExist(err) {
@@ -276,25 +229,22 @@ func TestUpdateMergeAddedBinary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-			projectDir := initProject(t, src)
-			if err := os.WriteFile(filepath.Join(src, "img.bin"), []byte(binaryFresh), 0o600); err != nil {
-				t.Fatal(err)
-			}
+			projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+			updateTestTemplateFile(t, regs, testRegistryTemplate, "img.bin", string(binaryFresh))
 			if err := os.WriteFile(filepath.Join(projectDir, "img.bin"), []byte(binaryLocal), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
+			opts := updateTestOptions(&stdout, &stderr, regs)
 			opts.Conflict = tt.conflict
 			result, err := Update(context.Background(), projectDir, opts)
 			if err != nil {
 				t.Fatalf("Update error: %v", err)
 			}
-			if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryLocal {
+			if got, _ := os.ReadFile(filepath.Join(projectDir, "img.bin")); string(got) != binaryLocal { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 				t.Errorf("img.bin = %q, want local binary kept", got)
 			}
-			if got, err := os.ReadFile(filepath.Join(projectDir, "img.bin.new")); err != nil || string(got) != binaryFresh {
+			if got, err := os.ReadFile(filepath.Join(projectDir, "img.bin.new")); err != nil || string(got) != binaryFresh { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 				t.Errorf("img.bin.new = %q, want template-new sidecar", got)
 			}
 			if _, err := os.Stat(filepath.Join(projectDir, "img.bin.rej")); !os.IsNotExist(err) {
@@ -312,55 +262,47 @@ func TestUpdateMergeAddedBinary(t *testing.T) {
 
 func TestUpdatePreserve(t *testing.T) {
 	t.Run("preserve globs always prefer local", func(t *testing.T) {
-		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
+		projectDir, regs := initRegistryProject(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt":  "template v1\n",
 			"merge.txt": "a\nb\nc\n",
 		})
-		projectDir := initProject(t, src)
 		if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(projectDir, "merge.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("template v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(src, "merge.txt"), []byte("a\nREMOTE\nc\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "keep.txt", "template v2\n")
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "merge.txt", "a\nREMOTE\nc\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "keep.txt")); string(got) != "local keep\n" {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "keep.txt")); string(got) != "local keep\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("keep.txt = %q, want local preferred despite template change", got)
 		}
 		if len(result.Conflicts) != 1 || result.Conflicts[0] != "merge.txt" {
 			t.Errorf("Conflicts = %v, want only the non-preserved merge.txt", result.Conflicts)
 		}
-		got, _ := os.ReadFile(filepath.Join(projectDir, "merge.txt"))
+		got, _ := os.ReadFile(filepath.Join(projectDir, "merge.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 		if !strings.Contains(string(got), "<<<<<<< local") {
 			t.Errorf("merge.txt missing inline markers:\n%s", got)
 		}
 	})
 	t.Run("pristine preserved survives template-only change", func(t *testing.T) {
-		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
+		projectDir, regs := initRegistryProject(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt": "template v1\n",
 		})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("template v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "keep.txt", "template v2\n")
 		var stdout, stderr strings.Builder
-		result, err := Update(context.Background(), projectDir, updateTestOptions(&stdout, &stderr))
+		result, err := Update(context.Background(), projectDir, updateTestOptions(&stdout, &stderr, regs))
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "keep.txt")); string(got) != "template v1\n" {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "keep.txt")); string(got) != "template v1\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("keep.txt = %q, want pristine local copy kept", got)
 		}
 		if len(result.Conflicts) != 0 {
@@ -371,18 +313,15 @@ func TestUpdatePreserve(t *testing.T) {
 		}
 	})
 	t.Run("deleted preserved stays deleted", func(t *testing.T) {
-		src := makeTemplate(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
+		projectDir, regs := initRegistryProject(t, "preserves:\n  - \"keep.txt\"\n", map[string]string{
 			"keep.txt": "template v1\n",
 		})
-		projectDir := initProject(t, src)
 		if err := os.Remove(filepath.Join(projectDir, "keep.txt")); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("template v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "keep.txt", "template v2\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -399,19 +338,14 @@ func TestUpdatePreserve(t *testing.T) {
 
 func TestUpdateMigrations(t *testing.T) {
 	t.Run("migrations run in manifest order", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := initProject(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
 		manifest := "migrations:\n" +
 			"  - run: [\"echo first >> order.txt\"]\n" +
 			"  - run: [\"echo second >> order.txt\"]\n"
-		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(src, "app.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, ".turutan.yml", string(manifest))
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "app.txt", "v2\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.Stdin = strings.NewReader("y\n")
 		result, err := Update(context.Background(), projectDir, opts)
@@ -424,7 +358,7 @@ func TestUpdateMigrations(t *testing.T) {
 		if result.Migrations[0] != "echo first >> order.txt" || result.Migrations[1] != "echo second >> order.txt" {
 			t.Errorf("Migrations = %v, want ordered echo commands", result.Migrations)
 		}
-		got, err := os.ReadFile(filepath.Join(projectDir, "order.txt"))
+		got, err := os.ReadFile(filepath.Join(projectDir, "order.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 		if err != nil {
 			t.Fatalf("reading order.txt: %v", err)
 		}
@@ -432,19 +366,16 @@ func TestUpdateMigrations(t *testing.T) {
 		if len(lines) != 2 || strings.TrimSpace(lines[0]) != "first" || strings.TrimSpace(lines[1]) != "second" {
 			t.Errorf("order.txt = %q, want first-then-second lines", got)
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("app.txt = %q, want template-new content alongside migrations", got)
 		}
 	})
 	t.Run("failing migration aborts update", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := initProject(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
 		manifest := "migrations:\n  - run: [\"exit 3\"]\n"
-		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, ".turutan.yml", string(manifest))
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.Stdin = strings.NewReader("y\n")
 		if _, err := Update(context.Background(), projectDir, opts); err == nil {
@@ -454,23 +385,18 @@ func TestUpdateMigrations(t *testing.T) {
 }
 
 func TestUpdateMigrationsConsent(t *testing.T) {
-	setupMigrationProject := func(t *testing.T) (string, string) {
+	setupMigrationProject := func(t *testing.T) (map[string]string, string) {
 		t.Helper()
-		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := initProject(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
 		manifest := "migrations:\n  - run: [\"echo hi >> marker.txt\"]\n"
-		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(src, "app.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return src, projectDir
+		updateTestTemplateFile(t, regs, testRegistryTemplate, ".turutan.yml", manifest)
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "app.txt", "v2\n")
+		return regs, projectDir
 	}
 	t.Run("non-interactive without allow-hooks refuses", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
+		regs, projectDir := setupMigrationProject(t)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.NonInteractive = true
 		_, err := Update(context.Background(), projectDir, opts)
@@ -483,14 +409,14 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 		if _, statErr := os.Stat(filepath.Join(projectDir, "marker.txt")); !os.IsNotExist(statErr) {
 			t.Error("marker.txt exists, want the refused migration skipped")
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v1\n" {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v1\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("app.txt = %q, want old content kept after refusal", got)
 		}
 	})
 	t.Run("non-interactive with allow-hooks runs", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
+		regs, projectDir := setupMigrationProject(t)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.NonInteractive = true
 		opts.AllowHooks = true
@@ -501,17 +427,17 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 		if len(result.Migrations) != 1 {
 			t.Fatalf("Migrations = %v, want the single consented command", result.Migrations)
 		}
-		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" {
+		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("marker.txt = %q, want the migration output", got)
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("app.txt = %q, want template-new content", got)
 		}
 	})
 	t.Run("interactive consent runs migrations", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
+		regs, projectDir := setupMigrationProject(t)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.Stdin = strings.NewReader("y\n")
 		result, err := Update(context.Background(), projectDir, opts)
@@ -521,14 +447,14 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 		if len(result.Migrations) != 1 {
 			t.Errorf("Migrations = %v, want the consented command", result.Migrations)
 		}
-		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" {
+		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("marker.txt = %q, want the migration output", got)
 		}
 	})
 	t.Run("interactive decline skips migrations", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
+		regs, projectDir := setupMigrationProject(t)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.Stdin = strings.NewReader("n\n")
 		result, err := Update(context.Background(), projectDir, opts)
@@ -541,7 +467,7 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 		if _, statErr := os.Stat(filepath.Join(projectDir, "marker.txt")); !os.IsNotExist(statErr) {
 			t.Error("marker.txt exists, want the declined migration skipped")
 		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" {
+		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 			t.Errorf("app.txt = %q, want template-new content despite declined migrations", got)
 		}
 		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
@@ -549,13 +475,10 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive without migrations passes", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "app.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "app.txt", "v2\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.NonInteractive = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Errorf("Update error: %v", err)
@@ -564,70 +487,53 @@ func TestUpdateMigrationsConsent(t *testing.T) {
 }
 
 func TestUpdateLockAdvances(t *testing.T) {
-	tests := []struct {
-		name string
-		git  bool
-	}{
-		{name: "filesystem identity advances", git: false},
-		{name: "local-git commit advances", git: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var src, projectDir, old string
-			if tt.git {
-				repoDir, sha := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-				src = repoDir
-				old = sha
-				projectDir = initProject(t, src)
-				updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
-			} else {
-				src = makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-				projectDir = initProject(t, src)
-				state, err := config.LoadState(os.DirFS(projectDir))
-				if err != nil {
-					t.Fatal(err)
-				}
-				old = state.ResolvedCommit
-				if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
-			result, err := Update(context.Background(), projectDir, opts)
-			if err != nil {
-				t.Fatalf("Update error: %v", err)
-			}
-			if result.Old != old {
-				t.Errorf("Old = %q, want %q", result.Old, old)
-			}
-			if result.Old == result.New {
-				t.Error("New == Old, want the identity to advance")
-			}
-			state, err := config.LoadState(os.DirFS(projectDir))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if state.ResolvedCommit != result.New {
-				t.Errorf("state ResolvedCommit = %q, want %q", state.ResolvedCommit, result.New)
-			}
-			lock, err := config.LoadLock(os.DirFS(projectDir))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if lock.ResolvedSHA != result.New {
-				t.Errorf("lock ResolvedSHA = %q, want %q", lock.ResolvedSHA, result.New)
-			}
-			_ = src
-		})
-	}
+	t.Run("registry digest advances", func(t *testing.T) {
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		state, err := config.LoadState(os.DirFS(projectDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := state.ResolvedCommit
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "hello.txt", "v2\n")
+		var stdout, stderr strings.Builder
+		opts := updateTestOptions(&stdout, &stderr, regs)
+		result, err := Update(context.Background(), projectDir, opts)
+		if err != nil {
+			t.Fatalf("Update error: %v", err)
+		}
+		if result.Old != old {
+			t.Errorf("Old = %q, want %q", result.Old, old)
+		}
+		if result.Old == result.New {
+			t.Error("New == Old, want the identity to advance")
+		}
+		state, err = config.LoadState(os.DirFS(projectDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.ResolvedCommit != result.New {
+			t.Errorf("state ResolvedCommit = %q, want %q", state.ResolvedCommit, result.New)
+		}
+		lock, err := config.LoadLock(os.DirFS(projectDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lock.ResolvedSHA != result.New {
+			t.Errorf("lock ResolvedSHA = %q, want %q", lock.ResolvedSHA, result.New)
+		}
+		if lock.Registry != testRegistryName {
+			t.Errorf("lock Registry = %q, want %q", lock.Registry, testRegistryName)
+		}
+		if state.Registry != testRegistryName || state.RequestedRef == "" {
+			t.Errorf("state registry/version = %q/%q, want registry tracking", state.Registry, state.RequestedRef)
+		}
+	})
 }
 
 func TestUpdateDataOverlay(t *testing.T) {
 	t.Run("data file overlay re-renders", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"greet.txt.tmpl": "hi {{.project_name}}\n"})
-		projectDir := initProject(t, src)
-		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"greet.txt.tmpl": "hi {{.project_name}}\n"})
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 		if string(got) != "hi proj\n" {
 			t.Fatalf("greet.txt = %q, want defaulted init render", got)
 		}
@@ -635,17 +541,15 @@ func TestUpdateDataOverlay(t *testing.T) {
 		if err := os.WriteFile(dataFile, []byte("project_name: overlaid\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(src, "greet.txt.tmpl"), []byte("hey {{.project_name}}\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "greet.txt.tmpl", "hey {{.project_name}}\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		opts.DataFile = dataFile
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
-		got, _ = os.ReadFile(filepath.Join(projectDir, "greet.txt"))
+		got, _ = os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 		if string(got) != "hey overlaid\n" {
 			t.Errorf("greet.txt = %q, want overlaid re-render", got)
 		}
@@ -658,13 +562,10 @@ func TestUpdateDataOverlay(t *testing.T) {
 		}
 	})
 	t.Run("missing key suggests data file", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"a.txt": "v1\n"})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "b.txt.tmpl"), []byte("{{.brand_new_key}}\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"a.txt": "v1\n"})
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "b.txt.tmpl", "{{.brand_new_key}}\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		_, err := Update(context.Background(), projectDir, opts)
 		if err == nil || !strings.Contains(err.Error(), `"brand_new_key"`) {
@@ -674,14 +575,11 @@ func TestUpdateDataOverlay(t *testing.T) {
 }
 
 func TestUpdateNewTemplateKeys(t *testing.T) {
-	setup := func(t *testing.T) (string, string) {
+	setup := func(t *testing.T) (map[string]string, string) {
 		t.Helper()
-		src := makeTemplate(t, "", map[string]string{"a.txt": "v1\n"})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "b.txt.tmpl"), []byte("{{.brand_new_key}}\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return src, projectDir
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"a.txt": "v1\n"})
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "b.txt.tmpl", "{{.brand_new_key}}\n")
+		return regs, projectDir
 	}
 	tests := []struct {
 		name           string
@@ -704,9 +602,9 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, projectDir := setup(t)
+			regs, projectDir := setup(t)
 			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
+			opts := updateTestOptions(&stdout, &stderr, regs)
 			opts.Force = true
 			opts.Stdin = strings.NewReader(tt.stdin)
 			opts.NonInteractive = tt.nonInteractive
@@ -726,7 +624,7 @@ func TestUpdateNewTemplateKeys(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Update error: %v", err)
 			}
-			if got, _ := os.ReadFile(filepath.Join(projectDir, "b.txt")); string(got) != tt.wantFile {
+			if got, _ := os.ReadFile(filepath.Join(projectDir, "b.txt")); string(got) != tt.wantFile { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 				t.Errorf("b.txt = %q, want input render %q", got, tt.wantFile)
 			}
 			if !strings.Contains(stdout.String(), "Enter brand_new_key") {
@@ -749,21 +647,22 @@ func TestUpdateFailures(t *testing.T) {
 		mutate  func(t *testing.T, projectDir string, opts *UpdateOptions)
 		errPart string
 	}{
-		{name: "missing state errors", mutate: func(t *testing.T, projectDir string, opts *UpdateOptions) {}, errPart: ""},
+		{name: "missing state errors", mutate: func(_ *testing.T, _ string, _ *UpdateOptions) {}, errPart: ""},
 		{name: "bad conflict rejected", mutate: func(t *testing.T, _ string, opts *UpdateOptions) { opts.Conflict = "merge" }, errPart: "conflict"},
-		{name: "ref rejected for filesystem", mutate: func(t *testing.T, _ string, opts *UpdateOptions) { opts.Ref = "v1" }, errPart: "ref"},
+		{name: "bad version rejected", mutate: func(_ *testing.T, _ string, opts *UpdateOptions) { opts.Ref = "not-a-version" }, errPart: "not-a-version"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var projectDir string
+			var regs map[string]string
 			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
+			opts := updateTestOptions(&stdout, &stderr, regs)
 			opts.Force = true
 			if tt.name == "missing state errors" {
 				projectDir = t.TempDir()
 			} else {
-				src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-				projectDir = initProject(t, src)
+				projectDir, regs = initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+				opts.Registries = regs
 			}
 			tt.mutate(t, projectDir, &opts)
 			_, err := Update(context.Background(), projectDir, opts)
@@ -831,16 +730,13 @@ func TestUpdateConflictModePersists(t *testing.T) {
 			if tt.manifestConflict != "" {
 				manifest = "conflict: " + tt.manifestConflict + "\n"
 			}
-			src := makeTemplate(t, manifest, map[string]string{"conflict.txt": "a\nb\nc\n"})
-			projectDir := initProject(t, src)
+			projectDir, regs := initRegistryProject(t, manifest, map[string]string{"conflict.txt": "a\nb\nc\n"})
 			if err := os.WriteFile(filepath.Join(projectDir, "conflict.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(src, "conflict.txt"), []byte("a\nREMOTE\nc\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
+			updateTestTemplateFile(t, regs, testRegistryTemplate, "conflict.txt", "a\nREMOTE\nc\n")
 			var stdout, stderr strings.Builder
-			opts := updateTestOptions(&stdout, &stderr)
+			opts := updateTestOptions(&stdout, &stderr, regs)
 			opts.Force = true
 			opts.Conflict = tt.flag
 			if _, err := Update(context.Background(), projectDir, opts); err != nil {
@@ -953,24 +849,23 @@ var profileTestFiles = map[string]string{
 	".github/ci.yml":   "ci\n",
 }
 
-func initProfiles(t *testing.T, src string, profiles ...string) string {
+func initRegistryProfiles(t *testing.T, manifest string, files map[string]string, profiles ...string) (string, map[string]string) {
 	t.Helper()
+	regs, ref := makeTestRegistry(t, manifest, files)
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
 	if len(profiles) > 0 {
 		opts.DataFile = profilesDataFile(t, profiles...)
 	}
-	if err := Init(context.Background(), src, target, opts); err != nil {
-		t.Fatalf("Init error: %v", err)
-	}
-	return target
+	mustInitTestProject(t, target, regs, ref, opts)
+	return target, regs
 }
 
-func updateProfiles(t *testing.T, projectDir string, profiles ...string) *UpdateResult {
+func updateProfiles(t *testing.T, regs map[string]string, projectDir string, profiles ...string) *UpdateResult {
 	t.Helper()
 	var stdout, stderr strings.Builder
-	opts := updateTestOptions(&stdout, &stderr)
+	opts := updateTestOptions(&stdout, &stderr, regs)
 	opts.Force = true
 	opts.NonInteractive = true
 	if len(profiles) > 0 {
@@ -1026,10 +921,10 @@ func assertProfileAbsent(t *testing.T, projectDir, rel string) {
 	}
 }
 
-func assertCheckQuiet(t *testing.T, projectDir string) {
+func assertCheckQuiet(t *testing.T, regs map[string]string, projectDir string) {
 	t.Helper()
 	var stdout strings.Builder
-	result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
+	result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
 	if err != nil {
 		t.Fatalf("Check error: %v", err)
 	}
@@ -1039,12 +934,11 @@ func assertCheckQuiet(t *testing.T, projectDir string) {
 }
 
 func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
-	src := makeTemplate(t, profileTestManifest, profileTestFiles)
-	projectDir := initProfiles(t, src, "core")
+	projectDir, regs := initRegistryProfiles(t, profileTestManifest, profileTestFiles, "core")
 	for _, rel := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml"} {
 		assertProfileAbsent(t, projectDir, rel)
 	}
-	result := updateProfiles(t, projectDir, "core", "go")
+	result := updateProfiles(t, regs, projectDir, "core", "go")
 	assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
 	assertProfileAbsent(t, projectDir, ".github/ci.yml")
@@ -1064,15 +958,14 @@ func TestUpdateAddProfilesWithoutTemplateChange(t *testing.T) {
 	if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core", "go"}) {
 		t.Errorf("stored profiles = %v, want [core go]", got)
 	}
-	assertCheckQuiet(t, projectDir)
+	assertCheckQuiet(t, regs, projectDir)
 }
 
 func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 	t.Run("unmodified dropped files are removed with empty dirs pruned", func(t *testing.T) {
-		src := makeTemplate(t, profileTestManifest, profileTestFiles)
-		projectDir := initProfiles(t, src, "core", "go")
+		projectDir, regs := initRegistryProfiles(t, profileTestManifest, profileTestFiles, "core", "go")
 		assertProfileFile(t, projectDir, "go.mod", "module example\n")
-		result := updateProfiles(t, projectDir, "core")
+		result := updateProfiles(t, regs, projectDir, "core")
 		assertProfileAbsent(t, projectDir, "go.mod")
 		assertProfileAbsent(t, projectDir, "cmd/app/main.go")
 		assertProfileAbsent(t, projectDir, "cmd/app")
@@ -1091,16 +984,15 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 		if got := storedProfiles(t, projectDir); !slices.Equal(got, []string{"core"}) {
 			t.Errorf("stored profiles = %v, want [core]", got)
 		}
-		assertCheckQuiet(t, projectDir)
+		assertCheckQuiet(t, regs, projectDir)
 	})
 	t.Run("locally modified dropped file is kept on disk but untracked", func(t *testing.T) {
-		src := makeTemplate(t, profileTestManifest, profileTestFiles)
-		projectDir := initProfiles(t, src, "core", "go")
+		projectDir, regs := initRegistryProfiles(t, profileTestManifest, profileTestFiles, "core", "go")
 		mainPath := filepath.Join(projectDir, "cmd", "app", "main.go")
 		if err := os.WriteFile(mainPath, []byte("package main // local\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		updateProfiles(t, projectDir, "core")
+		updateProfiles(t, regs, projectDir, "core")
 		assertProfileAbsent(t, projectDir, "go.mod")
 		assertProfileFile(t, projectDir, "cmd/app/main.go", "package main // local\n")
 		if paths := lockPaths(t, projectDir); slices.Contains(paths, "cmd/app/main.go") {
@@ -1109,15 +1001,14 @@ func TestUpdateRemoveProfilesWithoutTemplateChange(t *testing.T) {
 		if info, err := os.Stat(filepath.Join(projectDir, "cmd", "app")); err != nil || !info.IsDir() {
 			t.Error("cmd/app was pruned while it still holds the kept local file")
 		}
-		assertCheckQuiet(t, projectDir)
+		assertCheckQuiet(t, regs, projectDir)
 	})
 }
 
 func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
-	src := makeTemplate(t, profileTestManifest, profileTestFiles)
-	projectDir := initProfiles(t, src, "core", "go")
+	projectDir, regs := initRegistryProfiles(t, profileTestManifest, profileTestFiles, "core", "go")
 	var stdout, stderr strings.Builder
-	opts := updateTestOptions(&stdout, &stderr)
+	opts := updateTestOptions(&stdout, &stderr, regs)
 	opts.Force = true
 	if _, err := Update(context.Background(), projectDir, opts); err != nil {
 		t.Fatalf("Update error: %v", err)
@@ -1129,22 +1020,11 @@ func TestUpdateKeepsStoredProfilesWithoutOverlay(t *testing.T) {
 	}
 }
 
-func profileGitFixture(t *testing.T) string {
-	t.Helper()
-	files := map[string]string{".turutan.yml": profileTestManifest}
-	for name, content := range profileTestFiles {
-		files[name] = content
-	}
-	repoDir, _ := initTemplateRepo(t, files)
-	return repoDir
-}
-
 func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
-	repoDir := profileGitFixture(t)
-	projectDir := initProfiles(t, repoDir, "core")
+	projectDir, regs := initRegistryProfiles(t, profileTestManifest, profileTestFiles, "core")
 	assertProfileAbsent(t, projectDir, "go.mod")
-	updateTemplateFile(t, repoDir, "keep.txt", "keep v2\n")
-	result := updateProfiles(t, projectDir, "core", "go")
+	updateTestTemplateFile(t, regs, testRegistryTemplate, "keep.txt", "keep v2\n")
+	result := updateProfiles(t, regs, projectDir, "core", "go")
 	assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
 	assertProfileFile(t, projectDir, "go.mod", "module example\n")
 	assertProfileFile(t, projectDir, "cmd/app/main.go", "package main\n")
@@ -1161,14 +1041,13 @@ func TestUpdateTemplateChangeWithAddedProfiles(t *testing.T) {
 }
 
 func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
-	repoDir := profileGitFixture(t)
-	projectDir := initProfiles(t, repoDir, "core", "go", "github")
+	projectDir, regs := initRegistryProfiles(t, profileTestManifest, profileTestFiles, "core", "go", "github")
 	ciPath := filepath.Join(projectDir, ".github", "ci.yml")
 	if err := os.WriteFile(ciPath, []byte("ci // local\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	updateTemplateFile(t, repoDir, "keep.txt", "keep v2\n")
-	result := updateProfiles(t, projectDir, "core")
+	updateTestTemplateFile(t, regs, testRegistryTemplate, "keep.txt", "keep v2\n")
+	result := updateProfiles(t, regs, projectDir, "core")
 	assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
 	assertProfileAbsent(t, projectDir, "go.mod")
 	assertProfileAbsent(t, projectDir, "cmd")
@@ -1191,18 +1070,18 @@ func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 }
 
 func TestUpdateBackfillsNewInputDefault(t *testing.T) {
-	src := makeTemplate(t, "", map[string]string{"app.txt": "v1\n"})
-	projectDir := initProject(t, src)
-	writeFiles(t, src, map[string]string{
+	projectDir, regs := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
+	writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{
 		".turutan.yml": "inputs:\n" +
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 			"  new_feature:\n    label: \"New feature\"\n    type: array\n" +
 			"    default: [\"alpha\", \"beta\"]\n",
 		"feat.txt.tmpl": "[{{ range $i, $p := .new_feature }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",
 	})
+	releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
 	t.Run("plain non-interactive update uses the new default", func(t *testing.T) {
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
+		opts := updateTestOptions(&stdout, &stderr, regs)
 		opts.NonInteractive = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
@@ -1218,7 +1097,7 @@ func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 		}
 	})
 	t.Run("diff succeeds on the backfilled checkout", func(t *testing.T) {
-		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions(regs))
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -1228,7 +1107,7 @@ func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	})
 	t.Run("check reports up to date", func(t *testing.T) {
 		var stdout strings.Builder
-		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
 		if err != nil {
 			t.Fatalf("Check error: %v", err)
 		}

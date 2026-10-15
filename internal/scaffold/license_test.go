@@ -145,9 +145,9 @@ func TestInitStampsSourceLicense(t *testing.T) {
 			"go.mod.tmpl": "module {{.project_name}}\n",
 			"LICENSE":     licenseApache,
 		}
-		src := makeTemplate(t, "", files)
+		regs, ref := makeTestRegistry(t, "", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))
@@ -164,9 +164,9 @@ func TestInitStampsSourceLicense(t *testing.T) {
 			"go.mod.tmpl": "module {{.project_name}}\n",
 			"LICENSE":     licenseMIT,
 		}
-		src := makeTemplate(t, "license: Apache-2.0\n", files)
+		regs, ref := makeTestRegistry(t, "license: Apache-2.0\n", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))
@@ -183,9 +183,9 @@ func TestInitStampsSourceLicense(t *testing.T) {
 			"go.mod.tmpl": "module {{.project_name}}\n",
 			"LICENSE":     licenseApache,
 		}
-		src := makeTemplate(t, "license: Apache-2.0\nlicense-files: [LICENSE]\n", files)
+		regs, ref := makeTestRegistry(t, "license: Apache-2.0\nlicense-files: [LICENSE]\n", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, ".config", "turutan", "LICENSE"))
@@ -201,17 +201,17 @@ func TestInitStampsSourceLicense(t *testing.T) {
 	})
 	t.Run("missing license-file fails naming the file", func(t *testing.T) {
 		t.Parallel()
-		src := makeTemplate(t, "license-files: [LICENSE]\n", map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
-		err := Init(context.Background(), src, filepath.Join(t.TempDir(), "proj"), testOptions(&strings.Builder{}))
+		regs, ref := makeTestRegistry(t, "license-files: [LICENSE]\n", map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
+		err := Init(context.Background(), filepath.Join(t.TempDir(), "proj"), ref, regs, testOptions(&strings.Builder{}))
 		if err == nil || !strings.Contains(err.Error(), `"LICENSE"`) {
 			t.Errorf("error = %v, want it to name the missing file", err)
 		}
 	})
 	t.Run("missing license defaults MIT-0", func(t *testing.T) {
 		t.Parallel()
-		src := makeTemplate(t, "", map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
+		regs, ref := makeTestRegistry(t, "", map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))

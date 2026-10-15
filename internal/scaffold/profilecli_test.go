@@ -35,29 +35,28 @@ func diffPaths(diffs []FileDiff) []string {
 	return paths
 }
 
-func updateCLIOptions(stdout, stderr *strings.Builder) UpdateOptions {
-	opts := updateTestOptions(stdout, stderr)
+func updateCLIOptions(stdout, stderr *strings.Builder, regs map[string]string) UpdateOptions {
+	opts := updateTestOptions(stdout, stderr, regs)
 	opts.Force = true
 	opts.NonInteractive = true
 	return opts
 }
 
 func TestComputeDiffWhat(t *testing.T) {
-	setup := func(t *testing.T) string {
+	setup := func(t *testing.T) (string, map[string]string, string) {
 		t.Helper()
-		src := makeTemplate(t, "", map[string]string{"up.txt": "v1\n", "loc.txt": "v1\n"})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "up.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"up.txt": "v1\n", "loc.txt": "v1\n"})
+		fresh := updateTestTemplateFile(t, regs, testRegistryTemplate, "up.txt", "v2\n")
 		if err := os.WriteFile(filepath.Join(projectDir, "loc.txt"), []byte("local\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		return projectDir
+		return projectDir, regs, fresh
 	}
 	t.Run("default all shows both sides", func(t *testing.T) {
-		projectDir := setup(t)
-		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
+		projectDir, regs, fresh := setup(t)
+		opts := diffOptions(regs)
+		opts.Ref = fresh
+		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -66,8 +65,9 @@ func TestComputeDiffWhat(t *testing.T) {
 		}
 	})
 	t.Run("upstream hides local edits", func(t *testing.T) {
-		projectDir := setup(t)
-		opts := diffOptions()
+		projectDir, regs, fresh := setup(t)
+		opts := diffOptions(regs)
+		opts.Ref = fresh
 		opts.What = "upstream"
 		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
@@ -81,8 +81,8 @@ func TestComputeDiffWhat(t *testing.T) {
 		}
 	})
 	t.Run("local hides template changes", func(t *testing.T) {
-		projectDir := setup(t)
-		opts := diffOptions()
+		projectDir, regs, _ := setup(t)
+		opts := diffOptions(regs)
 		opts.What = "local"
 		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
@@ -96,8 +96,8 @@ func TestComputeDiffWhat(t *testing.T) {
 		}
 	})
 	t.Run("unknown what errors", func(t *testing.T) {
-		projectDir := setup(t)
-		opts := diffOptions()
+		projectDir, regs, _ := setup(t)
+		opts := diffOptions(regs)
 		opts.What = "bogus"
 		if _, err := ComputeDiff(context.Background(), projectDir, opts); err == nil {
 			t.Error("ComputeDiff with bogus --what succeeded, want error")
@@ -106,12 +106,11 @@ func TestComputeDiffWhat(t *testing.T) {
 		}
 	})
 	t.Run("upstream clean when only local edits", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := initProject(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("local\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		opts := diffOptions()
+		opts := diffOptions(regs)
 		opts.What = "upstream"
 		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
@@ -122,12 +121,9 @@ func TestComputeDiffWhat(t *testing.T) {
 		}
 	})
 	t.Run("local clean when only template changes", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		opts := diffOptions()
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "hello.txt", "v2\n")
+		opts := diffOptions(regs)
 		opts.What = "local"
 		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
@@ -141,11 +137,8 @@ func TestComputeDiffWhat(t *testing.T) {
 
 func TestUpdatePreview(t *testing.T) {
 	t.Run("preview prints plan without writing", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := initProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "hello.txt", "v2\n")
 		beforeState, err := os.ReadFile(filepath.Join(projectDir, config.StateFileName)) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if err != nil {
 			t.Fatal(err)
@@ -155,7 +148,7 @@ func TestUpdatePreview(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
-		opts := updateCLIOptions(&stdout, &stderr)
+		opts := updateCLIOptions(&stdout, &stderr, regs)
 		opts.Preview = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -191,16 +184,11 @@ func TestUpdatePreview(t *testing.T) {
 		}
 	})
 	t.Run("preview groups entries by kind", func(t *testing.T) {
-		src := makeTemplate(t, profileCLIManifest, profileCLIFiles)
-		projectDir := initProfiles(t, src, "core")
-		if err := os.WriteFile(filepath.Join(src, "keep.txt"), []byte("keep v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(src, "new.txt"), []byte("new\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		projectDir, regs := initRegistryProfiles(t, profileCLIManifest, profileCLIFiles, "core")
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "keep.txt", "keep v2\n")
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "new.txt", "new\n")
 		var stdout, stderr strings.Builder
-		opts := updateCLIOptions(&stdout, &stderr)
+		opts := updateCLIOptions(&stdout, &stderr, regs)
 		opts.Preview = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
@@ -215,30 +203,32 @@ func TestUpdatePreview(t *testing.T) {
 }
 
 func TestUpdateRenames(t *testing.T) {
-	evolve := func(t *testing.T, src string) {
+	evolve := func(t *testing.T, regs map[string]string, extra map[string]string) {
 		t.Helper()
-		if err := os.WriteFile(
-			filepath.Join(src, ".turutan.yml"),
-			[]byte("renames:\n  old.txt: new.txt\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		data, err := os.ReadFile(filepath.Join(src, "old.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		regDir := testRegistryDir(t, regs)
+		tmplDir := filepath.Join(regDir, "templates", testRegistryTemplate)
+		data, err := os.ReadFile(filepath.Join(tmplDir, "old.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Remove(filepath.Join(src, "old.txt")); err != nil {
+		files := map[string]string{
+			".turutan.yml": "renames:\n  old.txt: new.txt\n",
+			"new.txt":      string(data),
+		}
+		for name, content := range extra {
+			files[name] = content
+		}
+		writeTestRegistryFiles(t, regs, testRegistryTemplate, files)
+		if err := os.Remove(filepath.Join(tmplDir, "old.txt")); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(src, "new.txt"), data, 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
-			t.Fatal(err)
-		}
+		releaseTestTemplate(t, regDir, testRegistryTemplate)
 	}
 	t.Run("unmodified file follows the rename", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"old.txt": "hello\n"})
-		projectDir := initProject(t, src)
-		evolve(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"old.txt": "hello\n"})
+		evolve(t, regs, nil)
 		var stdout, stderr strings.Builder
-		result, err := Update(context.Background(), projectDir, updateCLIOptions(&stdout, &stderr))
+		result, err := Update(context.Background(), projectDir, updateCLIOptions(&stdout, &stderr, regs))
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -259,17 +249,13 @@ func TestUpdateRenames(t *testing.T) {
 		}
 	})
 	t.Run("diverged file conflicts at the new path", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"old.txt": "a\nbase\nc\n"})
-		projectDir := initProject(t, src)
+		projectDir, regs := initRegistryProject(t, "", map[string]string{"old.txt": "a\nbase\nc\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "old.txt"), []byte("a\nLOCAL\nc\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		evolve(t, src)
-		if err := os.WriteFile(filepath.Join(src, "new.txt"), []byte("a\nREMOTE\nc\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		evolve(t, regs, map[string]string{"new.txt": "a\nREMOTE\nc\n"})
 		var stdout, stderr strings.Builder
-		result, err := Update(context.Background(), projectDir, updateCLIOptions(&stdout, &stderr))
+		result, err := Update(context.Background(), projectDir, updateCLIOptions(&stdout, &stderr, regs))
 		if err != nil {
 			t.Fatalf("Update error: %v", err)
 		}

@@ -34,7 +34,7 @@ Run 'turutan diff' before 'turutan update' to review pending drift.`,
 			return runUpdate(cmd, flags)
 		},
 	}
-	cmd.Flags().StringVar(&flags.ref, "ref", "", "override the stored requestedRef for this run")
+	cmd.Flags().StringVar(&flags.ref, "ref", "", "update to a pinned template version instead of the index latest")
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej)")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "update even when the tree differs from the lock")
 	cmd.Flags().StringVar(&flags.dataFile, "data-file", "", "overlay stored data from a YAML/JSON file (see go doc text/template for data/dot terms)")
@@ -54,6 +54,7 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 	}
 	_, err := scaffold.Update(cmd.Context(), ".", scaffold.UpdateOptions{
 		Ref:            flags.ref,
+		Registries:     loadInitRegistries(),
 		Conflict:       conflict,
 		Force:          flags.force,
 		DataFile:       flags.dataFile,

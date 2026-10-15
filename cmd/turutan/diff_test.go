@@ -14,7 +14,7 @@ import (
 
 func TestDiffCmdExitCodes(t *testing.T) {
 	t.Run("exit 0 with no drift", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		runInProject(t, dst)
 		cmd := newDiffCmd()
 		var stdout bytes.Buffer
@@ -29,7 +29,7 @@ func TestDiffCmdExitCodes(t *testing.T) {
 		}
 	})
 	t.Run("exit 2 on local edit with unified body", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
 		if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("aaa\nBBB\nccc\nddd\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -50,18 +50,32 @@ func TestDiffCmdExitCodes(t *testing.T) {
 			}
 		}
 	})
-	t.Run("exit 2 on template change", func(t *testing.T) {
-		src, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
-		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	t.Run("exit 2 on released template with ref", func(t *testing.T) {
+		regDir, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		fresh := updateCmdRegistryFile(t, regDir, cmdTestTemplate, "hello.txt", "v2\n")
 		runInProject(t, dst)
 		cmd := newDiffCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{})
+		cmd.SetArgs([]string{"--ref", fresh})
 		if err := cmd.Execute(); exitCodeOf(err) != 2 {
 			t.Errorf("diff err = %v (exit %d), want exit 2", err, exitCodeOf(err))
+		}
+	})
+	t.Run("exit 0 when release exists but pin unchanged", func(t *testing.T) {
+		regDir, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		updateCmdRegistryFile(t, regDir, cmdTestTemplate, "hello.txt", "v2\n")
+		runInProject(t, dst)
+		cmd := newDiffCmd()
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("diff error: %v (exit %d)", err, exitCodeOf(err))
+		}
+		if got := stdout.String(); !strings.Contains(got, "no drift") {
+			t.Errorf("stdout = %q, want no-drift line", got)
 		}
 	})
 	t.Run("exit 1 without state", func(t *testing.T) {
@@ -76,7 +90,7 @@ func TestDiffCmdExitCodes(t *testing.T) {
 		}
 	})
 	t.Run("no-pager flag accepted off TTY", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -94,7 +108,7 @@ func TestDiffCmdExitCodes(t *testing.T) {
 		}
 	})
 	t.Run("lock untouched by diff", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +134,7 @@ func TestDiffCmdExitCodes(t *testing.T) {
 
 func TestDiffWhatLocalCmd(t *testing.T) {
 	t.Run("local shows project-only drift", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(dst, "hello.txt"), []byte("local\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}

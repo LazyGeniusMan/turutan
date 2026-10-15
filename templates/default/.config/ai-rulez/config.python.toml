@@ -1,2 +1,0 @@
-[profiles]
-python = ["python", "builtin:python"]

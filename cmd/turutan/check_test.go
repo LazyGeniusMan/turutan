@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,9 +23,9 @@ func exitCodeOf(err error) int {
 	return 1
 }
 
-func initTestProject(t *testing.T, files map[string]string) (string, string) {
+func initTestProject(t *testing.T, files map[string]string) (string, string, map[string]string) {
 	t.Helper()
-	src := writeTemplate(t, files)
+	regDir, regs, flag := makeCmdRegistry(t, "", files)
 	dst := filepath.Join(t.TempDir(), "proj")
 	var stdout bytes.Buffer
 	opts := scaffold.Options{
@@ -37,10 +36,11 @@ func initTestProject(t *testing.T, files map[string]string) (string, string) {
 		Stderr:         &bytes.Buffer{},
 		Stdin:          bytes.NewReader(nil),
 	}
-	if err := scaffold.Init(context.Background(), src, dst, opts); err != nil {
+	if err := scaffold.Init(context.Background(), dst, scaffoldRef(t, flag), regs, opts); err != nil {
 		t.Fatalf("Init error: %v", err)
 	}
-	return src, dst
+	useCmdRegistryConfig(t, regs)
+	return regDir, dst, regs
 }
 
 func runInProject(t *testing.T, dir string) {
@@ -50,7 +50,7 @@ func runInProject(t *testing.T, dir string) {
 
 func TestCheckCmdExitCodes(t *testing.T) {
 	t.Run("exit 0 when up to date", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		runInProject(t, dst)
 		cmd := newCheckCmd()
 		var stdout bytes.Buffer
@@ -64,11 +64,9 @@ func TestCheckCmdExitCodes(t *testing.T) {
 			t.Errorf("stdout = %q, want up-to-date line", got)
 		}
 	})
-	t.Run("exit 2 when template moved", func(t *testing.T) {
-		src, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
-		if err := os.WriteFile(filepath.Join(src, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	t.Run("exit 2 when template released", func(t *testing.T) {
+		regDir, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+		updateCmdRegistryFile(t, regDir, cmdTestTemplate, "hello.txt", "v2\n")
 		runInProject(t, dst)
 		cmd := newCheckCmd()
 		var stdout bytes.Buffer
@@ -94,13 +92,13 @@ func TestCheckCmdExitCodes(t *testing.T) {
 			t.Errorf("check err = %v (exit %d), want exit 1", err, exitCodeOf(err))
 		}
 	})
-	t.Run("exit 1 with ref on filesystem", func(t *testing.T) {
-		_, dst := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
+	t.Run("exit 1 with bad version", func(t *testing.T) {
+		_, dst, _ := initTestProject(t, map[string]string{"hello.txt": "v1\n"})
 		runInProject(t, dst)
 		cmd := newCheckCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"--ref", "v1"})
+		cmd.SetArgs([]string{"--ref", "not-a-version"})
 		err := cmd.Execute()
 		if exitCodeOf(err) != 1 {
 			t.Errorf("check err = %v (exit %d), want exit 1", err, exitCodeOf(err))

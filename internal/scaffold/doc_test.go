@@ -76,9 +76,9 @@ func TestInitDocFiles(t *testing.T) {
 			"go.mod.tmpl":    "module {{.project_name}}\n",
 			"README.md.tmpl": "# {{.project_name}}\n",
 		}
-		src := makeTemplate(t, "doc-files: [README.md]\n", files)
+		regs, ref := makeTestRegistry(t, "doc-files: [README.md]\n", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, ".config", "turutan", "README.md"))
@@ -104,9 +104,9 @@ func TestInitDocFiles(t *testing.T) {
 			"go.mod.tmpl": "module {{.project_name}}\n",
 			"GO.md.tmpl":  "# {{.project_name}} go notes\n",
 		}
-		src := makeTemplate(t, condManifest, files)
+		regs, ref := makeTestRegistry(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Init(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
+		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, ".config", "turutan", "GO.md")); !os.IsNotExist(err) {

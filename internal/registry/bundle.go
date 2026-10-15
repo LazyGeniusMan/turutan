@@ -253,3 +253,63 @@ func CopyTree(srcDir, destDir string) error {
 		return os.WriteFile(target, data, info.Mode().Perm())
 	})
 }
+
+func CopyTreeFiltered(srcDir, destDir string) error {
+	absSrc, err := filepath.Abs(srcDir)
+	if err != nil {
+		return fmt.Errorf("resolving source %q: %w", srcDir, err)
+	}
+	if err := os.MkdirAll(destDir, 0o750); err != nil {
+		return fmt.Errorf("creating destination %q: %w", destDir, err)
+	}
+	return filepath.WalkDir(absSrc, func(full string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(absSrc, full)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		slash := filepath.ToSlash(rel)
+		if slash == ".git" || strings.HasPrefix(slash, ".git/") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if slash == "manifest" || strings.HasPrefix(slash, "manifest/") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if slash == "releases" || strings.HasPrefix(slash, "releases/") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		target, err := filter.SafeJoin(destDir, rel) // #nosec G703 -- rel is WalkDir-relative to absSrc and SafeJoin-pinned to destDir
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o750)
+		}
+		if d.Type()&fs.ModeSymlink != 0 || !d.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(full) // #nosec G304,G122 -- full comes from walking absSrc with symlinks skipped; SafeJoin-pinned write below
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, info.Mode().Perm())
+	})
+}

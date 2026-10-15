@@ -1,7 +1,0 @@
-{{/* Rendered file example: inputs render with missingkey=error, sprig
-filters (minus env/expandenv) are available, and .profiles defaults
-to []. The .tmpl suffix is stripped on render. ~keep */ -}}
-# Greeting for {{ .project_name }}
-
-Style: {{ .greeting_style | upper }}
-Profiles: {{ range $i, $p := .profiles }}{{ if $i }}, {{ end }}{{ $p }}{{ end }}

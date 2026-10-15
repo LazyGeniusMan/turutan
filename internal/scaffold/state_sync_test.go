@@ -64,8 +64,7 @@ var stateSyncFiles = map[string]string{
 
 func TestStateSyncFilesystem(t *testing.T) {
 	t.Run("hand-edited data re-renders at pinned commit", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
 		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi proj\n" {
@@ -102,12 +101,12 @@ func TestStateSyncFilesystem(t *testing.T) {
 			t.Errorf("stdout = %q, want the synced summary", stdout.String())
 		}
 	})
-	t.Run("filesystem renders the live stored path", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+	t.Run("unreleased template edit stays invisible to the pin", func(t *testing.T) {
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
+		regDir := testRegistryDir(t, regs)
 		if err := os.WriteFile(
-			filepath.Join(src, "greet.txt.tmpl"),
+			filepath.Join(regDir, "templates", testRegistryTemplate, "greet.txt.tmpl"),
 			[]byte("changed {{.project_name}}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -118,8 +117,26 @@ func TestStateSyncFilesystem(t *testing.T) {
 			t.Fatalf("StateSync error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
-		if string(got) != "changed proj\n" {
-			t.Errorf("greet.txt = %q, want the live stored-path render", got)
+		if string(got) != "hi proj\n" {
+			t.Errorf("greet.txt = %q, want the pinned snapshot render", got)
+		}
+		if result.Old != old || result.New != old {
+			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, old)
+		}
+	})
+	t.Run("released template change keeps the pin", func(t *testing.T) {
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		old := storedCommit(t, projectDir)
+		updateTestTemplateFile(t, regs, testRegistryTemplate, "greet.txt.tmpl", "changed {{.project_name}}\n")
+		var stdout, stderr strings.Builder
+		result, err := StateSync(
+			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr))
+		if err != nil {
+			t.Fatalf("StateSync error: %v", err)
+		}
+		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
+		if string(got) != "hi proj\n" {
+			t.Errorf("greet.txt = %q, want the pinned render without upstream drift", got)
 		}
 		if result.Old != old || result.New != old {
 			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, old)
@@ -129,8 +146,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("dirty guard without force", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		if err := os.WriteFile(
 			filepath.Join(projectDir, "greet.txt"), []byte("local edit\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -149,8 +165,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("preview leaves tree and state alone", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
 		editStoredData(t, projectDir, "project_name", "previewed")
 		var stdout, stderr strings.Builder
@@ -173,88 +188,6 @@ func TestStateSyncFilesystem(t *testing.T) {
 	})
 }
 
-func TestStateSyncLocalGitPinned(t *testing.T) {
-	repoDir, old := initTemplateRepo(t, map[string]string{
-		".turutan.yml":   stateSyncManifest,
-		"greet.txt.tmpl": "{{.greeting}} {{.project_name}}\n",
-	})
-	projectDir := initProject(t, repoDir)
-	if got := storedCommit(t, projectDir); got != old {
-		t.Fatalf("stored commit = %q, want %q", got, old)
-	}
-	updateTemplateFile(t, repoDir, "greet.txt.tmpl", "changed {{.project_name}}\n")
-	var stdout, stderr strings.Builder
-	result, err := StateSync(
-		context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr))
-	if err != nil {
-		t.Fatalf("StateSync error: %v", err)
-	}
-	got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
-	if string(got) != "hi proj\n" {
-		t.Errorf("greet.txt = %q, want pinned render without upstream drift", got)
-	}
-	if result.Old != old || result.New != old {
-		t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, old)
-	}
-	if got := storedCommit(t, projectDir); got != old {
-		t.Errorf("stored commit = %q, want pinned %q", got, old)
-	}
-}
-
-func TestStateSyncRemoteGitCacheHit(t *testing.T) {
-	sha := strings.Repeat("ab", 20)
-	cacheHome := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	cached := filepath.Join(cacheHome, "turutan", "default", sha, "templates", "default")
-	if err := os.MkdirAll(cached, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	writeFiles(t, cached, map[string]string{
-		".turutan.yml":   stateSyncManifest,
-		"greet.txt.tmpl": "{{.greeting}} {{.project_name}}\n",
-	})
-	projectDir := t.TempDir()
-	state := &config.State{
-		Version:         config.StateVersion,
-		Template:        "git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=main",
-		SourceKind:      "remote-git",
-		RequestedRef:    "main",
-		ResolvedCommit:  sha,
-		Data:            map[string]any{"project_name": "cached", "greeting": "hey"},
-		Engine:          "turutan/0.1.0",
-		TemplateLicense: config.TemplateLicenseMIT0,
-	}
-	if err := config.SaveState(projectDir, state); err != nil {
-		t.Fatal(err)
-	}
-	lock := &config.Lock{
-		Source:      state.Template,
-		Ref:         "main",
-		ResolvedSHA: sha,
-		Subpath:     "templates/default",
-		Files:       []config.LockFile{},
-	}
-	if err := config.SaveLock(projectDir, lock); err != nil {
-		t.Fatal(err)
-	}
-	var stdout, stderr strings.Builder
-	result, err := StateSync(
-		context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr))
-	if err != nil {
-		t.Fatalf("StateSync cache-hit error: %v", err)
-	}
-	got, err := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
-	if err != nil || string(got) != "hey cached\n" {
-		t.Errorf("greet.txt = %q, want cached pinned render", got)
-	}
-	if result.Old != sha || result.New != sha {
-		t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, sha)
-	}
-	if got := storedCommit(t, projectDir); got != sha {
-		t.Errorf("stored commit = %q, want pinned %q", got, sha)
-	}
-}
-
 func TestStateSyncFailures(t *testing.T) {
 	t.Run("missing state errors", func(t *testing.T) {
 		var stdout, stderr strings.Builder
@@ -264,14 +197,14 @@ func TestStateSyncFailures(t *testing.T) {
 			t.Error("StateSync without state succeeded, want error")
 		}
 	})
-	t.Run("unresolvable pinned commit errors", func(t *testing.T) {
-		repoDir, _ := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := initProject(t, repoDir)
+	t.Run("tampered pinned digest errors", func(t *testing.T) {
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		state, err := config.LoadState(os.DirFS(projectDir))
 		if err != nil {
 			t.Fatal(err)
 		}
-		state.ResolvedCommit = strings.Repeat("0", 40)
+		state.TemplateDigest = "sha256:" + strings.Repeat("0", 64)
+		state.ResolvedCommit = strings.Repeat("0", 64)
 		if err := config.SaveState(projectDir, state); err != nil {
 			t.Fatal(err)
 		}
@@ -283,8 +216,7 @@ func TestStateSyncFailures(t *testing.T) {
 		}
 	})
 	t.Run("bad conflict rejected", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
 		opts := stateSyncTestOptions(&stdout, &stderr)
 		opts.Conflict = "merge"
@@ -296,8 +228,7 @@ func TestStateSyncFailures(t *testing.T) {
 
 func TestStateInput(t *testing.T) {
 	t.Run("interactive reprompt defaults from stored values", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
 		opts := stateInputTestOptions(&stdout, &stderr)
 		opts.Stdin = strings.NewReader("newproj\n\n")
@@ -324,8 +255,7 @@ func TestStateInput(t *testing.T) {
 		}
 	})
 	t.Run("accepting every default leaves data alone", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
 		opts := stateInputTestOptions(&stdout, &stderr)
 		opts.Stdin = strings.NewReader("\n\n")
@@ -341,8 +271,7 @@ func TestStateInput(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive without data fails", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
 		opts := stateInputTestOptions(&stdout, &stderr)
 		opts.NonInteractive = true
@@ -353,8 +282,7 @@ func TestStateInput(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive data-file overlay re-renders", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(
@@ -384,12 +312,12 @@ func TestStateInput(t *testing.T) {
 			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, old)
 		}
 	})
-	t.Run("filesystem renders the live stored path", func(t *testing.T) {
-		src := makeTemplate(t, stateSyncManifest, stateSyncFiles)
-		projectDir := initProject(t, src)
+	t.Run("unreleased template edit stays invisible to the pin", func(t *testing.T) {
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
+		regDir := testRegistryDir(t, regs)
 		if err := os.WriteFile(
-			filepath.Join(src, "greet.txt.tmpl"),
+			filepath.Join(regDir, "templates", testRegistryTemplate, "greet.txt.tmpl"),
 			[]byte("changed {{.project_name}}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -401,8 +329,8 @@ func TestStateInput(t *testing.T) {
 			t.Fatalf("StateInput error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
-		if string(got) != "changed proj\n" {
-			t.Errorf("greet.txt = %q, want the live stored-path render", got)
+		if string(got) != "hi proj\n" {
+			t.Errorf("greet.txt = %q, want the pinned snapshot render", got)
 		}
 		if result.Old != old || result.New != old {
 			t.Errorf("Old/New = %q/%q, want both %q", result.Old, result.New, old)

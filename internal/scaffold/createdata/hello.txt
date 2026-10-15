@@ -1,2 +1,0 @@
-This is a verbatim file: copied byte-for-byte, no template evaluation.
-If it contained {{ .project_name }} it would stay literal.

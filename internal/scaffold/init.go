@@ -14,42 +14,58 @@ import (
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
-	"github.com/LazyGeniusMan/turutan/internal/git"
+	"github.com/LazyGeniusMan/turutan/internal/registry"
 	"github.com/LazyGeniusMan/turutan/internal/template"
 	"github.com/Masterminds/semver/v3"
 )
 
-// Init initializes a new project at target from the given template source.
+// Init initializes a new project at target from a registry template.
+// The template ref selects registry/template@version; an empty version
+// resolves to the index latest. Registries map names to base URIs; the
+// reserved turutan name falls back to its OCI address without config.
 // ~keep
 func Init(
 	ctx context.Context,
-	source, target string,
+	target string,
+	ref RegistryRef,
+	registries map[string]string,
 	opts Options,
 ) error {
 	stdout, stderr, stdin := streams(opts)
 	if err := validateInitOpts(opts); err != nil {
 		return err
 	}
-	src, err := resolveInitSrc(source, opts, stderr)
+	rr, err := ResolveRegistry(ctx, registries, ref.Registry)
 	if err != nil {
 		return err
 	}
-	fetched, manifest, engine, err := fetchInitTemplate(
-		ctx, src, opts, stderr)
+	templateManifest, err := ResolveTemplateManifest(rr, ref.Template, ref.Version)
 	if err != nil {
 		return err
 	}
-	if fetched.Cleanup != nil {
-		defer fetched.Cleanup()
+	bundleDir, bundleURI, cleanup, err := FetchTemplateBundle(ctx, rr, templateManifest)
+	if err != nil {
+		return err
 	}
-	absTarget, data, staged, cleanupStage, err := stageInit(
-		target, fetched, manifest, opts, stdout, stdin)
+	defer cleanup()
+	manifest, err := config.LoadManifest(os.DirFS(bundleDir))
+	if err != nil {
+		return err
+	}
+	engine, err := checkMinEngine(manifest, opts.Engine, stderr, opts.Verbose)
+	if err != nil {
+		return err
+	}
+	vlogf(stderr, opts.Verbose,
+		"init: template %s bundle %s", ref.String(), bundleURI)
+	absTarget, data, staged, cleanupStage, err := stageInitBundle(
+		target, bundleDir, manifest, opts, stdout, stdin)
 	if err != nil {
 		return err
 	}
 	defer cleanupStage()
-	return finishInit(
-		ctx, src, fetched, manifest, absTarget, data, staged,
+	return finishRegistryInit(
+		rr, templateManifest, bundleDir, bundleURI, manifest, absTarget, data, staged,
 		opts, engine, stdout, stderr, stdin)
 }
 
@@ -68,107 +84,8 @@ func validateInitOpts(opts Options) error {
 	return nil
 }
 
-func resolveInitSrc(
-	source string,
-	opts Options,
-	stderr io.Writer,
-) (*template.Source, error) {
-	src, err := template.ResolveAlias(source)
-	if err != nil {
-		return nil, err
-	}
-	if opts.Ref != "" {
-		src.RequestedRef = opts.Ref
-	}
-	if opts.Subpath != "" {
-		src.Subpath = filepath.ToSlash(filepath.Clean(opts.Subpath))
-	}
-	vlogf(stderr, opts.Verbose,
-		"init: source %q kind %s ref %q depth %d",
-		src.String(), src.Kind, src.RequestedRef, src.Depth)
-	if src.Kind == template.KindLocalGit ||
-		src.Kind == template.KindFilesystem {
-		abs, err := filepath.Abs(src.Repo)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"init: resolving source %q: %w", src.Raw, err)
-		}
-		src.Repo = abs
-	}
-	return src, nil
-}
-
-func relativizeForStore(projectDir string, src *template.Source) template.Source {
-	out := *src
-	if out.Kind != template.KindFilesystem || out.Repo == "" ||
-		!filepath.IsAbs(out.Repo) {
-		return out
-	}
-	if rel, err := filepath.Rel(projectDir, out.Repo); err == nil {
-		out.Repo = filepath.ToSlash(rel)
-	}
-	return out
-}
-
-func parseStoredSource(projectDir, raw string) (*template.Source, error) {
-	if join, ok := storedRelativePath(projectDir, raw); ok {
-		return template.ParseSource(join)
-	}
-	return template.ParseSource(raw)
-}
-
-func storedRelativePath(projectDir, raw string) (string, bool) {
-	rest := raw
-	if strings.HasPrefix(rest, "git::") {
-		return "", false
-	}
-	if strings.Contains(rest, "://") || git.IsScpLike(rest) {
-		return "", false
-	}
-	locator := rest
-	if idx := strings.Index(rest, "?"); idx >= 0 {
-		locator = rest[:idx]
-	}
-	if locator == "" || filepath.IsAbs(locator) ||
-		filepath.IsAbs(filepath.FromSlash(locator)) {
-		return "", false
-	}
-	return filepath.Join(projectDir, filepath.FromSlash(raw)), true
-}
-
-func fetchInitTemplate(
-	ctx context.Context,
-	src *template.Source,
-	opts Options,
-	stderr io.Writer,
-) (*template.Fetched, *config.Manifest, string, error) {
-	fetched, err := template.Fetch(ctx, src)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	vlogf(stderr, opts.Verbose,
-		"init: fetched %s commit %q", src.Kind, fetched.ResolvedCommit)
-	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
-	if err != nil {
-		if fetched.Cleanup != nil {
-			fetched.Cleanup()
-		}
-		return nil, nil, "", err
-	}
-	warnManifestSourceMismatch(stderr, manifest, src)
-	engine, err := checkMinEngine(manifest, opts.Engine, stderr, opts.Verbose)
-	if err != nil {
-		if fetched.Cleanup != nil {
-			fetched.Cleanup()
-		}
-		return nil, nil, "", err
-	}
-	return fetched, manifest, engine, nil
-}
-
-func stageInit(
-	target string,
-	fetched *template.Fetched,
+func stageInitBundle(
+	target, bundleDir string,
 	manifest *config.Manifest,
 	opts Options,
 	stdout io.Writer,
@@ -183,11 +100,11 @@ func stageInit(
 		return "", nil, "", nil, err
 	}
 	staged, cleanup, err := renderWithData(
-		fetched.Dir, data, manifest, opts, stdout, stdin)
+		bundleDir, data, manifest, opts, stdout, stdin)
 	if err != nil {
 		return "", nil, "", cleanup, err
 	}
-	if err := plantLicenseFiles(fetched.Dir, staged, manifest); err != nil {
+	if err := plantLicenseFiles(bundleDir, staged, manifest); err != nil {
 		return "", nil, "", cleanup, fmt.Errorf("init: %w", err)
 	}
 	if err := plantDocFiles(staged, manifest); err != nil {
@@ -196,10 +113,10 @@ func stageInit(
 	return absTarget, data, staged, cleanup, nil
 }
 
-func finishInit(
-	_ context.Context,
-	src *template.Source,
-	fetched *template.Fetched,
+func finishRegistryInit(
+	rr *ResolvedRegistry,
+	templateManifest *registry.TemplateManifest,
+	bundleDir, bundleURI string,
 	manifest *config.Manifest,
 	absTarget string,
 	data map[string]any,
@@ -209,8 +126,6 @@ func finishInit(
 	stdout, stderr io.Writer,
 	stdin io.Reader,
 ) error {
-	stored := relativizeForStore(absTarget, src)
-	src = &stored
 	preserved, err := preservedGlobs(data, manifest)
 	if err != nil {
 		return err
@@ -219,31 +134,85 @@ func finishInit(
 	if err != nil {
 		return err
 	}
-	resolved := fetched.ResolvedCommit
-	if resolved == "" {
-		resolved = strings.TrimPrefix(
-			config.ComputeManifestHash(files), "sha256:")
+	digest := strings.TrimSpace(templateManifest.Digest)
+	if digest == "" {
+		var err error
+		digest, err = registry.DigestDir(bundleDir)
+		if err != nil {
+			return fmt.Errorf("init: %w", err)
+		}
 	}
-	license := resolveTemplateLicense(os.DirFS(fetched.Dir), manifest)
+	digestHex := strings.TrimPrefix(digest, "sha256:")
+	license := resolveTemplateLicense(os.DirFS(bundleDir), manifest)
 	vlogf(stderr, opts.Verbose, "init: template license %s", license)
-	if err := writeStateAndLock(
-		absTarget, src, resolved, data, opts, files, engine, license,
+	ref := RegistryStateRef(rr.Name, templateManifest.Name, templateManifest.Version)
+	if err := writeRegistryStateAndLock(
+		absTarget, rr.Name, ref, templateManifest.Version, bundleURI, digest,
+		data, opts, files, engine, license,
 	); err != nil {
 		return err
 	}
-	if err := StoreBase(absTarget, resolved, staged); err != nil {
+	if err := StoreBase(absTarget, digestHex, staged); err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
 	if err := gateHooks(manifest, absTarget, opts, stdout, stderr, stdin); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(stdout, "initialized %s from %s @ %s (%d files)\n",
-		absTarget, src.String(), shortSHA(resolved), len(files)); err != nil {
+	if _, err := fmt.Fprintf(stdout, "initialized %s from %s (%d files)\n",
+		absTarget, ref, len(files)); err != nil {
 		return err
 	}
 	vlogf(stderr, opts.Verbose,
 		"init: wrote %d file(s) state %s lock %s",
 		len(files), config.StateFileName, config.LockFileName)
+	return nil
+}
+
+func writeRegistryStateAndLock(
+	target, registryName, ref, version, uri, digest string,
+	data map[string]any,
+	opts Options,
+	files []config.LockFile,
+	engine, license string,
+) error {
+	digestHex := strings.TrimPrefix(strings.TrimSpace(digest), "sha256:")
+	if digestHex == "" {
+		return fmt.Errorf("init: template digest is empty")
+	}
+	full := digest
+	if !strings.HasPrefix(full, "sha256:") {
+		full = "sha256:" + digestHex
+	}
+	state := &config.State{
+		Version:         config.StateVersion,
+		Template:        ref,
+		SourceKind:      "registry",
+		Registry:        registryName,
+		TemplateURI:     uri,
+		TemplateDigest:  full,
+		RequestedRef:    version,
+		ResolvedCommit:  digestHex,
+		Data:            data,
+		Skip:            opts.Skip,
+		Conflict:        string(opts.Conflict),
+		Engine:          "turutan/" + engine,
+		TemplateLicense: license,
+	}
+	if err := config.SaveState(target, state); err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+	lock := &config.Lock{
+		Source:      ref,
+		Ref:         version,
+		ResolvedSHA: digestHex,
+		Registry:    registryName,
+		URI:         uri,
+		Digest:      full,
+		Files:       files,
+	}
+	if err := config.SaveLock(target, lock); err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
 	return nil
 }
 
@@ -626,56 +595,6 @@ func keepExisting(slash string, manifest *config.Manifest, opts Options, preserv
 		return false, fmt.Errorf("init: matching --skip entries: %w", err)
 	}
 	return skipped, nil
-}
-
-func warnManifestSourceMismatch(stderr io.Writer, manifest *config.Manifest, src *template.Source) {
-	if manifest.Source == "" || manifest.Source == src.String() {
-		return
-	}
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	_, _ = fmt.Fprintf(stderr,
-		"turutan: template manifest source %q differs from requested %q (advisory only)\n",
-		manifest.Source, src.String())
-}
-
-func writeStateAndLock(
-	target string,
-	src *template.Source,
-	resolved string,
-	data map[string]any,
-	opts Options,
-	files []config.LockFile,
-	engine, license string,
-) error {
-	state := &config.State{
-		Version:         config.StateVersion,
-		Template:        src.String(),
-		SourceKind:      string(src.Kind),
-		Subpath:         src.Subpath,
-		RequestedRef:    src.RequestedRef,
-		ResolvedCommit:  resolved,
-		Data:            data,
-		Skip:            opts.Skip,
-		Conflict:        string(opts.Conflict),
-		Engine:          "turutan/" + engine,
-		TemplateLicense: license,
-	}
-	if err := config.SaveState(target, state); err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-	lock := &config.Lock{
-		Source:      src.String(),
-		Ref:         src.RequestedRef,
-		ResolvedSHA: resolved,
-		Subpath:     src.Subpath,
-		Files:       files,
-	}
-	if err := config.SaveLock(target, lock); err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-	return nil
 }
 
 func gateHooks(

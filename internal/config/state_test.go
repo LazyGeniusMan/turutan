@@ -9,18 +9,18 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
-
-	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
 func validState() *State {
 	return &State{
 		Version:         StateVersion,
-		Template:        "git::https://github.com/org/web.git//react",
-		SourceKind:      "remote-git",
-		Subpath:         "react",
-		RequestedRef:    "^1.2",
-		ResolvedCommit:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Template:        "acme/web@1.2.0",
+		SourceKind:      "registry",
+		Registry:        "acme",
+		TemplateURI:     "oci://ghcr.io/acme/web:1.2.0",
+		TemplateDigest:  "sha256:" + strings.Repeat("a", 64),
+		RequestedRef:    "1.2.0",
+		ResolvedCommit:  strings.Repeat("a", 64),
 		Data:            map[string]any{"project_name": "demo"},
 		Engine:          "turutan/0.1.0",
 		TemplateLicense: TemplateLicenseMIT0,
@@ -49,12 +49,25 @@ func TestStateRoundTrip(t *testing.T) {
 			t.Errorf("Data = %v, want project_name=demo", got.Data)
 		}
 	})
-	t.Run("filesystem identity accepted", func(t *testing.T) {
+	t.Run("sha256 digest form accepted", func(t *testing.T) {
+		state := validState()
+		state.ResolvedCommit = state.TemplateDigest
+		if err := ValidateState(state); err != nil {
+			t.Errorf("ValidateState digest error: %v", err)
+		}
+	})
+	t.Run("legacy git kind rejected", func(t *testing.T) {
+		state := validState()
+		state.SourceKind = "remote-git"
+		if err := ValidateState(state); err == nil {
+			t.Error("ValidateState remote-git succeeded, want removal error")
+		}
+	})
+	t.Run("legacy filesystem kind rejected", func(t *testing.T) {
 		state := validState()
 		state.SourceKind = "filesystem"
-		state.ResolvedCommit = strings.Repeat("b", 64)
-		if err := ValidateState(state); err != nil {
-			t.Errorf("ValidateState filesystem error: %v", err)
+		if err := ValidateState(state); err == nil {
+			t.Error("ValidateState filesystem succeeded, want removal error")
 		}
 	})
 }
@@ -103,6 +116,12 @@ func TestValidateStateFailures(t *testing.T) {
 		{name: "future version rejected", mutate: func(s *State) { s.Version = StateVersion + 1 }},
 		{name: "empty template rejected", mutate: func(s *State) { s.Template = "" }},
 		{name: "unknown kind rejected", mutate: func(s *State) { s.SourceKind = "s3" }},
+		{name: "empty registry rejected", mutate: func(s *State) { s.Registry = "" }},
+		{name: "empty templateURI rejected", mutate: func(s *State) { s.TemplateURI = "" }},
+		{name: "bad templateDigest rejected", mutate: func(s *State) { s.TemplateDigest = "md5:abc" }},
+		{name: "digest mismatch rejected", mutate: func(s *State) { s.ResolvedCommit = strings.Repeat("b", 64) }},
+		{name: "empty requestedRef rejected", mutate: func(s *State) { s.RequestedRef = "" }},
+		{name: "bad requestedRef rejected", mutate: func(s *State) { s.RequestedRef = "not-a-version" }},
 		{name: "short SHA rejected", mutate: func(s *State) { s.ResolvedCommit = "abc123" }},
 		{name: "empty engine rejected", mutate: func(s *State) { s.Engine = "" }},
 		{name: "empty license rejected", mutate: func(s *State) { s.TemplateLicense = "" }},
@@ -189,8 +208,12 @@ func TestLockRoundTrip(t *testing.T) {
 
 func validLock() *Lock {
 	return &Lock{
-		Source:       "git::https://github.com/org/web.git//react",
-		ResolvedSHA:  strings.Repeat("a", 40),
+		Source:       "acme/web@1.2.0",
+		Ref:          "1.2.0",
+		ResolvedSHA:  strings.Repeat("a", 64),
+		Registry:     "acme",
+		URI:          "oci://ghcr.io/acme/web:1.2.0",
+		Digest:       "sha256:" + strings.Repeat("a", 64),
 		ManifestHash: "sha256:" + strings.Repeat("b", 64),
 		Files: []LockFile{
 			{Path: "a.txt", SHA256: strings.Repeat("c", 64), Bytes: 1},
@@ -227,11 +250,32 @@ func TestValidateLockShape(t *testing.T) {
 			}
 		})
 	}
-	t.Run("64-hex filesystem identity accepted", func(t *testing.T) {
+	t.Run("sha256 digest form accepted", func(t *testing.T) {
 		lock := validLock()
-		lock.ResolvedSHA = strings.Repeat("e", 64)
+		lock.ResolvedSHA = lock.Digest
 		if err := ValidateLock(lock); err != nil {
 			t.Errorf("ValidateLock error: %v", err)
+		}
+	})
+	t.Run("empty registry uri rejected", func(t *testing.T) {
+		lock := validLock()
+		lock.URI = ""
+		if err := ValidateLock(lock); err == nil {
+			t.Error("ValidateLock with empty uri succeeded, want error")
+		}
+	})
+	t.Run("bad registry digest rejected", func(t *testing.T) {
+		lock := validLock()
+		lock.Digest = "md5:abc"
+		if err := ValidateLock(lock); err == nil {
+			t.Error("ValidateLock with bad digest succeeded, want error")
+		}
+	})
+	t.Run("empty registry ref rejected", func(t *testing.T) {
+		lock := validLock()
+		lock.Ref = ""
+		if err := ValidateLock(lock); err == nil {
+			t.Error("ValidateLock with empty ref succeeded, want error")
 		}
 	})
 	t.Run("saved lock passes shape validation", func(t *testing.T) {
@@ -261,11 +305,9 @@ func TestLoadManifest(t *testing.T) {
 			t.Errorf("default manifest = %+v, want empty", got)
 		}
 	})
-	t.Run("default template manifest parses", func(t *testing.T) {
-		data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
-		if err != nil {
-			t.Skipf("default template manifest not found: %v", err)
-		}
+	t.Run("registry template manifest parses", func(t *testing.T) {
+		data := []byte("source: \"testreg/test@0.1.0\"\nmin-engine: \">=0.1.0\"\nlicense: MIT-0\n" +
+			"excludes:\n  - \"gen/**\"\nconflict: inline\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
@@ -274,7 +316,7 @@ func TestLoadManifest(t *testing.T) {
 			t.Error("MinEngine empty, want a floor constraint")
 		}
 		if len(got.Excludes) == 0 {
-			t.Error("Excludes empty, want default excludes globs")
+			t.Error("Excludes empty, want excludes globs")
 		}
 	})
 	t.Run("bad conflict rejected", func(t *testing.T) {
@@ -693,264 +735,22 @@ func TestDiffInputs(t *testing.T) {
 	})
 }
 
-func TestDefaultTemplateConditionals(t *testing.T) {
-	t.Parallel()
-	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
-	if err != nil {
-		t.Skipf("default template manifest not found: %v", err)
-	}
-	got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
-	if err != nil {
-		t.Fatalf("LoadManifest error: %v", err)
-	}
-	if strings.Contains(string(data), "\nprofiles:") {
-		t.Error("default manifest declares profiles, want conditionals only")
-	}
-	if len(got.Conditionals) != 39 {
-		t.Errorf("conditionals = %d, want 39 (20 plain + 19 ai+language)", len(got.Conditionals))
-	}
-	byIf := map[string]ManifestConditional{}
-	for _, cond := range got.Conditionals {
-		byIf[cond.If] = cond
-	}
-	for _, id := range []string{"ai", "go", "github", "typescript", "typst", "rust-polygot"} {
-		cond, ok := byIf[`{{contains .profiles "`+id+`"}}`]
-		if !ok {
-			t.Errorf("missing conditional for %q", id)
-			continue
-		}
-		if len(cond.Includes) == 0 {
-			t.Errorf("conditional %q has no includes", id)
-		}
-	}
-	goCond := byIf[`{{contains .profiles "go"}}`]
-	if !slices.Contains(goCond.Includes, ".config/mise/config.go.toml") {
-		t.Errorf("go includes = %v, want go toolchain", goCond.Includes)
-	}
-	for _, pattern := range goCond.Includes {
-		if strings.Contains(pattern, "ai-rulez") {
-			t.Errorf("go includes %q, want ai-rulez gated on ai+go, not the language alone", pattern)
-		}
-	}
-	for _, id := range []string{"c", "go", "docker", "github", "kubernetes"} {
-		cond, ok := byIf[`{{and (contains .profiles "ai") (contains .profiles "`+id+`")}}`]
-		if !ok {
-			t.Errorf("missing ai+%s combined conditional", id)
-			continue
-		}
-		if len(cond.Includes) == 0 {
-			t.Errorf("ai+%s conditional has no includes", id)
-		}
-	}
-	aiGo := byIf[`{{and (contains .profiles "ai") (contains .profiles "go")}}`]
-	if !slices.Contains(aiGo.Includes, ".config/ai-rulez/config.go.toml") {
-		t.Errorf("ai+go includes = %v, want ai-rulez go config", aiGo.Includes)
-	}
-	if !slices.Contains(aiGo.Includes, ".config/ai-rulez/domains/go/**") {
-		t.Errorf("ai+go includes = %v, want ai-rulez go domain", aiGo.Includes)
-	}
-	aiCond := byIf[`{{contains .profiles "ai"}}`]
-	for _, want := range []string{
-		".config/ai-rulez/config.custom.toml",
-		".config/ai-rulez/domains/custom/**",
-	} {
-		if !slices.Contains(aiCond.Preserves, want) {
-			t.Errorf("ai conditional preserves lacks %q (ai-gated custom seed)", want)
-		}
-	}
-	for _, want := range []string{
-		".config/mise/config.custom.toml",
-		".config/fnox.toml",
-		".config/hk/custom.pkl",
-		".gitignore",
-	} {
-		if !slices.Contains(got.Preserves, want) {
-			t.Errorf("preserves lacks %q (ex-custom file)", want)
-		}
-	}
-	for _, want := range []string{
-		".config/ai-rulez/config.custom.toml",
-		".config/ai-rulez/domains/custom/**",
-	} {
-		if slices.Contains(got.Preserves, want) {
-			t.Errorf("root preserves contains %q, want ai-gated conditional preserves only", want)
-		}
-	}
-	for _, pattern := range got.Includes {
-		if strings.Contains(pattern, "ai-rulez") {
-			t.Errorf("root includes %q, want ai-rulez gated on conditionals only", pattern)
-		}
-	}
-	if _, ok := got.Inputs["profiles"]; !ok {
-		t.Error("inputs lacks profiles array input")
-	} else if got.Inputs["profiles"].Type != "array" {
-		t.Errorf("profiles input type = %q, want array", got.Inputs["profiles"].Type)
-	}
-	if len(got.Includes) == 0 {
-		t.Error("root includes empty, want the core whitelist so conditional files do not leak")
-	}
-	wantProfiles := []string{"ai", "c", "cloudflare", "cpp", "csharp", "docker", "elixir", "github", "gitlab", "go", "java", "kubernetes", "php", "python", "r", "ruby", "rust", "rust-polygot", "typescript", "typst"}
-	if def, ok := got.Inputs["profiles"]; ok {
-		if !slices.Equal(def.Options, wantProfiles) {
-			t.Errorf("profiles options = %v, want %v in conditional order", def.Options, wantProfiles)
-		}
-	} else {
-		t.Error("inputs lacks profiles, want options check")
-	}
-	var condOrder []string
-	for _, cond := range got.Conditionals {
-		const prefix = `{{contains .profiles "`
-		if rest, ok := strings.CutPrefix(cond.If, prefix); ok {
-			if id, _, ok := strings.Cut(rest, `"}}`); ok {
-				condOrder = append(condOrder, id)
-			}
-		}
-	}
-	if def, ok := got.Inputs["profiles"]; ok {
-		if !slices.Equal(def.Options, condOrder) {
-			t.Errorf("profiles options = %v, want conditional order %v", def.Options, condOrder)
-		}
-	}
-}
-
-func TestDefaultTemplateOwnership(t *testing.T) {
-	t.Parallel()
-	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "default", ManifestFileName))
-	if err != nil {
-		t.Skipf("default template manifest not found: %v", err)
-	}
-	manifest, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
-	if err != nil {
-		t.Fatalf("LoadManifest error: %v", err)
-	}
-	t.Run("conditionals carry includes without profiles", func(t *testing.T) {
-		t.Parallel()
-		if len(manifest.Conditionals) == 0 {
-			t.Fatal("conditionals empty, want one per feature")
-		}
-		for i, cond := range manifest.Conditionals {
-			if len(cond.Includes) == 0 {
-				t.Errorf("conditionals[%d] has no includes, want at least one", i)
-			}
-		}
-		matched := map[string][]string{}
-		for _, cond := range manifest.Conditionals {
-			for _, pattern := range cond.Includes {
-				if pattern == ".config/ai-rulez/domains/yml/**" {
-					matched[pattern] = append(matched[pattern], cond.If)
-				}
-			}
-		}
-		slices.Sort(matched[".config/ai-rulez/domains/yml/**"])
-		want := []string{
-			`{{and (contains .profiles "ai") (contains .profiles "docker")}}`,
-			`{{and (contains .profiles "ai") (contains .profiles "github")}}`,
-			`{{and (contains .profiles "ai") (contains .profiles "kubernetes")}}`,
-		}
-		if !slices.Equal(matched[".config/ai-rulez/domains/yml/**"], want) {
-			t.Errorf("yml owners = %v, want ai-gated layered OR across docker github kubernetes", matched[".config/ai-rulez/domains/yml/**"])
-		}
-	})
-	t.Run("every file excluded conditional preserved or core", func(t *testing.T) {
-		t.Parallel()
-		if len(manifest.Includes) == 0 {
-			t.Fatal("root includes empty, want the core whitelist")
-		}
-		isCore := func(rel, stripped string) bool {
-			for _, pattern := range manifest.Includes {
-				for _, cand := range []string{rel, stripped} {
-					if ok, err := filter.Match(pattern, cand); err == nil && ok {
-						return true
-					}
-				}
-			}
-			return false
-		}
-		conditionalHit := func(rel, stripped string) bool {
-			for _, cond := range manifest.Conditionals {
-				for _, pattern := range cond.Includes {
-					for _, cand := range []string{rel, stripped} {
-						if ok, err := filter.Match(pattern, cand); err == nil && ok {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}
-		preservedHit := func(rel string) bool {
-			ok, err := filter.MatchAny(manifest.Preserves, rel)
-			if err == nil && ok {
-				return true
-			}
-			for _, cond := range manifest.Conditionals {
-				if ok, err := filter.MatchAny(cond.Preserves, rel); err == nil && ok {
-					return true
-				}
-			}
-			return false
-		}
-		excludedHit := func(rel string) bool {
-			ok, err := filter.MatchAny(manifest.Excludes, rel)
-			return err == nil && ok
-		}
-		for _, rel := range []string{
-			".config/mise/config.custom.toml",
-			".config/fnox.toml",
-			".config/hk/custom.pkl",
-			".gitignore",
-		} {
-			if !preservedHit(rel) {
-				t.Errorf("%s not preserved, want ex-custom keep", rel)
-			}
-			if conditionalHit(rel, rel) {
-				t.Errorf("%s in conditional includes, want preserves only", rel)
-			}
-		}
-		root := filepath.Join("..", "..", "templates", "default")
-		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			rel, err := filepath.Rel(root, path)
-			if err != nil {
-				return err
-			}
-			rel = filepath.ToSlash(rel)
-			if rel == ManifestFileName || rel == ManifestFileNameAlt {
-				return nil
-			}
-			stripped := strings.TrimSuffix(rel, ".tmpl")
-			licensed := slices.Contains(manifest.LicenseFiles, rel) || slices.Contains(manifest.LicenseFiles, stripped)
-			docced := slices.Contains(manifest.DocFiles, rel) || slices.Contains(manifest.DocFiles, stripped)
-			if excludedHit(rel) || licensed || docced || isCore(rel, stripped) || conditionalHit(rel, stripped) || preservedHit(rel) {
-				return nil
-			}
-			t.Errorf("orphan file %q: not excluded, conditional, preserved, licensed, doc, or root-includes core", rel)
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("walking default template: %v", err)
-		}
-	})
-}
-
 func TestStateLockLocations(t *testing.T) {
 	t.Parallel()
 	commit := strings.Repeat("a", 64)
-	digest := "sha256:" + strings.Repeat("b", 64)
+	digest := "sha256:" + commit
 	stateFile := func(engine string) *fstest.MapFile {
 		return &fstest.MapFile{Data: []byte(
-			"version: 1\ntemplate: tpl\nsourceKind: filesystem\n" +
+			"version: 1\ntemplate: acme/web@1.2.0\nsourceKind: registry\n" +
+				"registry: acme\ntemplateURI: oci://ghcr.io/acme/web:1.2.0\n" +
+				"templateDigest: " + digest + "\nrequestedRef: 1.2.0\n" +
 				"resolvedCommit: " + commit + "\nengine: " + engine + "\n" +
 				"templateLicense: MIT-0\n")}
 	}
 	lockFile := &fstest.MapFile{Data: []byte(
-		`{"source":"tpl","resolved_sha":"` + commit + `",` +
-			`"manifest_hash":"` + digest + `","files":[]}`)}
+		`{"source":"acme/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
+			`"registry":"acme","uri":"oci://ghcr.io/acme/web:1.2.0",` +
+			`"digest":"` + digest + `","manifest_hash":"` + digest + `","files":[]}`)}
 	t.Run("yaml state loads", func(t *testing.T) {
 		t.Parallel()
 		fsys := fstest.MapFS{
@@ -990,7 +790,9 @@ func TestStateLockLocations(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		state := &State{
-			Template: "tpl", SourceKind: "filesystem",
+			Template: "acme/web@1.2.0", SourceKind: "registry",
+			Registry: "acme", TemplateURI: "oci://ghcr.io/acme/web:1.2.0",
+			TemplateDigest: digest, RequestedRef: "1.2.0",
 			ResolvedCommit: commit, Engine: "turutan/0.1.0",
 			TemplateLicense: TemplateLicenseMIT0,
 		}
@@ -1008,7 +810,7 @@ func TestStateLockLocations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reading saved state: %v", err)
 		}
-		if !strings.Contains(string(data), "template: tpl") {
+		if !strings.Contains(string(data), "template: acme/web@1.2.0") {
 			t.Errorf("saved state = %q, want yaml with template key", data)
 		}
 		if err := SaveLock(dir, &Lock{

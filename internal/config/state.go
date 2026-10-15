@@ -45,6 +45,9 @@ type State struct {
 	Version         int            `yaml:"version"`
 	Template        string         `yaml:"template"`
 	SourceKind      string         `yaml:"sourceKind"`
+	Registry        string         `yaml:"registry,omitempty"`
+	TemplateURI     string         `yaml:"templateURI,omitempty"`
+	TemplateDigest  string         `yaml:"templateDigest,omitempty"`
 	Subpath         string         `yaml:"subpath,omitempty"`
 	RequestedRef    string         `yaml:"requestedRef,omitempty"`
 	ResolvedCommit  string         `yaml:"resolvedCommit"`
@@ -66,6 +69,9 @@ type Lock struct {
 	Source       string     `json:"source"`
 	Ref          string     `json:"ref,omitempty"`
 	ResolvedSHA  string     `json:"resolved_sha"`
+	Registry     string     `json:"registry,omitempty"`
+	URI          string     `json:"uri,omitempty"`
+	Digest       string     `json:"digest,omitempty"`
 	Subpath      string     `json:"subpath,omitempty"`
 	ManifestHash string     `json:"manifest_hash"`
 	Files        []LockFile `json:"files"`
@@ -147,14 +153,31 @@ func ValidateState(state *State) error {
 		return fmt.Errorf("invalid state: template is empty")
 	}
 	switch state.SourceKind {
+	case "registry":
+		if strings.TrimSpace(state.Registry) == "" {
+			return fmt.Errorf("invalid state: registry is empty")
+		}
+		if strings.TrimSpace(state.TemplateURI) == "" {
+			return fmt.Errorf("invalid state: templateURI is empty")
+		}
+		if !manifestHashRe.MatchString(state.TemplateDigest) {
+			return fmt.Errorf("invalid state: templateDigest %q is not a sha256: digest", state.TemplateDigest)
+		}
+		digestHex := strings.TrimPrefix(state.TemplateDigest, "sha256:")
+		if state.ResolvedCommit != digestHex && state.ResolvedCommit != state.TemplateDigest {
+			return fmt.Errorf("invalid state: resolvedCommit %q does not match templateDigest %q",
+				state.ResolvedCommit, state.TemplateDigest)
+		}
+		if state.RequestedRef == "" {
+			return fmt.Errorf("invalid state: requestedRef is empty")
+		}
+		if _, err := semver.NewVersion(strings.TrimSpace(state.RequestedRef)); err != nil {
+			return fmt.Errorf("invalid state: requestedRef %q is not a semantic version: %w", state.RequestedRef, err)
+		}
 	case "remote-git", "local-git":
-		if !hex40.MatchString(state.ResolvedCommit) {
-			return fmt.Errorf("invalid state: resolvedCommit %q is not a 40-hex commit SHA", state.ResolvedCommit)
-		}
+		return fmt.Errorf("invalid state: sourceKind %q is no longer supported: re-init from a registry template", state.SourceKind)
 	case "filesystem":
-		if !hex64.MatchString(state.ResolvedCommit) {
-			return fmt.Errorf("invalid state: resolvedCommit %q is not a content identity", state.ResolvedCommit)
-		}
+		return fmt.Errorf("invalid state: sourceKind %q is no longer supported: re-init from a registry template", state.SourceKind)
 	default:
 		return fmt.Errorf("invalid state: unknown sourceKind %q", state.SourceKind)
 	}
@@ -203,7 +226,22 @@ func ValidateLock(lock *Lock) error {
 	if lock.Source == "" {
 		return fmt.Errorf("invalid lock: source is empty")
 	}
-	if !hex40.MatchString(lock.ResolvedSHA) && !hex64.MatchString(lock.ResolvedSHA) {
+	if lock.Registry != "" {
+		if !hex64.MatchString(lock.ResolvedSHA) && !manifestHashRe.MatchString(lock.ResolvedSHA) {
+			return fmt.Errorf(
+				"invalid lock: resolved_sha %q is not a 64-hex digest or sha256: digest",
+				lock.ResolvedSHA)
+		}
+		if !manifestHashRe.MatchString(lock.Digest) {
+			return fmt.Errorf("invalid lock: digest %q is not a sha256: digest", lock.Digest)
+		}
+		if strings.TrimSpace(lock.URI) == "" {
+			return fmt.Errorf("invalid lock: uri is empty")
+		}
+		if strings.TrimSpace(lock.Ref) == "" {
+			return fmt.Errorf("invalid lock: ref is empty")
+		}
+	} else if !hex40.MatchString(lock.ResolvedSHA) && !hex64.MatchString(lock.ResolvedSHA) {
 		return fmt.Errorf(
 			"invalid lock: resolved_sha %q is not a 40-hex commit "+"SHA or 64-hex content identity",
 			lock.ResolvedSHA)

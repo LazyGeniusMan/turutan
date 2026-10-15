@@ -10,18 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
-	"github.com/LazyGeniusMan/turutan/internal/git"
-	"github.com/LazyGeniusMan/turutan/internal/template"
+	"github.com/LazyGeniusMan/turutan/internal/registry"
 )
-
-var pinnedSHARe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
 // SyncOptions tunes the StateSync re-render at the pinned commit.
 // ~keep
@@ -72,13 +68,13 @@ func StateSync(
 	}
 	data := map[string]any{}
 	maps.Copy(data, state.Data)
-	src, fetched, manifest, err := fetchPinnedTemplate(
-		ctx, projectDir, state, "sync", opts.Engine, stderr, opts.Verbose)
+	fetched, manifest, err := fetchPinnedTemplate(
+		ctx, state, "sync", opts.Engine, stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
-	if fetched.Cleanup != nil {
-		defer fetched.Cleanup()
+	if fetched.cleanup != nil {
+		defer fetched.cleanup()
 	}
 	if opts.Conflict != "" {
 		state.Conflict = string(opts.Conflict)
@@ -90,7 +86,7 @@ func StateSync(
 			uopts, stdout, stderr, stdin)
 	}
 	return runStateSync(
-		ctx, projectDir, state, lock, src, fetched, manifest, data,
+		ctx, projectDir, state, lock, fetched, manifest, data,
 		uopts, stdout, stderr, stdin, "")
 }
 
@@ -114,13 +110,13 @@ func StateInput(
 	if err != nil {
 		return nil, err
 	}
-	src, fetched, manifest, err := fetchPinnedTemplate(
-		ctx, projectDir, state, "state input", opts.Engine, stderr, opts.Verbose)
+	fetched, manifest, err := fetchPinnedTemplate(
+		ctx, state, "state input", opts.Engine, stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
-	if fetched.Cleanup != nil {
-		defer fetched.Cleanup()
+	if fetched.cleanup != nil {
+		defer fetched.cleanup()
 	}
 	if opts.Conflict != "" {
 		state.Conflict = string(opts.Conflict)
@@ -162,7 +158,7 @@ func StateInput(
 			uopts, stdout, stderr, stdin)
 	}
 	return runStateSync(
-		ctx, projectDir, state, lock, src, fetched, manifest, data,
+		ctx, projectDir, state, lock, fetched, manifest, data,
 		uopts, stdout, stderr, stdin, formatChangedKeys(changed))
 }
 
@@ -227,8 +223,7 @@ func runStateSync(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	_ *template.Source,
-	fetched *template.Fetched,
+	bundle *fetchedBundle,
 	manifest *config.Manifest,
 	data map[string]any,
 	uopts UpdateOptions,
@@ -241,7 +236,7 @@ func runStateSync(
 		return nil, fmt.Errorf("sync: creating staging dir: %w", err)
 	}
 	rendered, err := renderStaged(
-		fetched, stage, manifest, data, uopts, stdout, stdin)
+		bundle, stage, manifest, data, uopts, stdout, stdin)
 	if err != nil {
 		_ = os.RemoveAll(stage)
 		return nil, err
@@ -293,7 +288,7 @@ func previewStateSync(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	fetched *template.Fetched,
+	bundle *fetchedBundle,
 	manifest *config.Manifest,
 	data map[string]any,
 	uopts UpdateOptions,
@@ -306,7 +301,7 @@ func previewStateSync(
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
 	rendered, err := renderStaged(
-		fetched, stage, manifest, data, uopts, stdout, stdin)
+		bundle, stage, manifest, data, uopts, stdout, stdin)
 	if err != nil {
 		return nil, err
 	}
@@ -383,163 +378,63 @@ func finishStateSync(
 
 func fetchPinnedTemplate(
 	ctx context.Context,
-	projectDir string,
 	state *config.State,
 	op, engine string,
 	stderr io.Writer,
 	verbose bool,
-) (*template.Source, *template.Fetched, *config.Manifest, error) {
+) (*fetchedBundle, *config.Manifest, error) {
 	vlogf(stderr, verbose,
-		"%s: pinned commit %s requested ref %q",
-		op, state.ResolvedCommit, state.RequestedRef)
-	src, err := parseStoredSource(projectDir, state.Template)
+		"%s: pinned template %q version %q digest %s",
+		op, state.Template, state.RequestedRef, state.ResolvedCommit)
+	if state.SourceKind != "registry" {
+		return nil, nil, fmt.Errorf("%s: unknown sourceKind %q", op, state.SourceKind)
+	}
+	if strings.TrimSpace(state.TemplateURI) == "" {
+		return nil, nil, fmt.Errorf("%s: stored templateURI is empty", op)
+	}
+	uri, err := registry.ParseURI(state.TemplateURI)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
-	var fetched *template.Fetched
-	switch template.SourceKind(state.SourceKind) {
-	case template.KindRemoteGit:
-		fetched, err = fetchPinnedGit(ctx, src, state.ResolvedCommit, true, op)
-	case template.KindLocalGit:
-		fetched, err = fetchPinnedGit(ctx, src, state.ResolvedCommit, false, op)
-	case template.KindFilesystem:
-		fetched, err = template.Fetch(ctx, src)
-		if err == nil && fetched != nil {
-			fetched.ResolvedCommit = state.ResolvedCommit
-		}
-	default:
-		return nil, nil, nil, fmt.Errorf(
-			"%s: unknown sourceKind %q", op, state.SourceKind)
-	}
+	auth := registry.ResolveAuth(state.Registry, uri)
+	backend, err := registry.BackendFor(uri.Scheme)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
-	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
-	if err != nil {
-		if fetched.Cleanup != nil {
-			fetched.Cleanup()
-		}
-		return nil, nil, nil, fmt.Errorf("%s: %w", op, err)
-	}
-	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
-		if fetched.Cleanup != nil {
-			fetched.Cleanup()
-		}
-		return nil, nil, nil, err
-	}
-	return src, fetched, manifest, nil
-}
-
-func fetchPinnedGit(
-	ctx context.Context,
-	src *template.Source,
-	sha string,
-	useCache bool,
-	op string,
-) (*template.Fetched, error) {
-	if useCache && template.IsDefaultSource(src) && pinnedSHARe.MatchString(sha) {
-		if dir, ok := pinnedDefaultCache(sha); ok {
-			sub, err := pinnedSubdir(dir, src, op)
-			if err == nil {
-				return &template.Fetched{
-					Dir: sub, Source: src, ResolvedCommit: strings.ToLower(sha),
-				}, nil
-			}
-		}
-	}
-	depth := src.Depth
-	if depth <= 0 {
-		depth = template.DefaultDepth
-	}
-	_, dir, cleanup, err := clonePinnedAt(ctx, src, sha, depth, op)
-	if err == nil {
-		return &template.Fetched{
-			Dir: dir, Cleanup: cleanup, Source: src, ResolvedCommit: sha,
-		}, nil
-	}
-	if depth != template.DefaultDepth {
-		return nil, err
-	}
-	_, dir, cleanup, retryErr := clonePinnedAt(
-		ctx, src, sha, updateDeepenDepth, op)
-	if retryErr == nil {
-		return &template.Fetched{
-			Dir: dir, Cleanup: cleanup, Source: src, ResolvedCommit: sha,
-		}, nil
-	}
-	return nil, fmt.Errorf(
-		"%w (template history is shallow; fetch with ?depth= to reach further back)", err)
-}
-
-func clonePinnedAt(
-	ctx context.Context,
-	src *template.Source,
-	sha string,
-	depth int,
-	op string,
-) (string, string, func(), error) {
 	tmp, err := os.MkdirTemp("", "turutan-pinned-*")
 	if err != nil {
-		return "", "", nil, fmt.Errorf(
-			"%s: creating temp dir: %w", op, err)
+		return nil, nil, fmt.Errorf("%s: creating temp dir: %w", op, err)
 	}
 	cleanup := func() { _ = os.RemoveAll(tmp) }
-	if _, err := git.Clone(ctx, src.Repo, "", tmp, depth); err != nil {
+	if err := backend.Fetch(ctx, uri, auth, tmp); err != nil {
 		cleanup()
-		return "", "", nil, fmt.Errorf("%s: %w", op, err)
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
-	if err := git.Checkout(tmp, sha); err != nil {
-		cleanup()
-		return "", "", nil, fmt.Errorf("%s: %w", op, err)
+	stripReleaseMeta(tmp)
+	if strings.TrimSpace(state.TemplateDigest) != "" {
+		got, err := registry.DigestDir(tmp)
+		if err != nil {
+			cleanup()
+			return nil, nil, fmt.Errorf("%s: %w", op, err)
+		}
+		if got != state.TemplateDigest {
+			cleanup()
+			return nil, nil, fmt.Errorf("%s: pinned bundle digest mismatch: state wants %s", op, state.TemplateDigest)
+		}
 	}
-	dir, err := pinnedSubdir(tmp, src, op)
+	manifest, err := config.LoadManifest(os.DirFS(tmp))
 	if err != nil {
 		cleanup()
-		return "", "", nil, err
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
-	return tmp, dir, cleanup, nil
-}
-
-func pinnedSubdir(root string, src *template.Source, op string) (string, error) {
-	if src.Subpath == "" {
-		return root, nil
+	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
+		cleanup()
+		return nil, nil, err
 	}
-	dir, err := filter.SafeJoin(root, filepath.FromSlash(src.Subpath))
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", op, err)
-	}
-	info, err := os.Stat(dir)
-	if err != nil {
-		return "", fmt.Errorf(
-			"%s: fetching source %q: subpath %q: %w", op, src.Raw, src.Subpath, err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf(
-			"%s: fetching source %q: subpath %q is not a directory",
-			op, src.Raw, src.Subpath)
-	}
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		return "", fmt.Errorf(
-			"%s: fetching source %q: resolving subpath: %w", op, src.Raw, err)
-	}
-	if err := filter.EnsureWithinRoot(root, resolved); err != nil {
-		return "", fmt.Errorf("%s: fetching source %q: %w", op, src.Raw, err)
-	}
-	return dir, nil
-}
-
-func pinnedDefaultCache(sha string) (string, bool) {
-	cache := config.ResolveCacheDir()
-	if cache == "" {
-		return "", false
-	}
-	dir := filepath.Join(cache, "default", strings.ToLower(sha))
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return "", false
-	}
-	return dir, true
+	return &fetchedBundle{
+		dir: tmp, uri: state.TemplateURI, version: state.RequestedRef,
+		digest: state.ResolvedCommit, cleanup: cleanup,
+	}, manifest, nil
 }
 
 func repromptAllInputs(

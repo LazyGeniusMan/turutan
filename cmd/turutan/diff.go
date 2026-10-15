@@ -25,7 +25,7 @@ func newDiffCmd() *cobra.Command {
 			return runDiff(cmd, ref, noPager, what)
 		},
 	}
-	cmd.Flags().StringVar(&ref, "ref", "", "override the stored requestedRef for this run")
+	cmd.Flags().StringVar(&ref, "ref", "", "diff a pinned template version instead of the stored one")
 	cmd.Flags().BoolVar(&noPager, "no-pager", false, "print the plain diff even on a TTY")
 	cmd.Flags().StringVar(&what, "what", "all", "drift scope (all|upstream|local)")
 	return cmd
@@ -34,12 +34,13 @@ func newDiffCmd() *cobra.Command {
 func runDiff(cmd *cobra.Command, ref string, noPager bool, what string) error {
 	stdout := cmd.OutOrStdout()
 	diffs, err := scaffold.ComputeDiff(cmd.Context(), ".", scaffold.DiffOptions{
-		Ref:     ref,
-		Engine:  version,
-		NoColor: appCfg.noColor,
-		Verbose: appCfg.verbose,
-		What:    what,
-		Stderr:  cmd.ErrOrStderr(),
+		Ref:        ref,
+		Registries: loadInitRegistries(),
+		Engine:     version,
+		NoColor:    appCfg.noColor,
+		Verbose:    appCfg.verbose,
+		What:       what,
+		Stderr:     cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return err
