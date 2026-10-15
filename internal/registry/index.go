@@ -138,7 +138,6 @@ func SaveIndexFile(path string, index *RegistryIndex) error {
 	if err != nil {
 		return fmt.Errorf("encoding registry index %q: %w", path, err)
 	}
-	data = append(data, '\n')
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err

@@ -152,7 +152,6 @@ func SaveVersionedManifest(root string, manifest *TemplateManifest) (string, err
 	if err != nil {
 		return "", fmt.Errorf("encoding versioned manifest %q: %w", path, err)
 	}
-	data = append(data, '\n')
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return "", err
 	}
