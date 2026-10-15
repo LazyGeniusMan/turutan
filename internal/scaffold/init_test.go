@@ -32,7 +32,7 @@ func makeTemplate(t *testing.T, manifest string, files map[string]string) string
 	return dir
 }
 
-const basicManifest = "source: \"test\"\nmin-engine: \">=0.1.0\"\nconflict: inline\nexcludes:\n  - \"ignored/**\"\npreserves:\n  - \"keep.txt\"\n"
+const basicManifest = "min-engine: \">=0.1.0\"\nconflict: inline\nexcludes:\n  - \"ignored/**\"\npreserves:\n  - \"keep.txt\"\n"
 
 var basicFiles = map[string]string{
 	"go.mod.tmpl":      "module {{.project_name}}\n\ngo 1.26\n",
