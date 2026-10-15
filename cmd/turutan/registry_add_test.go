@@ -16,6 +16,7 @@ import (
 func isolatedAddConfig(t *testing.T) string {
 	t.Helper()
 	resetRootFlags(t)
+	isolateConfigCandidates(t)
 	path := filepath.Join(t.TempDir(), config.ConfigFileName)
 	appCfg.cfgFile = path
 	t.Chdir(t.TempDir())

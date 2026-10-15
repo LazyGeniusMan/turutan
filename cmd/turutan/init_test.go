@@ -166,6 +166,7 @@ func TestInitTemplateLayers(t *testing.T) {
 		is := assert.New(t)
 		_, regs, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
 		useCmdRegistryConfig(t, regs)
+		t.Setenv(config.EnvTemplateOverride, "")
 		v := viper.GetViper()
 		v.Set(config.TemplateConfigKey, flag)
 		t.Cleanup(func() { v.Set(config.TemplateConfigKey, "") })

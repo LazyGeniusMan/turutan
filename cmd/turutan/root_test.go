@@ -33,6 +33,7 @@ func isolateConfigCandidates(t *testing.T) {
 	if err := os.Unsetenv(config.EnvConfigOverride); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv(config.EnvTemplateOverride, "")
 }
 
 func writeIsolatedConfig(t *testing.T, body string) string {
