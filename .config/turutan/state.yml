@@ -1,0 +1,19 @@
+version: 1
+template: turutan/default@0.1.0
+sourceKind: registry
+registry: turutan
+templateURI: templates/default/releases/0.1.0.tar.gz
+templateDigest: sha256:b9d7ddc40b6909e40e9b891e89885f2bf7ae7c11ec5a70b6baca4cb86cca43cc
+requestedRef: 0.1.0
+resolvedCommit: b9d7ddc40b6909e40e9b891e89885f2bf7ae7c11ec5a70b6baca4cb86cca43cc
+data:
+    ai_agents:
+        - pi
+    profiles:
+        - ai
+        - go
+        - github
+    project_description: Project template lifecycle manager
+    project_name: turutan
+engine: turutan/dev
+templateLicense: MIT-0

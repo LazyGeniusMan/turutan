@@ -17,9 +17,7 @@ import "./cpp.pkl" as cpp
 {{- if contains .profiles "csharp" }}
 import "./csharp.pkl" as csharp
 {{- end }}
-{{- if contains .profiles "custom" }}
 import "./custom.pkl" as custom
-{{- end }}
 {{- if contains .profiles "docker" }}
 import "./docker.pkl" as docker
 {{- end }}
@@ -130,9 +128,7 @@ hooks {
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
-{{- if contains .profiles "custom" }}
       ...custom.pre_commit
-{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
 {{- end }}
@@ -190,9 +186,7 @@ hooks {
 {{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
 {{- end }}
-{{- if contains .profiles "custom" }}
       ...custom.pre_push_ci
-{{- end }}
     }
   }
   ["fix"] {
@@ -258,9 +252,7 @@ hooks {
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
-{{- if contains .profiles "custom" }}
       ...custom.pre_commit
-{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
 {{- end }}
@@ -318,9 +310,7 @@ hooks {
 {{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
 {{- end }}
-{{- if contains .profiles "custom" }}
       ...custom.pre_push_ci
-{{- end }}
     }
   }
   ["commit-msg"] {
@@ -394,9 +384,7 @@ hooks {
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
-{{- if contains .profiles "custom" }}
       ...custom.pre_commit
-{{- end }}
     }
   }
   ["pre-push"] {
@@ -459,9 +447,7 @@ hooks {
 {{- if contains .profiles "typst" }}
       ...typst.pre_push
 {{- end }}
-{{- if contains .profiles "custom" }}
       ...custom.pre_push
-{{- end }}
     }
   }
   ["post-checkout"] {

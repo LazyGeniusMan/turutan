@@ -45,10 +45,6 @@ jobs:
           TURUTAN_OCI_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           go build -o "${RUNNER_TEMP}/turutan" ./cmd/turutan
-          test -f registry.json || {
-            echo "registry.json missing, refusing to re-init" >&2
-            exit 1
-          }
           line="$("${RUNNER_TEMP}/turutan" registry release \
             default "${BUMP}" oci --uri-override \
             oci://ghcr.io/lazygeniusman/turutan/templates/default)"
@@ -56,8 +52,7 @@ jobs:
           version="${line#released default@}"
           version="${version%% *}"
           printf 'version=%s\n' "$version" >> "$GITHUB_ENV"
-          git add registry.json  # index is tracked ~keep
-          # manifests are committed truth ~keep
+          git add registry.json
           git add "templates/default/manifest/${version}.json"
           git status --short
           git diff --cached --quiet || git commit -m \

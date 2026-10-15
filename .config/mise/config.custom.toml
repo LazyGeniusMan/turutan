@@ -8,9 +8,7 @@ minimum_release_age_excludes = [
 ]
 
 [env]
-TURUTAN_BIN = "go run ./cmd/turutan"
-TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml"
-TURUTAN_TEMPLATE = "local/default@0.1.0"
+TURUTAN_BIN = "go run {{config_root}}/cmd/turutan"
 PROTON_PASS_KEY_PROVIDER = "{{ exec(command='sh scripts/proton-pass-detect-key-provider.sh') | trim }}"
 
 [tools]
@@ -87,25 +85,22 @@ run = "${TURUTAN_BIN} state input"
 description = "List template profiles offered and enabled"
 run = "${TURUTAN_BIN} profiles"
 
-[tasks."turutan:release"]
-description = "Rebuild the gitignored fs dogfood overlay from the committed created-but-unreleased index plus source tree; never mutates committed files"
+[tasks."turutan:dogfood"]
 run = """
-overlay=".tmp/turutan-dogfood"
-bin="$overlay/.bin/turutan"
-rm -rf "$overlay"
-mkdir -p "$overlay/templates" "$(dirname "$bin")"
-[ -f registry.json ] || { echo "committed registry.json missing" >&2; exit 1; }
-cp registry.json "$overlay/registry.json"
-cp -r templates/. "$overlay/templates/"
-go build -o "$bin" ./cmd/turutan
-( cd "$overlay" && ./.bin/turutan registry release default same fs --force )
-if [ ! -f .config/turutan/state.yml ]; then
-  tmp=$(mktemp -d)
-  ${TURUTAN_BIN:-turutan} init "$tmp" --data-file .config/turutan/dogfood-data.yml --defaults --non-interactive
-  cp "$tmp/.config/turutan/state.yml" .config/turutan/state.yml
-  cp "$tmp/.config/turutan/lock.json" .config/turutan/lock.json
-  mkdir -p .config/turutan/templates
-  cp -r "$tmp/.config/turutan/templates/." .config/turutan/templates/
-  rm -rf "$tmp"
-fi
+dogfood_dir=".tmp/turutan-dogfood"
+mkdir -p "$dogfood_dir/templates"
+cp registry.json "$dogfood_dir/registry.json"
+cp -r templates/. "$dogfood_dir/templates/"
+(cd "$dogfood_dir" && ${TURUTAN_BIN} registry release default same fs --force )
+${TURUTAN_BIN} registry add turutan fs:$dogfood_dir --force
+"""
+
+[tasks."turutan:dogfood:update"]
+run = """
+dogfood_dir=".tmp/turutan-dogfood"
+mkdir -p "$dogfood_dir/templates"
+cp registry.json "$dogfood_dir/registry.json"
+cp -r templates/. "$dogfood_dir/templates/"
+(cd "$dogfood_dir" && ${TURUTAN_BIN} registry release default same fs --force )
+${TURUTAN_BIN} registry add dogfood fs:$dogfood_dir --force
 """

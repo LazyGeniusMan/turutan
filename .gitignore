@@ -1,7 +1,4 @@
 .config/turutan/templates/
-.config/turutan/state.yml
-.config/turutan/lock.json
-templates/*/releases/
 .config/ai-rulez.bak*
 **.local.*
 .env*
