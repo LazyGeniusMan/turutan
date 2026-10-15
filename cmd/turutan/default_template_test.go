@@ -33,9 +33,9 @@ func repoRootDir(t *testing.T) string {
 
 // TestDefaultTemplateRegistry pins the recovered templates/default tree:
 // the authoring manifest migrated off the legacy git source, the fs
-// release at 0.1.0 with its versioned manifest and prepended index
-// release, offline fetch with release metadata stripped, and the OCI
-// publish URI building users need. It touches no network.
+// archive release at 0.1.0 with its single-version manifest and index
+// history, offline fetch from the archive, and the OCI publish URI users
+// need. It touches no network.
 // ~keep
 func TestDefaultTemplateRegistry(t *testing.T) {
 	root := repoRootDir(t)
@@ -54,7 +54,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NotEmpty(t, manifest.Inputs["project_name"])
 	})
 
-	t.Run("registry index tracks default at 0.1.0 with fs uri", func(t *testing.T) {
+	t.Run("registry index tracks default at 0.1.0 with relative archive uri", func(t *testing.T) {
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
 		require.NoError(t, err)
 		require.Equal(t, "turutan", index.Name)
@@ -62,17 +62,18 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "0.1.0", entry.Version)
 		require.NotEmpty(t, entry.Releases)
-		require.Equal(t, entry.Version, entry.Releases[0],
-			"index releases must be newest-first")
+		require.Equal(t, "0.1.0", entry.Releases[0])
 		require.True(t, entry.URI.IsRelative(),
 			"dogfood release uri must stay fs-relative, got %q", entry.URI.String())
 		require.Equal(t, registry.ReleaseSnapshotPath("default", "0.1.0"), entry.URI.Path)
+		require.Equal(t, "templates/default/releases/0.1.0.tar.gz", entry.URI.String())
 		require.NotEmpty(t, entry.Digest)
 	})
 
-	t.Run("versioned manifest exists and matches index", func(t *testing.T) {
+	t.Run("versioned manifest is a single version and matches index", func(t *testing.T) {
 		manifestPath := registry.VersionedManifestPath(root, "default", "0.1.0")
 		require.FileExists(t, manifestPath)
+		require.Equal(t, filepath.Join(root, "templates", "default", "manifest", "0.1.0.json"), manifestPath)
 		versioned, err := registry.LoadVersionedManifest(root, "default", "0.1.0")
 		require.NoError(t, err)
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
@@ -84,27 +85,33 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.Equal(t, entry.URI.String(), versioned.URI.String())
 	})
 
-	t.Run("release snapshot matches authoring tree minus meta", func(t *testing.T) {
-		snapshot := filepath.Join(root,
+	t.Run("release archive extracts minus meta", func(t *testing.T) {
+		archive := filepath.Join(root,
 			filepath.FromSlash(registry.ReleaseSnapshotPath("default", "0.1.0")))
-		require.DirExists(t, snapshot)
-		require.FileExists(t, filepath.Join(snapshot, ".turutan.yml"))
-		for _, meta := range []string{"manifest", "releases"} {
-			_, err := os.Stat(filepath.Join(snapshot, meta))
-			require.True(t, os.IsNotExist(err),
-				"snapshot must not bundle its own release history: %s", meta)
-		}
+		require.FileExists(t, archive)
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
 		require.NoError(t, err)
 		entry, err := index.FindTemplate("default")
 		require.NoError(t, err)
-		digest, err := registry.DigestDir(snapshot)
+		dest := t.TempDir()
+		uri, err := entry.URI.ResolveRelativeTo(root)
+		require.NoError(t, err)
+		backend, err := registry.BackendFor(uri.Scheme)
+		require.NoError(t, err)
+		require.NoError(t, backend.Fetch(t.Context(), uri, registry.AuthConfig{}, dest))
+		require.FileExists(t, filepath.Join(dest, ".turutan.yml"))
+		for _, meta := range []string{"manifest", "releases"} {
+			_, err := os.Stat(filepath.Join(dest, meta))
+			require.True(t, os.IsNotExist(err),
+				"archive must never bundle its own release history: %s", meta)
+		}
+		digest, err := registry.DigestDir(dest)
 		require.NoError(t, err)
 		require.Equal(t, entry.Digest, digest,
-			"snapshot must stay immutable: digest must match the release manifest")
+			"archive must stay immutable: digest must match the release manifest")
 	})
 
-	t.Run("fs fetch strips release metadata", func(t *testing.T) {
+	t.Run("fs fetch returns the stored relative uri", func(t *testing.T) {
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
 		require.NoError(t, err)
 		entry, err := index.FindTemplate("default")
@@ -114,17 +121,27 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 			Root: root,
 			Idx:  index,
 		}
-		manifest := *entry
+		manifest := entry.Manifest()
 		dir, fetchURI, cleanup, err := scaffold.FetchTemplateBundle(t.Context(), rr, &manifest)
 		require.NoError(t, err)
 		defer cleanup()
-		require.NotEmpty(t, fetchURI)
+		require.Equal(t, "templates/default/releases/0.1.0.tar.gz", fetchURI)
 		require.FileExists(t, filepath.Join(dir, ".turutan.yml"))
 		for _, meta := range []string{"manifest", "releases"} {
 			_, err := os.Stat(filepath.Join(dir, meta))
 			require.True(t, os.IsNotExist(err),
-				"fetched bundle must drop release metadata: %s", meta)
+				"fetched bundle must not contain release metadata: %s", meta)
 		}
+	})
+
+	t.Run("state stores the relative uri", func(t *testing.T) {
+		state, err := config.LoadState(os.DirFS(root))
+		if err != nil {
+			t.Skipf("no dogfood state in test checkout: %v", err)
+		}
+		require.NotContains(t, state.TemplateURI, "fs:/",
+			"state must store the pre-resolution relative URI, got %q", state.TemplateURI)
+		require.Equal(t, "templates/default/releases/0.1.0.tar.gz", state.TemplateURI)
 	})
 
 	t.Run("oci publish uri builds offline with override", func(t *testing.T) {

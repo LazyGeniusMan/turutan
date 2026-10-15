@@ -3,12 +3,14 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
-// FSBackend copies template trees to and from local directories.
+// FSBackend stores template bundles as gzip-tar archives in local files.
 // ~keep
 type FSBackend struct{}
 
@@ -20,7 +22,8 @@ func NewFSBackend() *FSBackend { return &FSBackend{} }
 // ~keep
 func (b *FSBackend) Scheme() Scheme { return SchemeFS }
 
-// Bundle digests srcDir and copies its tree to the local uri path.
+// Bundle archives srcDir and writes the bundle bytes to the local uri path
+// (an archive file such as templates/<name>/releases/<v>.tar.gz).
 // ~keep
 func (b *FSBackend) Bundle(ctx context.Context, srcDir string, uri URI, _ AuthConfig) (string, error) {
 	if err := requireScheme(uri, SchemeFS); err != nil {
@@ -39,17 +42,20 @@ func (b *FSBackend) Bundle(ctx context.Context, srcDir string, uri URI, _ AuthCo
 	if !info.IsDir() {
 		return "", fmt.Errorf("bundling %q: source is not a directory", uri.Path)
 	}
-	digest, err := DigestDir(srcDir)
+	blob, digest, err := BundleBytes(srcDir)
 	if err != nil {
 		return "", fmt.Errorf("bundling %q: %w", uri.Path, err)
 	}
-	if err := CopyTree(srcDir, uri.Path); err != nil {
+	if err := os.MkdirAll(filepath.Dir(uri.Path), 0o750); err != nil {
+		return "", fmt.Errorf("bundling %q: %w", uri.Path, err)
+	}
+	if err := os.WriteFile(uri.Path, blob, 0o600); err != nil {
 		return "", fmt.Errorf("bundling %q: %w", uri.Path, err)
 	}
 	return digest, nil
 }
 
-// Fetch copies the local uri tree into destDir.
+// Fetch extracts the local uri archive file into destDir.
 // ~keep
 func (b *FSBackend) Fetch(ctx context.Context, uri URI, _ AuthConfig, destDir string) error {
 	if err := requireScheme(uri, SchemeFS); err != nil {
@@ -61,14 +67,11 @@ func (b *FSBackend) Fetch(ctx context.Context, uri URI, _ AuthConfig, destDir st
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("fetching %q: %w", uri.Path, err)
 	}
-	info, err := os.Stat(uri.Path)
+	data, err := os.ReadFile(uri.Path) // #nosec G304 -- uri.Path is the caller-supplied absolute archive file
 	if err != nil {
 		return fmt.Errorf("fetching %q: %w", uri.Path, err)
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("fetching %q: source is not a directory", uri.Path)
-	}
-	if err := CopyTree(uri.Path, destDir); err != nil {
+	if err := ExtractBundle(bytes.NewReader(data), destDir); err != nil {
 		return fmt.Errorf("fetching %q: %w", uri.Path, err)
 	}
 	return nil

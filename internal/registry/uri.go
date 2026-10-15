@@ -3,7 +3,9 @@
 package registry
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,8 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // ErrInvalidURI is matched with errors.Is when URI text fails validation.
@@ -452,17 +452,25 @@ func validSubpath(subpath string) bool {
 	return true
 }
 
-// MarshalYAML renders the URI in canonical string form.
+// MarshalJSON renders the URI in canonical string form without HTML
+// escaping.
 // ~keep
-func (u URI) MarshalYAML() (any, error) {
-	return u.String(), nil
+func (u URI) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(u.String()); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
-// UnmarshalYAML parses canonical URI string form.
+// UnmarshalJSON parses canonical URI string form, rejecting unknown
+// shapes via the strict ParseURI grammar.
 // ~keep
-func (u *URI) UnmarshalYAML(value *yaml.Node) error {
+func (u *URI) UnmarshalJSON(data []byte) error {
 	var raw string
-	if err := value.Decode(&raw); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 	parsed, err := ParseURI(raw)

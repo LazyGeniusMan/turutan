@@ -315,7 +315,7 @@ func fetchDiffBundle(
 	registries map[string]string,
 ) (string, func(), error) {
 	if want == "" || want == state.RequestedRef {
-		return fetchPinnedBundle(ctx, state, "diff")
+		return fetchPinnedBundle(ctx, state, "diff", registries)
 	}
 	registryName := strings.TrimSpace(state.Registry)
 	templateName := ""
@@ -344,10 +344,24 @@ func fetchDiffBundle(
 	return dir, cleanup, nil
 }
 
-func fetchPinnedBundle(ctx context.Context, state *config.State, op string) (string, func(), error) {
+func fetchPinnedBundle(ctx context.Context, state *config.State, op string, registries map[string]string) (string, func(), error) {
 	uri, err := registry.ParseURI(state.TemplateURI)
 	if err != nil {
 		return "", nil, fmt.Errorf("%s: %w", op, err)
+	}
+	if uri.IsRelative() {
+		rr, err := ResolveRegistry(ctx, registries, state.Registry)
+		if err != nil {
+			return "", nil, fmt.Errorf("%s: %w", op, err)
+		}
+		if rr.Root == "" {
+			return "", nil, fmt.Errorf("%s: relative uri %q needs a local registry root", op, uri.Path)
+		}
+		resolved, err := uri.ResolveRelativeTo(rr.Root)
+		if err != nil {
+			return "", nil, fmt.Errorf("%s: %w", op, err)
+		}
+		uri = resolved
 	}
 	auth := registry.ResolveAuth(state.Registry, uri)
 	backend, err := registry.BackendFor(uri.Scheme)
@@ -363,7 +377,6 @@ func fetchPinnedBundle(ctx context.Context, state *config.State, op string) (str
 		cleanup()
 		return "", nil, fmt.Errorf("%s: %w", op, err)
 	}
-	stripReleaseMeta(tmp)
 	if strings.TrimSpace(state.TemplateDigest) != "" {
 		got, err := registry.DigestDir(tmp)
 		if err != nil {

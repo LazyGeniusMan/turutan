@@ -1,7 +1,0 @@
-{
-    "editor.wordWrap": "on",
-    "files.autoSave": "afterDelay",
-    "files.autoSaveDelay": 3000,
-    "mise.configureExtensionsAutomatically": true,
-    "mise.configureExtensionsAutomaticallyIgnoreList": [],
-}

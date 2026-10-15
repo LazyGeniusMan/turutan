@@ -1,9 +1,0 @@
-[profiles]
-gitlab = ["gitlab", "yml"]
-
-[[installed_skills]]
-name = "gitlab"
-source = "https://gitlab.com/gitlab-org/ai/skills"
-trust = "warn"
-include = ["glab"]
-domain = "gitlab"

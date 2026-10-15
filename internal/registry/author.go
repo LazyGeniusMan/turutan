@@ -3,13 +3,13 @@
 package registry
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // ErrInvalidAuthor is matched with errors.Is when author text fails validation.
@@ -87,17 +87,24 @@ func (a Author) String() string {
 	return out.String()
 }
 
-// MarshalYAML renders the Author in canonical string form.
+// MarshalJSON renders the Author in canonical string form without HTML
+// escaping, so "Name <email> (website)" stays readable.
 // ~keep
-func (a Author) MarshalYAML() (any, error) {
-	return a.String(), nil
+func (a Author) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(a.String()); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
-// UnmarshalYAML parses canonical author string form.
+// UnmarshalJSON parses canonical author string form.
 // ~keep
-func (a *Author) UnmarshalYAML(value *yaml.Node) error {
+func (a *Author) UnmarshalJSON(data []byte) error {
 	var raw string
-	if err := value.Decode(&raw); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 	parsed, err := ParseAuthor(raw)

@@ -154,21 +154,20 @@ func loadFSIndex(uri registry.URI) (*registry.RegistryIndex, string, error) {
 		}
 		dir = resolved.Path
 	}
-	for _, name := range []string{registry.IndexFileName, registry.IndexFileNameAlt} {
-		path := filepath.Join(dir, name)
-		if index, err := registry.LoadIndexFile(path); err == nil {
-			return index, dir, nil
-		}
+	path := filepath.Join(dir, registry.IndexFileName)
+	index, err := registry.LoadIndexFile(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("loading registry index: no %s in %q: %w",
+			registry.IndexFileName, dir, err)
 	}
-	return nil, "", fmt.Errorf("loading registry index: no %s or %s in %q",
-		registry.IndexFileName, registry.IndexFileNameAlt, dir)
+	return index, dir, nil
 }
 
 func loadHTTPIndex(ctx context.Context, uri registry.URI, auth registry.AuthConfig) (*registry.RegistryIndex, string, error) {
 	bases := []string{uri.String()}
-	if !strings.HasSuffix(uri.Path, ".yml") && !strings.HasSuffix(uri.Path, ".yaml") {
+	if !strings.HasSuffix(uri.Path, ".json") {
 		trimmed := strings.TrimSuffix(uri.String(), "/")
-		bases = []string{trimmed + "/" + registry.IndexFileName, trimmed + "/" + registry.IndexFileNameAlt}
+		bases = []string{trimmed + "/" + registry.IndexFileName}
 	}
 	client := &http.Client{Timeout: registryIndexTimeout}
 	var lastErr error
@@ -189,6 +188,7 @@ func fetchHTTPIndex(ctx context.Context, client *http.Client, address string, au
 	if err != nil {
 		return nil, fmt.Errorf("loading registry index from %s: %w", address, err)
 	}
+	req.Header.Set("Accept", "application/json")
 	switch auth.Kind {
 	case registry.AuthKindToken:
 		if token, ok := auth.BearerToken(); ok {
@@ -225,10 +225,8 @@ func loadS3Index(ctx context.Context, uri registry.URI, auth registry.AuthConfig
 		return nil, "", fmt.Errorf("loading registry index: %w", err)
 	}
 	keys := []string{strings.TrimSuffix(uri.Path, "/") + "/" + registry.IndexFileName}
-	if strings.HasSuffix(uri.Path, ".yml") || strings.HasSuffix(uri.Path, ".yaml") {
+	if strings.HasSuffix(uri.Path, ".json") {
 		keys = []string{uri.Path}
-	} else {
-		keys = append(keys, strings.TrimSuffix(uri.Path, "/")+"/"+registry.IndexFileNameAlt)
 	}
 	var lastErr error
 	for _, key := range keys {
@@ -272,13 +270,11 @@ func loadGitIndex(ctx context.Context, uri registry.URI, _ registry.AuthConfig) 
 		}
 		base = abs
 	}
-	for _, name := range []string{registry.IndexFileName, registry.IndexFileNameAlt} {
-		if index, err := registry.LoadIndexFile(filepath.Join(base, name)); err == nil {
-			return index, "", nil
-		}
+	if index, err := registry.LoadIndexFile(filepath.Join(base, registry.IndexFileName)); err == nil {
+		return index, "", nil
 	}
-	return nil, "", fmt.Errorf("loading registry index: no %s or %s in %q",
-		registry.IndexFileName, registry.IndexFileNameAlt, base)
+	return nil, "", fmt.Errorf("loading registry index: no %s in %q",
+		registry.IndexFileName, base)
 }
 
 func gitRemoteForURI(uri registry.URI) string {
@@ -308,19 +304,18 @@ func loadOCIIndex(ctx context.Context, uri registry.URI, auth registry.AuthConfi
 	if err := backend.Fetch(ctx, indexURI, auth, tmp); err != nil {
 		return nil, "", fmt.Errorf("loading registry index %s: %w", indexURI.String(), err)
 	}
-	for _, name := range []string{registry.IndexFileName, registry.IndexFileNameAlt} {
-		if index, err := registry.LoadIndexFile(filepath.Join(tmp, name)); err == nil {
-			return index, "", nil
-		}
+	if index, err := registry.LoadIndexFile(filepath.Join(tmp, registry.IndexFileName)); err == nil {
+		return index, "", nil
 	}
-	return nil, "", fmt.Errorf("loading registry index %s: no %s or %s in the index artifact",
-		indexURI.String(), registry.IndexFileName, registry.IndexFileNameAlt)
+	return nil, "", fmt.Errorf("loading registry index %s: no %s in the index artifact",
+		indexURI.String(), registry.IndexFileName)
 }
 
 // ResolveTemplateManifest returns the manifest for template at version, or
 // the latest when version is empty. Older versions prefer their versioned
-// manifest file; fs registries read it from disk, other schemes reuse the
-// index entry only when it matches the requested version.
+// manifest file templates/<name>/manifest/<version>.json: fs registries
+// read it from disk, http(s)/s3 registries fetch it over the network, and
+// other schemes return a clear error naming the expected file.
 // ~keep
 func ResolveTemplateManifest(rr *ResolvedRegistry, template, version string) (*registry.TemplateManifest, error) {
 	entry, err := rr.Idx.FindTemplate(template)
@@ -329,14 +324,14 @@ func ResolveTemplateManifest(rr *ResolvedRegistry, template, version string) (*r
 	}
 	want := strings.TrimSpace(version)
 	if want == "" {
-		out := *entry
+		out := entry.Manifest()
 		return &out, nil
 	}
 	if _, err := registry.ParseStrict(want); err != nil {
 		return nil, err
 	}
 	if want == entry.Version {
-		out := *entry
+		out := entry.Manifest()
 		return &out, nil
 	}
 	found := false
@@ -355,25 +350,94 @@ func ResolveTemplateManifest(rr *ResolvedRegistry, template, version string) (*r
 			return versioned, nil
 		}
 	}
+	switch rr.URI.Scheme {
+	case registry.SchemeHTTP, registry.SchemeHTTPS:
+		versioned, err := fetchHTTPVersionedManifest(rr, template, want)
+		if err != nil {
+			return nil, err
+		}
+		return versioned, nil
+	case registry.SchemeS3:
+		versioned, err := fetchS3VersionedManifest(rr, template, want)
+		if err != nil {
+			return nil, err
+		}
+		return versioned, nil
+	}
 	return nil, fmt.Errorf("template %q release %q needs its versioned manifest %s (only latest %q is cached)",
 		template, want, registry.VersionedManifestPath(rr.Root, template, want), entry.Version)
 }
 
-// stripReleaseMeta removes the versioned-manifest subtree and any release
-// snapshots from a fetched bundle dir. Releases never bundle their own
-// history (StageReleaseTree excludes manifest/ and releases/), but fs
-// registries store manifests and snapshots alongside the template tree, so
-// fetched copies must drop them before rendering and digest verification.
-// Both names are reserved for release metadata.
-// ~keep
-func stripReleaseMeta(dir string) {
-	_ = os.RemoveAll(filepath.Join(dir, "manifest"))
-	_ = os.RemoveAll(filepath.Join(dir, "releases"))
+func fetchHTTPVersionedManifest(rr *ResolvedRegistry, template, version string) (*registry.TemplateManifest, error) {
+	base := strings.TrimSuffix(rr.URI.String(), "/")
+	address := base + "/" + registry.ManifestObjectKey(template, version)
+	ctx, cancel := context.WithTimeout(context.Background(), registryIndexTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest from %s: %w", address, err)
+	}
+	req.Header.Set("Accept", "application/json")
+	switch rr.Auth.Kind {
+	case registry.AuthKindToken:
+		if token, ok := rr.Auth.BearerToken(); ok {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	case registry.AuthKindBasic:
+		if username, password, ok := rr.Auth.BasicAuth(); ok {
+			req.SetBasicAuth(username, password)
+		}
+	}
+	client := &http.Client{Timeout: registryIndexTimeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest from %s: %w", address, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("loading versioned manifest from %s: server answered %s", address, resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest from %s: %w", address, err)
+	}
+	manifest, err := registry.ParseVersionedManifest(data)
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest from %s: %w", address, err)
+	}
+	return manifest, nil
+}
+
+func fetchS3VersionedManifest(rr *ResolvedRegistry, template, version string) (*registry.TemplateManifest, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), registryIndexTimeout)
+	defer cancel()
+	client, err := registry.DefaultS3ClientFactory(rr.URI, rr.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest: %w", err)
+	}
+	key := strings.TrimSuffix(rr.URI.Path, "/") + "/" + registry.ManifestObjectKey(template, version)
+	body, err := client.GetObject(ctx, rr.URI.Bucket, key)
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest s3://%s/%s: %w", rr.URI.Bucket, key, err)
+	}
+	defer func() { _ = body.Close() }()
+	data, err := io.ReadAll(io.LimitReader(body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest s3://%s/%s: %w", rr.URI.Bucket, key, err)
+	}
+	manifest, err := registry.ParseVersionedManifest(data)
+	if err != nil {
+		return nil, fmt.Errorf("loading versioned manifest s3://%s/%s: %w", rr.URI.Bucket, key, err)
+	}
+	return manifest, nil
 }
 
 // FetchTemplateBundle fetches the bundle for manifest into a temp dir,
 // verifying the bundle digest against the manifest when present. It returns
-// the bundle dir, the absolute fetch URI recorded in state, and cleanup.
+// the bundle dir, the stored (pre-resolution) fetch URI recorded in state,
+// and cleanup. Relative fs URIs resolve against the registry root for the
+// fetch but the stored form stays relative so state files move with the
+// checkout.
 // ~keep
 func FetchTemplateBundle(ctx context.Context, rr *ResolvedRegistry, manifest *registry.TemplateManifest) (string, string, func(), error) {
 	uri := manifest.URI
@@ -401,7 +465,6 @@ func FetchTemplateBundle(ctx context.Context, rr *ResolvedRegistry, manifest *re
 		cleanup()
 		return "", "", nil, err
 	}
-	stripReleaseMeta(tmp)
 	if strings.TrimSpace(manifest.Digest) != "" {
 		got, err := registry.DigestDir(tmp)
 		if err != nil {
@@ -413,7 +476,7 @@ func FetchTemplateBundle(ctx context.Context, rr *ResolvedRegistry, manifest *re
 			return "", "", nil, fmt.Errorf("fetching template %q: digest mismatch: manifest wants %s", manifest.Name, manifest.Digest)
 		}
 	}
-	return tmp, uri.String(), cleanup, nil
+	return tmp, manifest.URI.String(), cleanup, nil
 }
 
 // RegistryStateRef returns the canonical registry/template@version ref.

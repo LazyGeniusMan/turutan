@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -66,7 +67,10 @@ func NewGitBackend(operator GitOperator) *GitBackend {
 // ~keep
 func (b *GitBackend) Scheme() Scheme { return SchemeGit }
 
-// Bundle overlays srcDir onto the uri subpath, commits and pushes the tag.
+// Bundle archives srcDir and stores the archive bytes under the version
+// tag: the file <subpath>/releases/<version>.tar.gz inside the cloned
+// repository (subpath defaults to templates/<name>), committed and pushed
+// as tag templates/<name>/<version>.
 // ~keep
 func (b *GitBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth AuthConfig) (string, error) {
 	if err := requireScheme(uri, SchemeGit); err != nil {
@@ -85,7 +89,7 @@ func (b *GitBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth Au
 	if !info.IsDir() {
 		return "", fmt.Errorf("bundling %q: source is not a directory", uri.String())
 	}
-	digest, err := DigestDir(srcDir)
+	blob, digest, err := BundleBytes(srcDir)
 	if err != nil {
 		return "", fmt.Errorf("bundling %q: %w", uri.String(), err)
 	}
@@ -98,18 +102,19 @@ func (b *GitBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth Au
 	if _, err := b.operator.Clone(ctx, remote, "", tmp, git.ShallowDepth); err != nil {
 		return "", fmt.Errorf("bundling %q: %w", uri.String(), err)
 	}
-	target := tmp
-	if uri.Subpath != "" {
-		sub, err := joinSubpath(tmp, uri.Subpath)
-		if err != nil {
-			return "", fmt.Errorf("bundling %q: %w", uri.String(), err)
-		}
-		if err := os.RemoveAll(sub); err != nil {
-			return "", fmt.Errorf("bundling %q: clearing subpath: %w", uri.String(), err)
-		}
-		target = sub
+	subpath := strings.TrimSpace(uri.Subpath)
+	if subpath == "" {
+		subpath = "templates/" + gitTemplateName(uri.Ref)
 	}
-	if err := CopyTree(srcDir, target); err != nil {
+	archiveRel := filepath.ToSlash(filepath.Join(filepath.FromSlash(subpath), "releases", gitReleaseVersion(uri.Ref)+".tar.gz"))
+	target, err := joinSubpath(tmp, archiveRel)
+	if err != nil {
+		return "", fmt.Errorf("bundling %q: %w", uri.String(), err)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		return "", fmt.Errorf("bundling %q: %w", uri.String(), err)
+	}
+	if err := os.WriteFile(target, blob, 0o600); err != nil {
 		return "", fmt.Errorf("bundling %q: %w", uri.String(), err)
 	}
 	if _, err := b.operator.CommitTag(tmp, uri.Ref); err != nil {
@@ -121,7 +126,8 @@ func (b *GitBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth Au
 	return digest, nil
 }
 
-// Fetch clones the uri ref and copies its subpath into destDir.
+// Fetch clones the uri ref and extracts its release archive
+// (<subpath>/releases/<version>.tar.gz) into destDir.
 // ~keep
 func (b *GitBackend) Fetch(ctx context.Context, uri URI, _ AuthConfig, destDir string) error {
 	if err := requireScheme(uri, SchemeGit); err != nil {
@@ -139,25 +145,40 @@ func (b *GitBackend) Fetch(ctx context.Context, uri URI, _ AuthConfig, destDir s
 	if _, err := b.operator.Clone(ctx, remote, uri.Ref, tmp, git.ShallowDepth); err != nil {
 		return fmt.Errorf("fetching %q: %w", uri.String(), err)
 	}
-	source := tmp
-	if uri.Subpath != "" {
-		sub, err := joinSubpath(tmp, uri.Subpath)
-		if err != nil {
-			return fmt.Errorf("fetching %q: %w", uri.String(), err)
-		}
-		info, err := os.Stat(sub)
-		if err != nil {
-			return fmt.Errorf("fetching %q: subpath: %w", uri.String(), err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("fetching %q: subpath is not a directory", uri.String())
-		}
-		source = sub
+	subpath := strings.TrimSpace(uri.Subpath)
+	if subpath == "" {
+		subpath = "templates/" + gitTemplateName(uri.Ref)
 	}
-	if err := CopyTree(source, destDir); err != nil {
+	archiveRel := filepath.ToSlash(filepath.Join(filepath.FromSlash(subpath), "releases", gitReleaseVersion(uri.Ref)+".tar.gz"))
+	source, err := joinSubpath(tmp, archiveRel)
+	if err != nil {
+		return fmt.Errorf("fetching %q: %w", uri.String(), err)
+	}
+	data, err := os.ReadFile(source) // #nosec G304 -- source is joinSubpath-pinned to the freshly cloned temp repo
+	if err != nil {
+		return fmt.Errorf("fetching %q: archive %q: %w", uri.String(), archiveRel, err)
+	}
+	if err := ExtractBundle(bytes.NewReader(data), destDir); err != nil {
 		return fmt.Errorf("fetching %q: %w", uri.String(), err)
 	}
 	return nil
+}
+
+func gitReleaseVersion(ref string) string {
+	trimmed := strings.Trim(strings.TrimSpace(ref), "/")
+	if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
+		return trimmed[idx+1:]
+	}
+	return trimmed
+}
+
+func gitTemplateName(ref string) string {
+	trimmed := strings.Trim(strings.TrimSpace(ref), "/")
+	parts := strings.Split(trimmed, "/")
+	if len(parts) >= 3 && parts[0] == "templates" {
+		return strings.Join(parts[1:len(parts)-1], "/")
+	}
+	return "default"
 }
 
 func gitRemoteURL(uri URI) string {

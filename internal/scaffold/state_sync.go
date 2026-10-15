@@ -29,6 +29,7 @@ type SyncOptions struct {
 	NonInteractive bool
 	Verbose        bool
 	Engine         string
+	Registries     map[string]string
 	Stdout         io.Writer
 	Stderr         io.Writer
 	Stdin          io.Reader
@@ -46,6 +47,7 @@ type InputOptions struct {
 	NonInteractive bool
 	Verbose        bool
 	Engine         string
+	Registries     map[string]string
 	Stdout         io.Writer
 	Stderr         io.Writer
 	Stdin          io.Reader
@@ -69,7 +71,7 @@ func StateSync(
 	data := map[string]any{}
 	maps.Copy(data, state.Data)
 	fetched, manifest, err := fetchPinnedTemplate(
-		ctx, state, "sync", opts.Engine, stderr, opts.Verbose)
+		ctx, state, "sync", opts.Engine, opts.Registries, stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +113,7 @@ func StateInput(
 		return nil, err
 	}
 	fetched, manifest, err := fetchPinnedTemplate(
-		ctx, state, "state input", opts.Engine, stderr, opts.Verbose)
+		ctx, state, "state input", opts.Engine, opts.Registries, stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -380,6 +382,7 @@ func fetchPinnedTemplate(
 	ctx context.Context,
 	state *config.State,
 	op, engine string,
+	registries map[string]string,
 	stderr io.Writer,
 	verbose bool,
 ) (*fetchedBundle, *config.Manifest, error) {
@@ -396,6 +399,20 @@ func fetchPinnedTemplate(
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
+	if uri.IsRelative() {
+		rr, err := ResolveRegistry(ctx, registries, state.Registry)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", op, err)
+		}
+		if rr.Root == "" {
+			return nil, nil, fmt.Errorf("%s: relative uri %q needs a local registry root", op, uri.Path)
+		}
+		resolved, err := uri.ResolveRelativeTo(rr.Root)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", op, err)
+		}
+		uri = resolved
+	}
 	auth := registry.ResolveAuth(state.Registry, uri)
 	backend, err := registry.BackendFor(uri.Scheme)
 	if err != nil {
@@ -410,7 +427,6 @@ func fetchPinnedTemplate(
 		cleanup()
 		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
-	stripReleaseMeta(tmp)
 	if strings.TrimSpace(state.TemplateDigest) != "" {
 		got, err := registry.DigestDir(tmp)
 		if err != nil {

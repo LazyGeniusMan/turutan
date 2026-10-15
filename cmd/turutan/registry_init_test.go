@@ -76,18 +76,15 @@ func TestRegistryInitCmd(t *testing.T) {
 		require.Equal(t, "John Doe", loaded.Author.String())
 	})
 
-	t.Run("accepts yaml alternate on force", func(t *testing.T) {
+	t.Run("writes json index", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		alt := filepath.Join(dir, registry.IndexFileNameAlt)
-		require.NoError(t, os.WriteFile(alt, []byte("name: acme\n"), 0o600))
 		_, _, err := execRegistryInit(t, "--author", "Jane Doe")
-		require.Error(t, err)
-		_, _, err = execRegistryInit(t, "--author", "Jane Doe", "--force")
 		require.NoError(t, err)
-		loaded, err := registry.LoadIndexFile(alt)
+		raw, err := os.ReadFile(filepath.Join(dir, registry.IndexFileName)) // #nosec G304 -- dir is t.TempDir() plus the fixed index file name
 		require.NoError(t, err)
-		require.Equal(t, "Jane Doe", loaded.Author.String())
+		require.Contains(t, string(raw), `"name"`)
+		require.Equal(t, "registry.json", registry.IndexFileName)
 	})
 
 	t.Run("requires author", func(t *testing.T) {

@@ -16,7 +16,6 @@ func validManifest() *TemplateManifest {
 		Version:      "1.2.0",
 		Author:       author,
 		URI:          uri,
-		Releases:     []string{"1.2.0", "1.1.0", "1.0.0"},
 		Digest:       "sha256:" + strings.Repeat("a", 64),
 		MinEngine:    ">= 0.2.0",
 		ManifestHash: "sha256:" + strings.Repeat("b", 64),
@@ -57,18 +56,6 @@ func TestTemplateManifestValidate(t *testing.T) {
 				uri, _ := ParseURI("oci://ghcr.io/org/repo")
 				m.URI = uri
 			},
-		},
-		{
-			name:   "releases ascending",
-			mutate: func(m *TemplateManifest) { m.Releases = []string{"1.0.0", "1.2.0"} },
-		},
-		{
-			name:   "releases head mismatch",
-			mutate: func(m *TemplateManifest) { m.Releases = []string{"1.1.0", "1.0.0"} },
-		},
-		{
-			name:   "bad release entry",
-			mutate: func(m *TemplateManifest) { m.Releases = []string{"1.2.0", "nope"} },
 		},
 		{
 			name:   "bad digest",

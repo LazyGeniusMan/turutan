@@ -43,35 +43,54 @@ turutan version        # version/commit/date plus license notice
 
 ## Dogfood: this repo is the turutan registry
 
-The repo root is the `turutan` registry root for authoring: `registry.yml`
-plus `templates/default` with fs-relative release URIs. The published OCI
-artifact (`oci://ghcr.io/lazygeniusman/turutan/templates`) carries OCI URIs
-for users. Template selection is explicit: `--template` flag wins, then
+The repo root is the `turutan` registry root for authoring:
+`registry.json` plus `templates/default` with fs-relative release URIs
+(`templates/default/releases/<v>.tar.gz`). The published OCI artifact
+(`oci://ghcr.io/lazygeniusman/turutan/templates`) carries OCI URIs for
+users. Template selection is explicit: `--template` flag wins, then
 `TURUTAN_TEMPLATE`, then the user-config `template:`, defaulting to
 `turutan/default@latest` via the OCI fallback.
 
+All generated registry artifacts are gitignored and rebuilt on demand:
+`registry.json`, `templates/*/manifest/`, `templates/*/releases/`,
+`.config/turutan/state.yml` and `.config/turutan/lock.json`. Only
+hand-written seeds stay committed (`dogfood-user.yml`,
+`dogfood-data.yml` — they hold no digests or absolute paths). Every
+`turutan:*` task depends on `turutan:release`, so a fresh clone works
+offline with one command:
+
 ```sh
-mise run turutan:check   # uses local/default@0.1.0, no network
-mise run turutan:diff    # drift vs the pinned snapshot (exit 2 when drifted)
+mise run turutan:check   # rebuilds artifacts, uses local/default@0.1.0, no network
+mise run turutan:diff    # drift vs the pinned archive (exit 2 when drifted)
 ```
 
 The mise `turutan:*` tasks point `TURUTAN_CONFIG` at
 `.config/turutan/dogfood-user.yml` (`local` registry → repo root) and pin
 `TURUTAN_TEMPLATE=local/default@0.1.0`. The repo's own
 `.config/turutan/state.yml` tracks `local/default@0.1.0` with the data in
-`.config/turutan/dogfood-data.yml`. Without mise, export the same two
-variables (or run `turutan registry add local <repo-root>` once and export
+`.config/turutan/dogfood-data.yml`, storing the pre-resolution relative
+URI (`templates/default/releases/0.1.0.tar.gz`) so the checkout moves
+freely between machines. Without mise, export the same two variables (or
+run `turutan registry add local <repo-root>` once and export
 `TURUTAN_TEMPLATE`).
 
-Author workflow: edit the tree under `templates/default/`, cut a release,
-then re-check against the newest snapshot:
+Author loop (two commands): edit the tree under `templates/default/`,
+rebuild the pinned release in place, then re-check:
 
 ```sh
-turutan registry release default minor fs
-# manifest: templates/default/manifest/<v>.yml, snapshot:
-# templates/default/releases/<v>/, index releases prepended.
+mise run turutan:release  # registry release default same fs --force:
+                          # archive templates/default/releases/<v>.tar.gz,
+                          # single-version manifest/<v>.json, index history updated
 TURUTAN_TEMPLATE=local/default@<v> turutan diff --ref <v>
 ```
+
+`registry release` bumps with `major|minor|patch` (new templates start at
+`0.1.0`) and rebuilds in place with `same --force` — no bump, just a
+fresh archive, manifest and index entry for the pinned version. `--force`
+is the rebuild switch: without it the command refuses to overwrite the
+versioned manifest, the release archive, or an already-listed version.
+The index entry keeps the latest manifest fields plus a newest-first
+`releases` history; versioned manifest files hold one version each.
 
 Bump the `TURUTAN_TEMPLATE` pin in the mise tasks, `dogfood-user.yml` and
 `.config/turutan/state.yml` (re-bootstrap via `turutan init` into a temp
@@ -101,5 +120,5 @@ template content carries its own license: each release records the
 template `.turutan.yml` license, and generated
 `.config/turutan/state.yml` records it as `templateLicense`
 (e.g. `"MIT-0"`). The registry is the source of truth for templates —
-this repo roots it (`registry.yml`, `templates/default`); author with
+this repo roots it (`registry.json`, `templates/default`); author with
 `registry init/create/release`.

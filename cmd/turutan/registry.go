@@ -28,8 +28,7 @@ directory (init, create, release) or store named registry references in the user
 config (add). The "turutan" registry resolves to its default OCI address
 without an explicit add.
 
-The registry index file is registry.yml (registry.yaml is accepted when
-reading).`,
+The registry index file is registry.json.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -52,7 +51,7 @@ func newRegistryInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize a template registry in the current directory",
 		Long: `Initialize a template registry in the current directory by
-writing registry.yml: the registry identity (name, version, author) with
+writing registry.json: the registry identity (name, version, author) with
 an empty template list.
 
 The author uses the canonical "Name <email> (website)" form. Refuses to
@@ -158,7 +157,7 @@ func runRegistryCreate(cmd *cobra.Command, name string, flags *registryCreateFla
 	if err != nil {
 		return fmt.Errorf("registry create: %w", err)
 	}
-	uri, err := registry.ParseURI(filepath.ToSlash(filepath.Join("templates", name)))
+	uri, err := registry.ParseURI(registry.ReleaseSnapshotPath(name, registryStarterVersion))
 	if err != nil {
 		return fmt.Errorf("registry create: %w", err)
 	}
@@ -210,13 +209,24 @@ func writeRegistryStarter(dir, name string) error {
 }
 
 func upsertRegistryTemplate(index *registry.RegistryIndex, manifest registry.TemplateManifest) {
+	entry := registry.RegistryTemplate{
+		Name:         manifest.Name,
+		Version:      manifest.Version,
+		Author:       manifest.Author,
+		Contributors: manifest.Contributors,
+		URI:          manifest.URI,
+		Digest:       manifest.Digest,
+		MinEngine:    manifest.MinEngine,
+		ManifestHash: manifest.ManifestHash,
+		License:      manifest.License,
+	}
 	for i := range index.Templates {
 		if index.Templates[i].Name == manifest.Name {
-			index.Templates[i] = manifest
+			index.Templates[i] = entry
 			return
 		}
 	}
-	index.Templates = append(index.Templates, manifest)
+	index.Templates = append(index.Templates, entry)
 }
 
 type registryAddFlags struct {
@@ -290,11 +300,9 @@ func runRegistryAdd(cmd *cobra.Command, name, rawURI string, flags *registryAddF
 }
 
 func existingIndexFile(dir string) (string, bool) {
-	for _, name := range []string{registry.IndexFileName, registry.IndexFileNameAlt} {
-		path := filepath.Join(dir, name)
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path, true
-		}
+	path := filepath.Join(dir, registry.IndexFileName)
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path, true
 	}
 	return "", false
 }
@@ -311,8 +319,8 @@ func findRegistryRoot(dir string) (string, string, error) {
 		parent := filepath.Dir(abs)
 		if parent == abs {
 			return "", "", fmt.Errorf(
-				"registry: no index (%s or %s) found in %q or its parents: run `turutan registry init` first",
-				registry.IndexFileName, registry.IndexFileNameAlt, dir)
+				"registry: no index (%s) found in %q or its parents: run `turutan registry init` first",
+				registry.IndexFileName, dir)
 		}
 		abs = parent
 	}

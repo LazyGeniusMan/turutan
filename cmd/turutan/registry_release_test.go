@@ -47,15 +47,18 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		out, err := execRegistryRelease(t, "foo", "minor", "fs")
 		require.NoError(t, err)
 		require.Contains(t, out, "foo@0.2.0")
-		manifestPath := filepath.Join(dir, "templates", "foo", "manifest", "0.2.0.yml")
+		manifestPath := filepath.Join(dir, "templates", "foo", "manifest", "0.2.0.json")
 		manifest, err := registry.LoadVersionedManifest(dir, "foo", "0.2.0")
 		require.NoError(t, err)
 		require.Equal(t, "foo", manifest.Name)
 		require.Equal(t, "0.2.0", manifest.Version)
 		require.Contains(t, out, manifest.Digest)
-		require.Equal(t, "templates/foo/releases/0.2.0", manifest.URI.String())
+		require.Equal(t, "templates/foo/releases/0.2.0.tar.gz", manifest.URI.String())
 		if _, err := os.Stat(manifestPath); err != nil {
 			t.Errorf("versioned manifest missing: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "templates", "foo", "releases", "0.2.0.tar.gz")); err != nil {
+			t.Errorf("release archive missing: %v", err)
 		}
 		loaded := load(t, dir)
 		found, err := loaded.FindTemplate("foo")
@@ -80,6 +83,19 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		require.Equal(t, "1.0.0", found.Version)
 		require.Equal(t, []string{"1.0.0", "0.2.0", "0.1.1"}, found.Releases)
 		_ = dir
+	})
+
+	t.Run("same bump rebuilds without version change", func(t *testing.T) {
+		dir := setup(t)
+		_, err := execRegistryRelease(t, "foo", "patch", "fs")
+		require.NoError(t, err)
+		out, err := execRegistryRelease(t, "foo", "same", "fs", "--force")
+		require.NoError(t, err)
+		require.Contains(t, out, "foo@0.1.1")
+		found, err := load(t, dir).FindTemplate("foo")
+		require.NoError(t, err)
+		require.Equal(t, "0.1.1", found.Version)
+		require.Equal(t, []string{"0.1.1"}, found.Releases)
 	})
 
 	t.Run("new template without create starts at 0.1.0", func(t *testing.T) {
@@ -115,7 +131,7 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		_ = dir
 	})
 
-	t.Run("author override and snapshot layout", func(t *testing.T) {
+	t.Run("author override and archive layout", func(t *testing.T) {
 		dir := setup(t)
 		_, err := execRegistryRelease(t, "foo", "minor", "fs",
 			"--author", "John Doe <john@example.com>")
@@ -123,9 +139,10 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		manifest, err := registry.LoadVersionedManifest(dir, "foo", "0.2.0")
 		require.NoError(t, err)
 		require.Equal(t, "John Doe <john@example.com>", manifest.Author.String())
-		if _, err := os.Stat(filepath.Join(dir, "templates", "foo", "releases", "0.2.0", ".turutan.yml")); err != nil {
-			t.Errorf("snapshot tree missing: %v", err)
-		}
+		archive := filepath.Join(dir, "templates", "foo", "releases", "0.2.0.tar.gz")
+		info, err := os.Stat(archive)
+		require.NoError(t, err)
+		require.Greater(t, info.Size(), int64(0))
 	})
 
 	t.Run("rejects bad bump scheme and missing template", func(t *testing.T) {

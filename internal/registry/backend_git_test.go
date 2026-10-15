@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"io/fs"
 	"os"
@@ -139,9 +140,18 @@ func TestGitBackendBundle(t *testing.T) {
 	if len(stub.pushed) != 1 || stub.pushed[0] != "templates/demo/1.0.0" {
 		t.Fatalf("pushed tags %q, want the bundle tag", stub.pushed)
 	}
-	assertSameTree(t, src, filepath.Join(stub.captured, "templates", "demo"))
-	if _, err := os.Stat(filepath.Join(stub.captured, "templates", "demo", "stale.txt")); !os.IsNotExist(err) {
-		t.Fatalf("stale subpath content survived the bundle overlay")
+	archive := filepath.Join(stub.captured, "templates", "demo", "releases", "1.0.0.tar.gz")
+	data, err := os.ReadFile(archive) // #nosec G304 -- archive is joinSubpath-pinned under the stub capture dir
+	if err != nil {
+		t.Fatalf("release archive missing: %v", err)
+	}
+	dest := t.TempDir()
+	if err := ExtractBundle(bytes.NewReader(data), dest); err != nil {
+		t.Fatalf("ExtractBundle error: %v", err)
+	}
+	assertSameTree(t, src, dest)
+	if _, err := os.Stat(filepath.Join(stub.captured, "templates", "demo", "stale.txt")); err != nil {
+		t.Fatalf("unrelated subpath content should survive archive bundling: %v", err)
 	}
 }
 
@@ -150,15 +160,19 @@ func TestGitBackendFetch(t *testing.T) {
 	ctx := context.Background()
 	remote := t.TempDir()
 	sub := filepath.Join(remote, "templates", "demo")
-	if err := os.MkdirAll(sub, 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(sub, "releases"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	writeFixtureTemplate(t, sub)
-	initGitRepo(t, remote)
-	wantDigest, err := DigestDir(sub)
+	fixture := t.TempDir()
+	writeFixtureTemplate(t, fixture)
+	blob, wantDigest, err := BundleBytes(fixture)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(sub, "releases", "1.0.0.tar.gz"), blob, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	initGitRepo(t, remote)
 	stub := &stubGitOperator{GitOperator: defaultGitOperator{}, cloneFrom: remote}
 	backend := NewGitBackend(stub)
 	uri := mustParseURI(t, "git+https://example.com/org/repo.git?ref=templates/demo/1.0.0&subpath=templates/demo")
@@ -169,7 +183,7 @@ func TestGitBackendFetch(t *testing.T) {
 	if stub.clonedRef != "templates/demo/1.0.0" {
 		t.Fatalf("cloned ref %q, want the uri ref", stub.clonedRef)
 	}
-	assertSameTree(t, sub, dest)
+	assertSameTree(t, fixture, dest)
 	if got, err := DigestDir(dest); err != nil || got != wantDigest {
 		t.Fatalf("DigestDir(dest) = %q, err = %v; want %q", got, err, wantDigest)
 	}

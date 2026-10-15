@@ -56,7 +56,7 @@ func TestRegistryCreateCmd(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "0.1.0", found.Version)
 		require.Equal(t, "Jane Doe <jane@example.com>", found.Author.String())
-		require.Equal(t, "templates/hello", found.URI.String())
+		require.Equal(t, "templates/hello/releases/0.1.0.tar.gz", found.URI.String())
 	})
 
 	t.Run("finds registry root from subdirectory", func(t *testing.T) {

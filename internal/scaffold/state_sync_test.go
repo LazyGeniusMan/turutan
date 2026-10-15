@@ -12,21 +12,23 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 )
 
-func stateSyncTestOptions(stdout, stderr *strings.Builder) SyncOptions {
+func stateSyncTestOptions(stdout, stderr *strings.Builder, regs map[string]string) SyncOptions {
 	return SyncOptions{
-		Engine: "0.1.0",
-		Stdout: stdout,
-		Stderr: stderr,
-		Stdin:  strings.NewReader(""),
+		Engine:     "0.1.0",
+		Registries: regs,
+		Stdout:     stdout,
+		Stderr:     stderr,
+		Stdin:      strings.NewReader(""),
 	}
 }
 
-func stateInputTestOptions(stdout, stderr *strings.Builder) InputOptions {
+func stateInputTestOptions(stdout, stderr *strings.Builder, regs map[string]string) InputOptions {
 	return InputOptions{
-		Engine: "0.1.0",
-		Stdout: stdout,
-		Stderr: stderr,
-		Stdin:  strings.NewReader(""),
+		Engine:     "0.1.0",
+		Registries: regs,
+		Stdout:     stdout,
+		Stderr:     stderr,
+		Stdin:      strings.NewReader(""),
 	}
 }
 
@@ -64,7 +66,7 @@ var stateSyncFiles = map[string]string{
 
 func TestStateSyncFilesystem(t *testing.T) {
 	t.Run("hand-edited data re-renders at pinned commit", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
 		got, _ := os.ReadFile(filepath.Join(projectDir, "greet.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
 		if string(got) != "hi proj\n" {
@@ -73,7 +75,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		editStoredData(t, projectDir, "project_name", "edited")
 		var stdout, stderr strings.Builder
 		result, err := StateSync(
-			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr))
+			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr, regs))
 		if err != nil {
 			t.Fatalf("StateSync error: %v", err)
 		}
@@ -112,7 +114,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		}
 		var stdout, stderr strings.Builder
 		result, err := StateSync(
-			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr))
+			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr, regs))
 		if err != nil {
 			t.Fatalf("StateSync error: %v", err)
 		}
@@ -130,7 +132,7 @@ func TestStateSyncFilesystem(t *testing.T) {
 		updateTestTemplateFile(t, regs, testRegistryTemplate, "greet.txt.tmpl", "changed {{.project_name}}\n")
 		var stdout, stderr strings.Builder
 		result, err := StateSync(
-			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr))
+			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr, regs))
 		if err != nil {
 			t.Fatalf("StateSync error: %v", err)
 		}
@@ -146,30 +148,30 @@ func TestStateSyncFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("dirty guard without force", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		if err := os.WriteFile(
 			filepath.Join(projectDir, "greet.txt"), []byte("local edit\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
 		if _, err := StateSync(
-			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr)); err == nil {
+			context.Background(), projectDir, stateSyncTestOptions(&stdout, &stderr, regs)); err == nil {
 			t.Error("StateSync on dirty tree succeeded, want guard error")
 		} else if !strings.Contains(err.Error(), "--force") {
 			t.Errorf("error = %q, want it to mention --force", err)
 		}
-		opts := stateSyncTestOptions(&stdout, &stderr)
+		opts := stateSyncTestOptions(&stdout, &stderr, regs)
 		opts.Force = true
 		if _, err := StateSync(context.Background(), projectDir, opts); err != nil {
 			t.Errorf("StateSync with --force error: %v", err)
 		}
 	})
 	t.Run("preview leaves tree and state alone", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
 		editStoredData(t, projectDir, "project_name", "previewed")
 		var stdout, stderr strings.Builder
-		opts := stateSyncTestOptions(&stdout, &stderr)
+		opts := stateSyncTestOptions(&stdout, &stderr, regs)
 		opts.Preview = true
 		result, err := StateSync(context.Background(), projectDir, opts)
 		if err != nil {
@@ -193,12 +195,12 @@ func TestStateSyncFailures(t *testing.T) {
 		var stdout, stderr strings.Builder
 		if _, err := StateSync(
 			context.Background(), t.TempDir(),
-			stateSyncTestOptions(&stdout, &stderr)); err == nil {
+			stateSyncTestOptions(&stdout, &stderr, nil)); err == nil {
 			t.Error("StateSync without state succeeded, want error")
 		}
 	})
 	t.Run("tampered pinned digest errors", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		state, err := config.LoadState(os.DirFS(projectDir))
 		if err != nil {
 			t.Fatal(err)
@@ -211,14 +213,14 @@ func TestStateSyncFailures(t *testing.T) {
 		var stdout, stderr strings.Builder
 		if _, err := StateSync(
 			context.Background(), projectDir,
-			stateSyncTestOptions(&stdout, &stderr)); err == nil {
+			stateSyncTestOptions(&stdout, &stderr, regs)); err == nil {
 			t.Error("StateSync with bogus pinned commit succeeded, want error")
 		}
 	})
 	t.Run("bad conflict rejected", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
-		opts := stateSyncTestOptions(&stdout, &stderr)
+		opts := stateSyncTestOptions(&stdout, &stderr, regs)
 		opts.Conflict = "merge"
 		if _, err := StateSync(context.Background(), projectDir, opts); err == nil {
 			t.Error("StateSync with bad --conflict succeeded, want error")
@@ -228,9 +230,9 @@ func TestStateSyncFailures(t *testing.T) {
 
 func TestStateInput(t *testing.T) {
 	t.Run("interactive reprompt defaults from stored values", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
-		opts := stateInputTestOptions(&stdout, &stderr)
+		opts := stateInputTestOptions(&stdout, &stderr, regs)
 		opts.Stdin = strings.NewReader("newproj\n\n")
 		result, err := StateInput(context.Background(), projectDir, opts)
 		if err != nil {
@@ -255,9 +257,9 @@ func TestStateInput(t *testing.T) {
 		}
 	})
 	t.Run("accepting every default leaves data alone", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
-		opts := stateInputTestOptions(&stdout, &stderr)
+		opts := stateInputTestOptions(&stdout, &stderr, regs)
 		opts.Stdin = strings.NewReader("\n\n")
 		if _, err := StateInput(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("StateInput error: %v", err)
@@ -271,9 +273,9 @@ func TestStateInput(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive without data fails", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		var stdout, stderr strings.Builder
-		opts := stateInputTestOptions(&stdout, &stderr)
+		opts := stateInputTestOptions(&stdout, &stderr, regs)
 		opts.NonInteractive = true
 		if _, err := StateInput(context.Background(), projectDir, opts); err == nil {
 			t.Error("StateInput non-interactive without data succeeded, want error")
@@ -282,7 +284,7 @@ func TestStateInput(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive data-file overlay re-renders", func(t *testing.T) {
-		projectDir, _ := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
+		projectDir, regs := initRegistryProject(t, stateSyncManifest, stateSyncFiles)
 		old := storedCommit(t, projectDir)
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(
@@ -290,7 +292,7 @@ func TestStateInput(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
-		opts := stateInputTestOptions(&stdout, &stderr)
+		opts := stateInputTestOptions(&stdout, &stderr, regs)
 		opts.NonInteractive = true
 		opts.DataFile = dataFile
 		result, err := StateInput(context.Background(), projectDir, opts)
@@ -322,7 +324,7 @@ func TestStateInput(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
-		opts := stateInputTestOptions(&stdout, &stderr)
+		opts := stateInputTestOptions(&stdout, &stderr, regs)
 		opts.Stdin = strings.NewReader("\n\n")
 		result, err := StateInput(context.Background(), projectDir, opts)
 		if err != nil {

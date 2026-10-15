@@ -3,22 +3,17 @@
 package registry
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
-// IndexFileName is the default registry index file name.
+// IndexFileName is the registry index file name (JSON only).
 // ~keep
-const IndexFileName = "registry.yml"
-
-// IndexFileNameAlt is the accepted alternate index file name.
-// ~keep
-const IndexFileNameAlt = "registry.yaml"
+const IndexFileName = "registry.json"
 
 // ErrInvalidIndex is matched with errors.Is when an index fails validation.
 // ~keep
@@ -28,23 +23,88 @@ var ErrInvalidIndex = errors.New("invalid index")
 // ~keep
 var ErrTemplateNotFound = errors.New("template not found")
 
+// RegistryTemplate is one index entry: the latest manifest fields plus the
+// newest-first releases history. Versioned files (TemplateManifest) hold a
+// single version with no releases list.
+//
+// distinctly from the single-version TemplateManifest file shape.
+//
+//nolint:revive // ~keep: RegistryTemplate names the index-entry shape
+type RegistryTemplate struct {
+	Name         string   `json:"name"`
+	Version      string   `json:"version"`
+	Author       Author   `json:"author"`
+	Contributors []Author `json:"contributors,omitempty"`
+	URI          URI      `json:"uri"`
+	Releases     []string `json:"releases,omitempty"`
+	Digest       string   `json:"digest,omitempty"`
+	MinEngine    string   `json:"min-engine,omitempty"`
+	ManifestHash string   `json:"manifestHash,omitempty"`
+	License      string   `json:"license,omitempty"`
+}
+
+// Validate reports whether the index entry is well-formed.
+// ~keep
+func (t *RegistryTemplate) Validate() error {
+	manifest := TemplateManifest{
+		Name:         t.Name,
+		Version:      t.Version,
+		Author:       t.Author,
+		Contributors: t.Contributors,
+		URI:          t.URI,
+		Digest:       t.Digest,
+		MinEngine:    t.MinEngine,
+		ManifestHash: t.ManifestHash,
+		License:      t.License,
+	}
+	if err := manifest.Validate(); err != nil {
+		return err
+	}
+	for i, release := range t.Releases {
+		if _, err := ParseStrict(release); err != nil {
+			return fmt.Errorf("%w: releases[%d]: %w", ErrInvalidIndex, i, err)
+		}
+	}
+	if !IsNewestFirst(t.Releases) && len(t.Releases) > 0 {
+		return fmt.Errorf("%w: releases must be strict semver sorted newest-first", ErrInvalidIndex)
+	}
+	return nil
+}
+
+// Manifest returns the single-version view of this entry.
+// ~keep
+func (t *RegistryTemplate) Manifest() TemplateManifest {
+	return TemplateManifest{
+		Name:         t.Name,
+		Version:      t.Version,
+		Author:       t.Author,
+		Contributors: t.Contributors,
+		URI:          t.URI,
+		Digest:       t.Digest,
+		MinEngine:    t.MinEngine,
+		ManifestHash: t.ManifestHash,
+		License:      t.License,
+	}
+}
+
 // RegistryIndex is the registry catalog: one entry per template holding its
-// latest release. The index file itself carries the registry identity.
+// latest release plus history. The index file itself carries the registry
+// identity.
 //
 //nolint:revive // ~keep: RegistryIndex is the mandated public name used across registry subcommands.
 type RegistryIndex struct {
-	Name      string             `yaml:"name"`
-	Version   string             `yaml:"version"`
-	Author    Author             `yaml:"author"`
-	Templates []TemplateManifest `yaml:"templates"`
+	Name      string             `json:"name"`
+	Version   string             `json:"version"`
+	Author    Author             `json:"author"`
+	Templates []RegistryTemplate `json:"templates"`
 }
 
-// ParseIndex decodes and validates index YAML, rejecting unknown fields.
+// ParseIndex decodes and validates index JSON, rejecting unknown fields.
 // ~keep
 func ParseIndex(data []byte) (*RegistryIndex, error) {
 	var index RegistryIndex
-	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
-	decoder.KnownFields(true)
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&index); err != nil {
 		return nil, fmt.Errorf("parsing registry index: %w", err)
 	}
@@ -68,19 +128,17 @@ func LoadIndexFile(path string) (*RegistryIndex, error) {
 	return index, nil
 }
 
-// SaveIndexFile validates the index and writes it to path.
+// SaveIndexFile validates the index and writes it to path as indented JSON.
 // ~keep
 func SaveIndexFile(path string, index *RegistryIndex) error {
 	if err := index.Validate(); err != nil {
 		return err
 	}
-	data, err := yaml.Marshal(index)
+	data, err := marshalJSONIndent(index)
 	if err != nil {
 		return fmt.Errorf("encoding registry index %q: %w", path, err)
 	}
-	if len(data) == 0 || data[len(data)-1] != '\n' {
-		data = append(data, '\n')
-	}
+	data = append(data, '\n')
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err
@@ -121,9 +179,9 @@ func (r *RegistryIndex) Validate() error {
 	return nil
 }
 
-// FindTemplate returns the manifest for name or ErrTemplateNotFound.
+// FindTemplate returns the index entry for name or ErrTemplateNotFound.
 // ~keep
-func (r *RegistryIndex) FindTemplate(name string) (*TemplateManifest, error) {
+func (r *RegistryIndex) FindTemplate(name string) (*RegistryTemplate, error) {
 	for i := range r.Templates {
 		if r.Templates[i].Name == name {
 			return &r.Templates[i], nil

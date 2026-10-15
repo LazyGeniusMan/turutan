@@ -107,11 +107,9 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 	}
 	author := index.Author
 	var contributors []registry.Author
-	var releases []string
 	if findErr == nil {
 		author = existing.Author
 		contributors = existing.Contributors
-		releases = existing.Releases
 	}
 	templateCfg, err := config.LoadManifest(os.DirFS(srcDir))
 	if err != nil {
@@ -127,21 +125,11 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 		Author:       author,
 		Contributors: contributors,
 		URI:          uri,
-		Releases:     append([]string{version}, releases...),
 		Digest:       digest,
 		MinEngine:    templateCfg.MinEngine,
 		ManifestHash: manifestHash,
 		License:      templateCfg.License,
 	}
-	seen := map[string]bool{}
-	deduped := entry.Releases[:0]
-	for _, release := range entry.Releases {
-		if !seen[release] {
-			seen[release] = true
-			deduped = append(deduped, release)
-		}
-	}
-	entry.Releases = deduped
 	if err := entry.Validate(); err != nil {
 		t.Fatal(err)
 	}

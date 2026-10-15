@@ -20,27 +20,26 @@ var (
 	manifestHashRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
-// TemplateManifest describes one template release line: the newest release
-// plus its history. Extra carries forward-compatible fields unknown to this
-// engine version.
+// TemplateManifest describes one template release: a single versioned file
+// at templates/<name>/manifest/<version>.json. It carries no release
+// history; the registry index entry (RegistryTemplate) owns the
+// newest-first releases list.
 // ~keep
 type TemplateManifest struct {
-	Name         string         `yaml:"name"`
-	Version      string         `yaml:"version"`
-	Author       Author         `yaml:"author"`
-	Contributors []Author       `yaml:"contributors,omitempty"`
-	URI          URI            `yaml:"uri"`
-	Releases     []string       `yaml:"releases,omitempty"`
-	Digest       string         `yaml:"digest,omitempty"`
-	MinEngine    string         `yaml:"min-engine,omitempty"`
-	ManifestHash string         `yaml:"manifestHash,omitempty"`
-	License      string         `yaml:"license,omitempty"`
-	Extra        map[string]any `yaml:",inline"`
+	Name         string   `json:"name"`
+	Version      string   `json:"version"`
+	Author       Author   `json:"author"`
+	Contributors []Author `json:"contributors,omitempty"`
+	URI          URI      `json:"uri"`
+	Digest       string   `json:"digest,omitempty"`
+	MinEngine    string   `json:"min-engine,omitempty"`
+	ManifestHash string   `json:"manifestHash,omitempty"`
+	License      string   `json:"license,omitempty"`
 }
 
 // Validate reports whether the manifest is internally consistent: names,
-// strict semver versions with newest-first releases, author formats, URI,
-// digest, engine constraint and manifest hash.
+// strict semver version, author formats, URI, digest, engine constraint
+// and manifest hash.
 // ~keep
 func (m *TemplateManifest) Validate() error {
 	if m == nil {
@@ -66,9 +65,6 @@ func (m *TemplateManifest) Validate() error {
 	if m.URI.Scheme == SchemeOCI && m.URI.Ref == "" && m.URI.Digest == "" {
 		return fmt.Errorf("%w: oci uri needs a tag or digest", ErrInvalidManifest)
 	}
-	if err := validateReleases(m.Version, m.Releases); err != nil {
-		return err
-	}
 	if m.Digest != "" && !digestRe.MatchString(m.Digest) {
 		return fmt.Errorf("%w: digest %q is not a sha256: digest", ErrInvalidManifest, m.Digest)
 	}
@@ -79,23 +75,6 @@ func (m *TemplateManifest) Validate() error {
 	}
 	if m.ManifestHash != "" && !manifestHashRe.MatchString(m.ManifestHash) {
 		return fmt.Errorf("%w: manifestHash %q is not a sha256: digest", ErrInvalidManifest, m.ManifestHash)
-	}
-	return nil
-}
-
-func validateReleases(version string, releases []string) error {
-	for i, release := range releases {
-		if _, err := ParseStrict(release); err != nil {
-			return fmt.Errorf("%w: releases[%d]: %w", ErrInvalidManifest, i, err)
-		}
-	}
-	if !IsNewestFirst(releases) && len(releases) > 0 {
-		return fmt.Errorf("%w: releases must be strict semver sorted newest-first", ErrInvalidManifest)
-	}
-	if len(releases) > 0 && canonical(releases[0]) != canonical(version) {
-		return fmt.Errorf(
-			"%w: releases[0] %q must equal version %q",
-			ErrInvalidManifest, releases[0], version)
 	}
 	return nil
 }

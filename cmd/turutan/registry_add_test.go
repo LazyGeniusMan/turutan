@@ -52,8 +52,8 @@ func TestRegistryAddCmd(t *testing.T) {
 		cases := map[string]string{
 			"local-rel": "templates/local",
 			"local-abs": "fs:/srv/registry",
-			"web":       "https://example.com/registry.yml",
-			"bucket":    "s3://my-bucket/registry.yml",
+			"web":       "https://example.com/registry.json",
+			"bucket":    "s3://my-bucket/registry.json",
 			"repo":      "git+https://example.com/org/registry.git?ref=v1.0.0",
 			"image":     "oci://ghcr.io/acme/templates",
 		}

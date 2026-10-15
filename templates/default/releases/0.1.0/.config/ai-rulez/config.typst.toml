@@ -1,9 +1,0 @@
-[profiles]
-typst = ["typst"]
-
-[[installed_skills]]
-name = "typst"
-source = "https://github.com/LazyGeniusMan/typst-skills"
-trust = "warn"
-include = ["*"]
-domain = "typst"

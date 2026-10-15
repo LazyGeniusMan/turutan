@@ -24,32 +24,40 @@ type registryReleaseFlags struct {
 func newRegistryReleaseCmd() *cobra.Command {
 	flags := &registryReleaseFlags{}
 	cmd := &cobra.Command{
-		Use:   "release <template-name> <major|minor|patch> <fs|http|s3|git|oci>",
+		Use:   "release <template-name> <major|minor|patch|same> <fs|http|s3|git|oci>",
 		Short: "Cut a versioned template release in the current registry",
 		Long: `Cut a versioned template release in the current registry: the
-command walks up from the working directory to find the registry index,
-bumps the indexed version (or starts a new template at 0.1.0), bundles
-templates/<name>/ through the scheme backend, writes the versioned
-manifest templates/<name>/manifest/<version>.yml and prepends the version
-to the index releases.
+command walks up from the working directory to find the registry index
+(registry.json), resolves the next version, bundles templates/<name>/
+through the scheme backend, writes the single-version manifest
+templates/<name>/manifest/<version>.json and records the version at the
+front of the index releases history.
 
-The release URI defaults per scheme: fs snapshots the staged tree to the
-versioned templates/<name>/releases/<version> path while git tags
-templates/<name>/<version> and oci tags <version>. Non-fs first releases need --uri-override because the
-host or bucket cannot be guessed; later releases adapt the indexed URI.
-http(s) and s3 URIs are reused as stored, so pass --uri-override per
-version for versioned URLs. Auth resolves from TURUTAN_REGISTRY_<NAME>_*
-and scheme environment variables; secrets are never logged.
+Archive layout: fs and git releases store one gzip-tar archive per
+version at templates/<name>/releases/<version>.tar.gz. The fs backend
+writes the archive file there; the git backend stores the same archive
+bytes at <subpath>/releases/<version>.tar.gz under tag
+templates/<name>/<version> (subpath defaults to templates/<name>).
+http(s)/s3 backends upload the same bundle bytes to the indexed URI, and
+oci pushes an OCI artifact. Bundles never contain manifest/ or releases/
+(the collector skips them), so no strip step runs on fetch.
 
-Refuses to overwrite an existing versioned manifest or re-release a
-version already in releases unless --force is given.`,
+Versioning: major|minor|patch bumps the indexed latest (new templates
+start at 0.1.0); same rebuilds the indexed version in place with no bump.
+--force rebuilds: it overwrites the versioned manifest file, the release
+archive, and re-records an already-listed version. Without --force the
+command refuses to overwrite any of them. Non-fs first releases need
+--uri-override because the host or bucket cannot be guessed; later
+releases adapt the indexed URI. Auth resolves from
+TURUTAN_REGISTRY_<NAME>_* and scheme environment variables; secrets are
+never logged.`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRegistryRelease(cmd, args[0], args[1], args[2], flags)
 		},
 	}
 	cmd.Flags().BoolVar(&flags.force, "force", false,
-		"overwrite an existing versioned manifest or re-release a listed version")
+		"rebuild in place: overwrite the versioned manifest, release archive, or an already-listed version (required with the \"same\" bump)")
 	cmd.Flags().StringVar(&flags.author, "author", "",
 		`release author as "Name <email> (website)" (default: indexed author)`)
 	cmd.Flags().StringVar(&flags.uriOverride, "uri-override", "",
@@ -148,29 +156,12 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 	if err != nil {
 		return fmt.Errorf("registry release: %w", err)
 	}
-	releases := []string{next}
-	if existing != nil {
-		for _, release := range existing.Releases {
-			if release == next {
-				continue
-			}
-			manifestPath := registry.VersionedManifestPath(root, name, release)
-			altPath := filepath.Join(root, "templates", filepath.FromSlash(name), "manifest", release+".yaml")
-			if _, err := os.Stat(manifestPath); err != nil {
-				if _, err := os.Stat(altPath); err != nil {
-					continue
-				}
-			}
-			releases = append(releases, release)
-		}
-	}
 	manifest := registry.TemplateManifest{
 		Name:         name,
 		Version:      next,
 		Author:       author,
 		Contributors: contributors,
 		URI:          uri,
-		Releases:     releases,
 		Digest:       digest,
 		MinEngine:    templateCfg.MinEngine,
 		ManifestHash: manifestHash,

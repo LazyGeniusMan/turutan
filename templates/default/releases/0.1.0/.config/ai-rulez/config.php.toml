@@ -1,2 +1,0 @@
-[profiles]
-php = ["php", "builtin:php"]

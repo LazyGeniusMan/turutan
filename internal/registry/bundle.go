@@ -54,7 +54,15 @@ func collectBundleEntries(srcDir string) ([]bundleEntry, error) {
 		if rel == "." {
 			return nil
 		}
-		if rel == ".git" || strings.HasPrefix(rel, ".git"+string(filepath.Separator)) {
+		slash := filepath.ToSlash(rel)
+		if slash == ".git" || strings.HasPrefix(slash, ".git/") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if slash == "manifest" || strings.HasPrefix(slash, "manifest/") ||
+			slash == "releases" || strings.HasPrefix(slash, "releases/") {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -187,13 +195,13 @@ func ExtractBundle(r io.Reader, destDir string) error {
 		if name == "." {
 			continue
 		}
-		target, err := filter.SafeJoin(abs, filepath.FromSlash(name))
+		target, err := filter.SafeJoin(abs, filepath.FromSlash(name)) // #nosec G703 -- name is tar-entry-relative and SafeJoin-pinned to the MkdirAll-created abs dest
 		if err != nil {
 			return fmt.Errorf("extracting bundle entry %q: %w", header.Name, err)
 		}
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o750); err != nil {
+			if err := os.MkdirAll(target, 0o750); err != nil { // #nosec G703 -- target is SafeJoin-pinned to abs from a sanitized tar entry name
 				return fmt.Errorf("creating bundle dir %q: %w", name, err)
 			}
 		case tar.TypeReg:
@@ -201,14 +209,14 @@ func ExtractBundle(r io.Reader, destDir string) error {
 			if total > maxBundleBytes {
 				return fmt.Errorf("extracting bundle: too large (zip bomb guard)")
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil { // #nosec G703 -- target dir is SafeJoin-pinned to abs from a sanitized tar entry name
 				return fmt.Errorf("creating parent of %q: %w", name, err)
 			}
 			data, err := io.ReadAll(io.LimitReader(tr, maxBundleBytes-total+1))
 			if err != nil {
 				return fmt.Errorf("reading bundle entry %q: %w", name, err)
 			}
-			if err := os.WriteFile(target, data, header.FileInfo().Mode().Perm()); err != nil {
+			if err := os.WriteFile(target, data, header.FileInfo().Mode().Perm()); err != nil { // #nosec G703 -- target is SafeJoin-pinned to abs from a sanitized tar entry name
 				return fmt.Errorf("writing bundle entry %q: %w", name, err)
 			}
 		default:
@@ -218,6 +226,9 @@ func ExtractBundle(r io.Reader, destDir string) error {
 }
 
 // CopyTree replicates srcDir into destDir, skipping .git and symlinks.
+// Release metadata (manifest/, releases/) is skipped by bundle collection
+// (collectBundleEntries), not here: staged copies keep the authoring tree
+// intact while archives never contain their own history.
 // ~keep
 func CopyTree(srcDir, destDir string) error {
 	absSrc, err := filepath.Abs(srcDir)
@@ -255,68 +266,6 @@ func CopyTree(srcDir, destDir string) error {
 			return nil
 		}
 		data, err := os.ReadFile(full) // #nosec G304, G122 -- full comes from walking absSrc with symlinks skipped
-		if err != nil {
-			return err
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, info.Mode().Perm()) // #nosec G703, G122 -- target is SafeJoin-pinned to destDir from WalkDir-relative rel
-	})
-}
-
-// CopyTreeFiltered replicates srcDir minus release metadata, for clean fetches.
-// ~keep
-func CopyTreeFiltered(srcDir, destDir string) error {
-	absSrc, err := filepath.Abs(srcDir)
-	if err != nil {
-		return fmt.Errorf("resolving source %q: %w", srcDir, err)
-	}
-	if err := os.MkdirAll(destDir, 0o750); err != nil {
-		return fmt.Errorf("creating destination %q: %w", destDir, err)
-	}
-	return filepath.WalkDir(absSrc, func(full string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(absSrc, full)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		slash := filepath.ToSlash(rel)
-		if slash == ".git" || strings.HasPrefix(slash, ".git/") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if slash == "manifest" || strings.HasPrefix(slash, "manifest/") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if slash == "releases" || strings.HasPrefix(slash, "releases/") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		target, err := filter.SafeJoin(destDir, rel) // #nosec G703 -- rel is WalkDir-relative to absSrc and SafeJoin-pinned to destDir
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o750) // #nosec G122 -- target is SafeJoin-pinned to destDir from WalkDir-relative rel with symlinks skipped
-		}
-		if d.Type()&fs.ModeSymlink != 0 || !d.Type().IsRegular() {
-			return nil
-		}
-		data, err := os.ReadFile(full) // #nosec G304,G122 -- full comes from walking absSrc with symlinks skipped; SafeJoin-pinned write below
 		if err != nil {
 			return err
 		}
