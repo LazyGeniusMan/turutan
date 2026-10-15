@@ -104,10 +104,8 @@ func newStateSyncCmd() *cobra.Command {
 		Long: `Re-render the project from the current .config/turutan/state.yml inputs
 at the exact pinned commit, without contacting the template upstream.
 
-The template is fetched at state ResolvedCommit only (remote-git reuses the
-default cache when present, else clones and checks out the pinned SHA;
-local-git checks out the stored SHA with no HEAD re-resolution; filesystem
-opens the stored path directly). The stored ResolvedCommit and RequestedRef
+The template bundle is fetched from the stored registry templateURI only
+and verified against the stored templateDigest. The stored ResolvedCommit and RequestedRef
 are kept unchanged, no new-input warnings are printed, and the merge uses
 the same guards as update (clean tree unless --force, conflicts inline or
 rej).`,
