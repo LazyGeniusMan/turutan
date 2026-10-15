@@ -94,12 +94,10 @@ overlay=".tmp/turutan-dogfood"
 bin="$overlay/.bin/turutan"
 rm -rf "$overlay"
 mkdir -p "$overlay/templates" "$(dirname "$bin")"
+[ -f registry.json ] || { echo "committed registry.json missing" >&2; exit 1; }
 cp registry.json "$overlay/registry.json"
 cp -r templates/. "$overlay/templates/"
 go build -o "$bin" ./cmd/turutan
-if [ ! -f "$overlay/registry.json" ]; then
-  ( cd "$overlay" && ./.bin/turutan registry init --name turutan --author "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)" )
-fi
 ( cd "$overlay" && ./.bin/turutan registry release default same fs --force )
 if [ ! -f .config/turutan/state.yml ]; then
   tmp=$(mktemp -d)

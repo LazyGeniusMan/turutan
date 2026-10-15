@@ -45,12 +45,10 @@ jobs:
           TURUTAN_OCI_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           go build -o "${RUNNER_TEMP}/turutan" ./cmd/turutan
-          if [ ! -f registry.json ]; then
-            AUTHOR="Andriyansyah Nurrachman <git@yansyah.my.id>"
-            AUTHOR="$AUTHOR (https://yansyah.my.id)"
-            "${RUNNER_TEMP}/turutan" registry init \
-              --name turutan --author "$AUTHOR"
-          fi
+          test -f registry.json || {
+            echo "registry.json missing, refusing to re-init" >&2
+            exit 1
+          }
           line="$("${RUNNER_TEMP}/turutan" registry release \
             default "${BUMP}" oci --uri-override \
             oci://ghcr.io/lazygeniusman/turutan/templates/default)"
