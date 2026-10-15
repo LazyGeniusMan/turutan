@@ -27,7 +27,7 @@ func TestResolveAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseURI error: %v", err)
 	}
-	httpURI, err := ParseURI("https://example.com/registry.json")
+	httpURI, err := ParseURI("https://example.com/turutan.json")
 	if err != nil {
 		t.Fatalf("ParseURI error: %v", err)
 	}

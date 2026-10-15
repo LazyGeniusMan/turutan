@@ -28,7 +28,7 @@ func newRegistryReleaseCmd() *cobra.Command {
 		Short: "Cut a versioned template release in the current registry",
 		Long: `Cut a versioned template release in the current registry: the
 command walks up from the working directory to find the registry index
-(registry.json), resolves the next version, bundles templates/<name>/
+(turutan.json), resolves the next version, bundles templates/<name>/
 through the scheme backend, writes the single-version manifest
 templates/<name>/manifest/<version>.json and records the version at the
 front of the index releases history.

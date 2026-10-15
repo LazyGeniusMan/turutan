@@ -39,7 +39,7 @@ func makeCmdRegistry(t *testing.T, manifest string, files map[string]string) (st
 		merged[k] = v
 	}
 	if manifest != "" {
-		merged[".turutan.yml"] = manifest
+		merged["template.yml"] = manifest
 	}
 	for name, content := range merged {
 		path := filepath.Join(regDir, "templates", cmdTestTemplate, filepath.FromSlash(name))

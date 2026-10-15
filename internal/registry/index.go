@@ -13,7 +13,7 @@ import (
 
 // IndexFileName is the registry index file name (JSON only).
 // ~keep
-const IndexFileName = "registry.json"
+const IndexFileName = "turutan.json"
 
 // ErrInvalidIndex is matched with errors.Is when an index fails validation.
 // ~keep

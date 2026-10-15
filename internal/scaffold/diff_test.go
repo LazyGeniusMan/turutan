@@ -212,7 +212,7 @@ func TestComputeDiffMinEngine(t *testing.T) {
 	setup := func(t *testing.T) (string, string, string) {
 		t.Helper()
 		projectDir, registryURI := initRegistryProject(t, "min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml", "min-engine: \">=99.0.0\"\n")
+		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "min-engine: \">=99.0.0\"\n")
 		return registryURI, projectDir, fresh
 	}
 	tests := []struct {

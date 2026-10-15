@@ -28,8 +28,8 @@ excludes:
   - ".config/turutan/lock.json"
   - ".config/turutan/templates/**"
   - ".config/ai-rulez/.generated-manifest*.json"
-  - ".turutan.yml"
-  - ".turutan.yaml"
+  - "template.yml"
+  - "template.yaml"
 preserves:
   - "**/*.local.*"
   - ".config/mise/config.custom.toml"

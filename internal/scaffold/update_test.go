@@ -893,7 +893,7 @@ func TestUpdateTemplateChangeWithRemovedProfiles(t *testing.T) {
 func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	projectDir, registryURI := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
 	writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{
-		".turutan.yml": "inputs:\n" +
+		"template.yml": "inputs:\n" +
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 			"  new_feature:\n    label: \"New feature\"\n    type: array\n" +
 			"    default: [\"alpha\", \"beta\"]\n",

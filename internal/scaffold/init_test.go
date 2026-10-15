@@ -16,7 +16,7 @@ func makeTemplate(t *testing.T, manifest string, files map[string]string) string
 	t.Helper()
 	dir := t.TempDir()
 	if manifest != "" {
-		if err := os.WriteFile(filepath.Join(dir, ".turutan.yml"), []byte(manifest), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "template.yml"), []byte(manifest), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

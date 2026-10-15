@@ -42,7 +42,7 @@ func TestRegistryCreateCmd(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, out, `"hello"`)
 		for _, rel := range []string{
-			"templates/hello/.turutan.yml",
+			"templates/hello/template.yml",
 			"templates/hello/README.md",
 			"templates/hello/hello.txt.tmpl",
 		} {
@@ -105,7 +105,7 @@ func TestRegistryCreateCmd(t *testing.T) {
 		content, err := os.ReadFile(filepath.Join(dir, "templates", "hello.bak", "author.txt")) // #nosec G304 -- dir is a test temp dir plus fixed fixture names
 		require.NoError(t, err, "force must back the author content up, not delete it")
 		require.Equal(t, "author content", string(content))
-		require.FileExists(t, filepath.Join(dir, "templates", "hello", ".turutan.yml"))
+		require.FileExists(t, filepath.Join(dir, "templates", "hello", "template.yml"))
 		loaded, err := registry.LoadIndexFile(filepath.Join(dir, registry.IndexFileName))
 		require.NoError(t, err)
 		require.Len(t, loaded.Templates, 1)

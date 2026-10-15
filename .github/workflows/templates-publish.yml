@@ -52,7 +52,7 @@ jobs:
           version="${line#released default@}"
           version="${version%% *}"
           printf 'version=%s\n' "$version" >> "$GITHUB_ENV"
-          git add registry.json
+          git add turutan.json
           git add "templates/default/manifest/${version}.json"
           git status --short
           git diff --cached --quiet || git commit -m \

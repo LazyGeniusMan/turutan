@@ -22,7 +22,7 @@ func newRegistryCmd() *cobra.Command {
 		Long: `Manage template registries: author a registry in the current
 directory (init, create, release).
 
-The registry index file is registry.json.`,
+The registry index file is turutan.json.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -45,7 +45,7 @@ func newRegistryInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize a template registry in the current directory",
 		Long: `Initialize a template registry in the current directory by
-writing registry.json: the registry identity (name, version, author) with
+writing turutan.json: the registry identity (name, version, author) with
 an empty template list.
 
 The author uses the canonical "Name <email> (website)" form. Refuses to
@@ -119,7 +119,7 @@ func newRegistryCreateCmd() *cobra.Command {
 		Short: "Create a starter template inside the current registry",
 		Long: `Create a starter template inside the current registry: the
 command walks up from the working directory to find the registry index,
-scaffolds templates/<name>/ with a minimal .turutan.yml, README.md and
+scaffolds templates/<name>/ with a minimal template.yml, README.md and
 hello.txt.tmpl, and records the template in the index as
 created-but-unreleased (name and author only: no version, URI, digest
 or releases history until the first registry release cuts one).
@@ -216,7 +216,7 @@ func isEmptyDir(dir string) (bool, error) {
 
 func writeRegistryStarter(dir, name string) error {
 	files := map[string]string{
-		".turutan.yml":   "min-engine: \">=0.1.0\"\nlicense: MIT-0\nconflict: inline\n",
+		"template.yml":   "min-engine: \">=0.1.0\"\nlicense: MIT-0\nconflict: inline\n",
 		"README.md":      "# " + name + "\n\nA turutan template. Render it with `turutan init --defaults . <out-dir>`.\n",
 		"hello.txt.tmpl": "Hello, {{ .project_name }}!\n",
 	}

@@ -124,7 +124,7 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Join(dir, "templates", "bare"), 0o750))
 		require.NoError(t, os.WriteFile(
-			filepath.Join(dir, "templates", "bare", ".turutan.yml"),
+			filepath.Join(dir, "templates", "bare", "template.yml"),
 			[]byte("min-engine: \">=0.1.0\"\n"), 0o600))
 		_, err = execRegistryRelease(t, "bare", "major", "fs")
 		require.NoError(t, err)

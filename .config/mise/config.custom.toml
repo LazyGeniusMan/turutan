@@ -90,7 +90,7 @@ run = """
 dir=".tmp/dogfood"
 rm -rf "$dir"
 mkdir -p "$dir/templates"
-cp registry.json "$dir/registry.json"
+cp turutan.json "$dir/turutan.json"
 cp -r templates/. "$dir/templates/"
 (cd "$dir" && ${TURUTAN_BIN} registry release default same fs --force )
 """

@@ -328,10 +328,10 @@ func adaptOverrideURI(parsed URI, scheme, name, version string) (URI, error) {
 }
 
 // TemplateManifestHash returns the sha256 hash of the template authoring
-// manifest (.turutan.yml or .turutan.yaml) in dir, for release provenance.
+// manifest (template.yml or template.yaml) in dir, for release provenance.
 // ~keep
 func TemplateManifestHash(dir string) (string, error) {
-	for _, name := range []string{".turutan.yml", ".turutan.yaml"} {
+	for _, name := range []string{"template.yml", "template.yaml"} {
 		data, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- name is a fixed manifest file under the caller-supplied template dir
 		if err != nil {
 			continue

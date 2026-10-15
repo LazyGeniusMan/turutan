@@ -84,7 +84,7 @@ func TestRegistryInitCmd(t *testing.T) {
 		raw, err := os.ReadFile(filepath.Join(dir, registry.IndexFileName)) // #nosec G304 -- dir is t.TempDir() plus the fixed index file name
 		require.NoError(t, err)
 		require.Contains(t, string(raw), `"name"`)
-		require.Equal(t, "registry.json", registry.IndexFileName)
+		require.Equal(t, "turutan.json", registry.IndexFileName)
 	})
 
 	t.Run("requires author", func(t *testing.T) {

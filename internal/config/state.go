@@ -27,8 +27,8 @@ import (
 const (
 	StateFileName       = ".config/turutan/state.yml"
 	LockFileName        = ".config/turutan/lock.json"
-	ManifestFileName    = ".turutan.yml"
-	ManifestFileNameAlt = ".turutan.yaml"
+	ManifestFileName    = "template.yml"
+	ManifestFileNameAlt = "template.yaml"
 	StateVersion        = 1
 	TemplateLicenseMIT0 = "MIT-0"
 )

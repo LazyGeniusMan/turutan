@@ -48,7 +48,7 @@ func withManifest(files map[string]string, manifest string) map[string]string {
 	for k, v := range files {
 		out[k] = v
 	}
-	out[".turutan.yml"] = manifest
+	out["template.yml"] = manifest
 	return out
 }
 

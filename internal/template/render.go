@@ -38,7 +38,7 @@ var skippedDirNames = []string{".git"}
 
 const skippedStateSubtree = ".config/turutan"
 
-var skippedFileNames = []string{".turutan.yml", ".turutan.yaml"}
+var skippedFileNames = []string{"template.yml", "template.yaml"}
 
 func isSkippedPath(slash string) bool {
 	if slash == skippedStateSubtree ||

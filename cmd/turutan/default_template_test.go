@@ -34,7 +34,7 @@ func repoRootDir(t *testing.T) string {
 	require.NoError(t, err)
 	require.FileExists(t, filepath.Join(abs, registry.IndexFileName),
 		"repo root must hold the committed registry index")
-	require.FileExists(t, filepath.Join(abs, "templates", "default", ".turutan.yml"),
+	require.FileExists(t, filepath.Join(abs, "templates", "default", "template.yml"),
 		"repo root must hold the unreleased default source tree")
 	return abs
 }
@@ -111,7 +111,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 	treeDir := filepath.Join(root, "templates", "default")
 
 	t.Run("authoring manifest migrated off legacy source", func(t *testing.T) {
-		raw, err := os.ReadFile(filepath.Join(treeDir, ".turutan.yml")) // #nosec G304 -- treeDir is derived from this test file location plus a fixed manifest name
+		raw, err := os.ReadFile(filepath.Join(treeDir, "template.yml")) // #nosec G304 -- treeDir is derived from this test file location plus a fixed manifest name
 		require.NoError(t, err)
 		require.NotContains(t, string(raw), "git::",
 			"registry is the source of truth: no legacy source may remain")
@@ -201,7 +201,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.Equal(t, digest, repeat, "bundle bytes must be deterministic")
 		dest := t.TempDir()
 		require.NoError(t, registry.ExtractBundle(bytes.NewReader(blob), dest))
-		require.FileExists(t, filepath.Join(dest, ".turutan.yml"))
+		require.FileExists(t, filepath.Join(dest, "template.yml"))
 		for _, meta := range []string{"manifest", "releases"} {
 			_, err := os.Stat(filepath.Join(dest, meta))
 			require.True(t, os.IsNotExist(err),

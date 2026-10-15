@@ -117,7 +117,7 @@ func TestCheckRegistryMinEngine(t *testing.T) {
 	t.Run("unsatisfiable floor stays best-effort", func(t *testing.T) {
 		projectDir, registryURI := initRegistryProject(t,
 			"min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml", "min-engine: \">=99.0.0\"\n")
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "min-engine: \">=99.0.0\"\n")
 		var stdout strings.Builder
 		opts := checkOptions(&stdout)
 		opts.Engine = "0.1.0"
@@ -136,7 +136,7 @@ func TestCheckRegistryInputs(t *testing.T) {
 		const manifest = "inputs:\n" +
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n"
 		projectDir, registryURI := initRegistryProject(t, manifest, map[string]string{"hello.txt": "v1\n"})
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml",
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml",
 			manifest+"  service_name:\n    label: \"Service name\"\n    type: string\n")
 		var stdout strings.Builder
 		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))

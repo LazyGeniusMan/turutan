@@ -134,8 +134,8 @@ func TestIndexRoundTrip(t *testing.T) {
 	if !strings.Contains(string(data), "manifestHash") {
 		t.Errorf("saved index drops manifestHash")
 	}
-	if IndexFileName != "registry.json" {
-		t.Errorf("IndexFileName = %q, want registry.json", IndexFileName)
+	if IndexFileName != "turutan.json" {
+		t.Errorf("IndexFileName = %q, want turutan.json", IndexFileName)
 	}
 }
 
