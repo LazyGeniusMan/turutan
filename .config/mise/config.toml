@@ -74,31 +74,28 @@ run = "goreleaser release --clean"
 
 [tasks."turutan:diff"]
 description = "Show template drift for this project"
+env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} diff"
 
 [tasks."turutan:check"]
 description = "Check whether the template has updates"
+env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} check"
 
 [tasks."turutan:update"]
 description = "Merge template updates into this project"
+env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} update"
 
 [tasks."turutan:state-sync"]
 description = "Re-render hand-edited state inputs at the pinned commit"
+env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} state sync"
 
 [tasks."turutan:state-input"]
 description = "Re-answer stored inputs and re-render at the pinned commit"
+env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} state input"
-
-[tasks."turutan:create"]
-description = "Scaffold a new template-authoring project"
-run = "${TURUTAN_BIN:-turutan} create"
-
-[tasks."turutan:profiles"]
-description = "List template profiles offered and enabled"
-run = "${TURUTAN_BIN:-turutan} profiles"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"

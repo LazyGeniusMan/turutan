@@ -1,0 +1,12 @@
+---
+project_name: turutan
+project_description: Project template lifecycle manager
+profiles:
+  - core
+  - ai
+  - go
+  - github
+  - custom
+ai_agents:
+  - pi
+  - opencode

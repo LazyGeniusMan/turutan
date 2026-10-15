@@ -1,0 +1,4 @@
+---
+template: local/default@0.1.0
+registries:
+  local: .

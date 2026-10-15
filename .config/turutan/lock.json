@@ -1,7 +1,11 @@
 {
-  "source": "templates/default",
-  "resolved_sha": "494e1e1bc5438672f5bfe88f7bdcf6798e7427aae592a3ad83534968d8ae9e69",
-  "manifest_hash": "sha256:494e1e1bc5438672f5bfe88f7bdcf6798e7427aae592a3ad83534968d8ae9e69",
+  "source": "local/default@0.1.0",
+  "ref": "0.1.0",
+  "resolved_sha": "0174038c88ca7ccbf7ddb89fe57a336e9c6b1751563864b3f7993cc2e67d3eb8",
+  "registry": "local",
+  "uri": "fs:/home/coder/.t3/worktrees/turutan/t3-d588c8cd/templates/default/releases/0.1.0",
+  "digest": "sha256:0174038c88ca7ccbf7ddb89fe57a336e9c6b1751563864b3f7993cc2e67d3eb8",
+  "manifest_hash": "sha256:c7e412727ca0a3528d093dd0e380ec1157870d0515e457a51fcf81b29f039f03",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -10,8 +14,8 @@
     },
     {
       "path": ".config/ai-rulez/config.custom.toml",
-      "sha256": "c7a23a02358dcbbc5f2e5b4ec5d71e1ae41e63734ef9d4c2967c0747a46fc55e",
-      "bytes": 189
+      "sha256": "31dadcbf7654de2b4ee19a0d93e4e98e8326be6c9aadf8637c995aeaffd1fecd",
+      "bytes": 31
     },
     {
       "path": ".config/ai-rulez/config.github.toml",
@@ -170,8 +174,8 @@
     },
     {
       "path": ".config/fnox.toml",
-      "sha256": "085e6e9aa8f7b0b4f652616086477c1654e3915441c9bafbb4c30035fa78e445",
-      "bytes": 259
+      "sha256": "82aa1199122dfe4d43edf169ce7f235bcf2b0842b25a308bfa15146eaee46143",
+      "bytes": 359
     },
     {
       "path": ".config/golangci-lint/.golangci.yml",
@@ -225,8 +229,8 @@
     },
     {
       "path": ".config/mise/config.custom.toml",
-      "sha256": "c44ca628d335245ad065b066b74c351512f277a1b9bb16f9c4d79ca385991e8d",
-      "bytes": 1816
+      "sha256": "764faf69707c92661d4552edbae972f2bf10db2112f19107da4712aa0650d4d6",
+      "bytes": 869
     },
     {
       "path": ".config/mise/config.github.toml",
@@ -240,13 +244,13 @@
     },
     {
       "path": ".config/mise/config.toml",
-      "sha256": "b265ba6fb11902ca33fe5b9c2eb0927098214f13ab3159e1b6dc26c30a1d9b1d",
-      "bytes": 2473
+      "sha256": "9fbdf9463c17c380297e4a0d576143c64528fe28f9cc17badb8683c9470f295e",
+      "bytes": 2459
     },
     {
       "path": ".config/miserc.toml",
-      "sha256": "499c5985fccf7fd8e837742dc6bdf26c93c48978127ac2c094f503678d8f5dc8",
-      "bytes": 63
+      "sha256": "e799d43e7d0b170074df6403a2ebfda5380199d505fe43ac763398050e27e065",
+      "bytes": 81
     },
     {
       "path": ".config/ryl.toml",
@@ -320,8 +324,8 @@
     },
     {
       "path": ".gitignore",
-      "sha256": "406b719ecda47dfbc28b03d00a4004e0964b71f6c0ddd98ffb4142515d95a091",
-      "bytes": 361
+      "sha256": "c849f7367fd2a4acee2808d20946e4717d102d6a06ca0b36ecaf957b19c8ccb9",
+      "bytes": 86
     },
     {
       "path": ".golangci.yml",
