@@ -87,20 +87,10 @@ run = "${TURUTAN_BIN} profiles"
 
 [tasks."turutan:dogfood"]
 run = """
-dogfood_dir=".tmp/turutan-dogfood"
-mkdir -p "$dogfood_dir/templates"
-cp registry.json "$dogfood_dir/registry.json"
-cp -r templates/. "$dogfood_dir/templates/"
-(cd "$dogfood_dir" && ${TURUTAN_BIN} registry release default same fs --force )
-${TURUTAN_BIN} registry add turutan fs:$dogfood_dir --force
-"""
-
-[tasks."turutan:dogfood:update"]
-run = """
-dogfood_dir=".tmp/turutan-dogfood"
-mkdir -p "$dogfood_dir/templates"
-cp registry.json "$dogfood_dir/registry.json"
-cp -r templates/. "$dogfood_dir/templates/"
-(cd "$dogfood_dir" && ${TURUTAN_BIN} registry release default same fs --force )
-${TURUTAN_BIN} registry add dogfood fs:$dogfood_dir --force
+dir=".tmp/dogfood"
+rm -rf "$dir"
+mkdir -p "$dir/templates"
+cp registry.json "$dir/registry.json"
+cp -r templates/. "$dir/templates/"
+(cd "$dir" && ${TURUTAN_BIN} registry release default same fs --force )
 """

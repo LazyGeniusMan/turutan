@@ -1,11 +1,11 @@
 version: 1
-template: turutan/default@0.1.0
+template: fs://.tmp/dogfood/default@0.1.0
 sourceKind: registry
-registry: turutan
-templateURI: templates/default/releases/0.1.0.tar.gz
-templateDigest: sha256:b9d7ddc40b6909e40e9b891e89885f2bf7ae7c11ec5a70b6baca4cb86cca43cc
+registry: fs://.tmp/dogfood
+templateURI: fs://templates/default/releases/0.1.0.tar.gz
+templateDigest: sha256:353daf3daab0628f31f9b558547a216d99b30743f3d69e640a8d848ad67d7b11
 requestedRef: 0.1.0
-resolvedCommit: b9d7ddc40b6909e40e9b891e89885f2bf7ae7c11ec5a70b6baca4cb86cca43cc
+resolvedCommit: 353daf3daab0628f31f9b558547a216d99b30743f3d69e640a8d848ad67d7b11
 data:
     ai_agents:
         - pi
