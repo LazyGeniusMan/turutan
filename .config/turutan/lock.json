@@ -5,7 +5,7 @@
   "registry": "turutan",
   "uri": "templates/default/releases/0.1.0.tar.gz",
   "digest": "sha256:b9d7ddc40b6909e40e9b891e89885f2bf7ae7c11ec5a70b6baca4cb86cca43cc",
-  "manifest_hash": "sha256:9bf69b5ebed7168f68bf2ce02e4b798c97c96707dd4efde5af64bb88fc9c266d",
+  "manifest_hash": "sha256:256ffa8d2f7bb2328baccbae656e1e716f1b310462ff12aa738fa18318e23f99",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".config/ai-rulez/config.toml",
-      "sha256": "bd80ed7595ffb307f05d172f7b17527e4355bebc9799ab2a6fa2b99b9fd992fd",
-      "bytes": 1750
+      "sha256": "336d8e06d04206eeda392e8a981ebd4bf1553af30c4ef0fa7cb9bcbcb733c44a",
+      "bytes": 1762
     },
     {
       "path": ".config/ai-rulez/domains/ai/.gitkeep",

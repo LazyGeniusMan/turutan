@@ -9,6 +9,7 @@ resolvedCommit: b9d7ddc40b6909e40e9b891e89885f2bf7ae7c11ec5a70b6baca4cb86cca43cc
 data:
     ai_agents:
         - pi
+        - opencode
     profiles:
         - ai
         - go

@@ -3,7 +3,7 @@ name = "turutan"
 gitignore = true
 compact = true
 
-presets = ["pi"]
+presets = ["pi", "opencode"]
 
 agents_md = true
 
