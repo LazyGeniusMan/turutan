@@ -58,6 +58,20 @@ func (a AuthConfig) HasCredentials() bool {
 	return a.Password != "" || a.Token != "" || a.SSHKey != ""
 }
 
+func (a AuthConfig) BasicAuth() (username, password string, ok bool) {
+	if a.Username == "" && a.Password == "" {
+		return "", "", false
+	}
+	return a.Username, a.Password, true
+}
+
+func (a AuthConfig) BearerToken() (string, bool) {
+	if a.Token == "" {
+		return "", false
+	}
+	return a.Token, true
+}
+
 // Redacted returns a copy with every secret replaced by a fixed mask.
 // ~keep
 func (a AuthConfig) Redacted() AuthConfig {
