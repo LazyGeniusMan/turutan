@@ -41,6 +41,47 @@ turutan state input    # re-answer every input, then re-render at the pinned rel
 turutan version        # version/commit/date plus license notice
 ```
 
+## Dogfood: this repo is the turutan registry
+
+The repo root is the `turutan` registry root for authoring: `registry.yml`
+plus `templates/default` with fs-relative release URIs. The published OCI
+artifact (`oci://ghcr.io/lazygeniusman/turutan/templates`) carries OCI URIs
+for users. Template selection is explicit: `--template` flag wins, then
+`TURUTAN_TEMPLATE`, then the user-config `template:`, defaulting to
+`turutan/default@latest` via the OCI fallback.
+
+```sh
+mise run turutan:check   # uses local/default@0.1.0, no network
+mise run turutan:diff    # drift vs the pinned snapshot (exit 2 when drifted)
+```
+
+The mise `turutan:*` tasks point `TURUTAN_CONFIG` at
+`.config/turutan/dogfood-user.yml` (`local` registry → repo root) and pin
+`TURUTAN_TEMPLATE=local/default@0.1.0`. The repo's own
+`.config/turutan/state.yml` tracks `local/default@0.1.0` with the data in
+`.config/turutan/dogfood-data.yml`. Without mise, export the same two
+variables (or run `turutan registry add local <repo-root>` once and export
+`TURUTAN_TEMPLATE`).
+
+Author workflow: edit the tree under `templates/default/`, cut a release,
+then re-check against the newest snapshot:
+
+```sh
+turutan registry release default minor fs
+# manifest: templates/default/manifest/<v>.yml, snapshot:
+# templates/default/releases/<v>/, index releases prepended.
+TURUTAN_TEMPLATE=local/default@<v> turutan diff --ref <v>
+```
+
+Bump the `TURUTAN_TEMPLATE` pin in the mise tasks, `dogfood-user.yml` and
+`.config/turutan/state.yml` (re-bootstrap via `turutan init` into a temp
+dir with `--data-file .config/turutan/dogfood-data.yml`, then copy the new
+state/lock/base back) to dogfood the new release. Users stay on OCI:
+`turutan init ./myapp --template turutan/default@latest --defaults` needs
+no config. To publish, cut an OCI release (no push happens here):
+`turutan registry release default <major|minor|patch> oci --uri-override
+oci://ghcr.io/lazygeniusman/turutan/templates/default`.
+
 ## Remote authentication
 
 Registry credentials come from the environment only and are never
@@ -60,5 +101,5 @@ template content carries its own license: each release records the
 template `.turutan.yml` license, and generated
 `.config/turutan/state.yml` records it as `templateLicense`
 (e.g. `"MIT-0"`). The registry is the source of truth for templates —
-there is no bundled live template; author with
+this repo roots it (`registry.yml`, `templates/default`); author with
 `registry init/create/release`.
