@@ -357,7 +357,7 @@ func fetchPinnedBundle(ctx context.Context, state *config.State, op string) (str
 		}
 		uri = resolved
 	}
-	auth := registry.ResolveAuth(state.Registry, uri)
+	auth := registry.ResolveAuth(uri)
 	backend, err := registry.BackendFor(uri.Scheme)
 	if err != nil {
 		return "", nil, fmt.Errorf("%s: %w", op, err)

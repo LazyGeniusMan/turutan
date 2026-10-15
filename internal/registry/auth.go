@@ -9,19 +9,21 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/git"
 )
 
-// Environment variables read by the auth resolver. Per-registry variables
-// use TURUTAN_REGISTRY_<NAME>_USER, _PASS, _TOKEN and _ENDPOINT; the rest
-// are scheme-generic S3-compatible, git and OCI variables.
+// Environment variables read by the auth resolver. Auth resolves only by
+// URI scheme (one credential per scheme type): S3-compatible, git, OCI and
+// HTTP(S) variables below. fs URIs are never authenticated.
 // ~keep
 const (
-	EnvRegistryPrefix = "TURUTAN_REGISTRY_"     // #nosec G101 -- env prefix, not a credential
-	EnvS3AccessKey    = "AWS_ACCESS_KEY_ID"     // #nosec G101 -- env var name, not a credential
-	EnvS3SecretKey    = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- env var name, not a credential
-	EnvS3Endpoint     = "AWS_ENDPOINT_URL"
-	EnvS3Region       = "AWS_REGION"
-	EnvOCIUser        = "TURUTAN_OCI_USER"     // #nosec G101 -- env var name, not a credential
-	EnvOCIPassword    = "TURUTAN_OCI_PASSWORD" // #nosec G101 -- env var name, not a credential
-	EnvOCIToken       = "TURUTAN_OCI_TOKEN"    // #nosec G101 -- env var name, not a credential
+	EnvS3AccessKey  = "AWS_ACCESS_KEY_ID"     // #nosec G101 -- env var name, not a credential
+	EnvS3SecretKey  = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- env var name, not a credential
+	EnvS3Endpoint   = "AWS_ENDPOINT_URL"
+	EnvS3Region     = "AWS_REGION"
+	EnvOCIUser      = "TURUTAN_OCI_USER"      // #nosec G101 -- env var name, not a credential
+	EnvOCIPassword  = "TURUTAN_OCI_PASSWORD"  // #nosec G101 -- env var name, not a credential (betterleaks:allow)
+	EnvOCIToken     = "TURUTAN_OCI_TOKEN"     // #nosec G101 -- env var name, not a credential
+	EnvHTTPUser     = "TURUTAN_HTTP_USER"     // #nosec G101 -- env var name, not a credential
+	EnvHTTPPassword = "TURUTAN_HTTP_PASSWORD" // #nosec G101 -- env var name, not a credential (betterleaks:allow)
+	EnvHTTPToken    = "TURUTAN_HTTP_TOKEN"    // #nosec G101 -- env var name, not a credential
 )
 
 // AuthKind describes how credentials in an AuthConfig authenticate.
@@ -38,7 +40,7 @@ const (
 	AuthKindS3    AuthKind = "s3"
 )
 
-// AuthConfig carries credentials for one registry or URI. Secrets never
+// AuthConfig carries credentials for one URI. Secrets never
 // appear in String output, logs or YAML redaction helpers; load them only
 // from environment variables or the config file.
 // ~keep
@@ -112,39 +114,18 @@ func (a AuthConfig) String() string {
 	return out
 }
 
-// ResolveAuth resolves auth for a registry URI and content uri from the
-// process environment.
+// ResolveAuth resolves auth for a content uri from the process
+// environment. Auth resolves only by URI scheme (one credential per scheme
+// type); fs URIs are never authenticated.
 // ~keep
-func ResolveAuth(registryURI string, uri URI) AuthConfig {
-	return ResolveAuthWithEnv(registryURI, uri, os.Getenv)
+func ResolveAuth(uri URI) AuthConfig {
+	return ResolveAuthWithEnv(uri, os.Getenv)
 }
 
-// ResolveAuthWithEnv resolves auth for a registry URI and content uri using
-// getenv, so callers can inject test environments. Per-registry variables
-// TURUTAN_REGISTRY_<NORMALIZED_URI>_USER, _PASS, _TOKEN and _ENDPOINT win
-// over scheme-generic variables.
+// ResolveAuthWithEnv resolves auth for a content uri using getenv, so
+// callers can inject test environments. Auth resolves only by URI scheme.
 // ~keep
-func ResolveAuthWithEnv(registryURI string, uri URI, getenv func(string) string) AuthConfig {
-	prefix := EnvRegistryPrefix + normalizeRegistryName(registryURI) + "_"
-	cfg := AuthConfig{Kind: AuthKindNone}
-	if username := getenv(prefix + "USER"); username != "" {
-		cfg.Username = username
-		cfg.Kind = AuthKindBasic
-	}
-	if password := getenv(prefix + "PASS"); password != "" {
-		cfg.Password = password
-		cfg.Kind = AuthKindBasic
-	}
-	if token := getenv(prefix + "TOKEN"); token != "" {
-		cfg.Token = token
-		cfg.Kind = AuthKindToken
-	}
-	if endpoint := getenv(prefix + "ENDPOINT"); endpoint != "" {
-		cfg.Endpoint = endpoint
-	}
-	if cfg.Kind != AuthKindNone {
-		return cfg
-	}
+func ResolveAuthWithEnv(uri URI, getenv func(string) string) AuthConfig {
 	return schemeAuth(uri, getenv)
 }
 
@@ -156,6 +137,8 @@ func schemeAuth(uri URI, getenv func(string) string) AuthConfig {
 		return gitAuth(getenv)
 	case SchemeOCI:
 		return ociAuth(getenv)
+	case SchemeHTTP, SchemeHTTPS:
+		return httpAuth(getenv)
 	default:
 		return AuthConfig{Kind: AuthKindNone}
 	}
@@ -208,20 +191,23 @@ func ociAuth(getenv func(string) string) AuthConfig {
 	return cfg
 }
 
+func httpAuth(getenv func(string) string) AuthConfig {
+	if token, ok := lookupNonEmpty(getenv, EnvHTTPToken); ok {
+		return AuthConfig{Kind: AuthKindToken, Token: token}
+	}
+	cfg := AuthConfig{Kind: AuthKindNone}
+	if user, ok := lookupNonEmpty(getenv, EnvHTTPUser); ok {
+		cfg.Username = user
+		cfg.Kind = AuthKindBasic
+	}
+	if password, ok := lookupNonEmpty(getenv, EnvHTTPPassword); ok {
+		cfg.Password = password
+		cfg.Kind = AuthKindBasic
+	}
+	return cfg
+}
+
 func lookupNonEmpty(getenv func(string) string, key string) (string, bool) {
 	value := strings.TrimSpace(getenv(key))
 	return value, value != ""
-}
-
-func normalizeRegistryName(name string) string {
-	upper := strings.ToUpper(strings.TrimSpace(name))
-	var out strings.Builder
-	for _, r := range upper {
-		if r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
-			out.WriteRune(r)
-		} else {
-			out.WriteByte('_')
-		}
-	}
-	return out.String()
 }

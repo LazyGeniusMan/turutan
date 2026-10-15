@@ -27,51 +27,29 @@ func TestResolveAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseURI error: %v", err)
 	}
+	httpURI, err := ParseURI("https://example.com/registry.json")
+	if err != nil {
+		t.Fatalf("ParseURI error: %v", err)
+	}
+	fsURI, err := ParseURI("fs://./registry-dir")
+	if err != nil {
+		t.Fatalf("ParseURI error: %v", err)
+	}
 	tests := []struct {
 		name     string
-		registry string
 		uri      URI
 		env      map[string]string
 		expected AuthConfig
 	}{
 		{
 			name:     "no credentials",
-			registry: "example",
 			uri:      ociURI,
 			env:      map[string]string{},
 			expected: AuthConfig{Kind: AuthKindNone},
 		},
 		{
-			name:     "per registry basic",
-			registry: "example",
-			uri:      ociURI,
-			env: map[string]string{
-				"TURUTAN_REGISTRY_EXAMPLE_USER": "alice",
-				"TURUTAN_REGISTRY_EXAMPLE_PASS": "s3cret", // betterleaks:allow (test fixture, not a credential)
-			},
-			expected: AuthConfig{Kind: AuthKindBasic, Username: "alice", Password: "s3cret"}, // betterleaks:allow (test fixture, not a credential)
-		},
-		{
-			name:     "per registry token",
-			registry: "example",
-			uri:      ociURI,
-			env:      map[string]string{"TURUTAN_REGISTRY_EXAMPLE_TOKEN": "tok"},
-			expected: AuthConfig{Kind: AuthKindToken, Token: "tok"},
-		},
-		{
-			name:     "per registry beats generic",
-			registry: "example",
-			uri:      ociURI,
-			env: map[string]string{
-				"TURUTAN_REGISTRY_EXAMPLE_TOKEN": "rtok",
-				"TURUTAN_OCI_TOKEN":              "gtok",
-			},
-			expected: AuthConfig{Kind: AuthKindToken, Token: "rtok"},
-		},
-		{
-			name:     "s3 generic env",
-			registry: "data",
-			uri:      s3URI,
+			name: "s3 generic env",
+			uri:  s3URI,
 			env: map[string]string{
 				"AWS_ACCESS_KEY_ID":     "akid",
 				"AWS_SECRET_ACCESS_KEY": "secret", // betterleaks:allow (test fixture, not a credential)
@@ -86,33 +64,67 @@ func TestResolveAuth(t *testing.T) {
 		},
 		{
 			name:     "git github token",
-			registry: "code",
 			uri:      gitURI,
 			env:      map[string]string{"GITHUB_TOKEN": "gh"},
 			expected: AuthConfig{Kind: AuthKindToken, Username: "x-access-token", Token: "gh"},
 		},
 		{
 			name:     "oci generic token",
-			registry: "images",
 			uri:      ociURI,
 			env:      map[string]string{"TURUTAN_OCI_TOKEN": "ocitok"},
 			expected: AuthConfig{Kind: AuthKindToken, Token: "ocitok"},
 		},
 		{
-			name:     "oci generic basic",
-			registry: "images",
-			uri:      ociURI,
+			name: "oci generic basic",
+			uri:  ociURI,
 			env: map[string]string{
 				"TURUTAN_OCI_USER":     "bot",
 				"TURUTAN_OCI_PASSWORD": "pw",
 			},
 			expected: AuthConfig{Kind: AuthKindBasic, Username: "bot", Password: "pw"},
 		},
+		{
+			name:     "http generic token",
+			uri:      httpURI,
+			env:      map[string]string{"TURUTAN_HTTP_TOKEN": "httptok"},
+			expected: AuthConfig{Kind: AuthKindToken, Token: "httptok"},
+		},
+		{
+			name: "http generic basic",
+			uri:  httpURI,
+			env: map[string]string{
+				"TURUTAN_HTTP_USER":     "bob",
+				"TURUTAN_HTTP_PASSWORD": "pw",
+			},
+			expected: AuthConfig{Kind: AuthKindBasic, Username: "bob", Password: "pw"},
+		},
+		{
+			name: "http token beats basic",
+			uri:  httpURI,
+			env: map[string]string{
+				"TURUTAN_HTTP_TOKEN":    "tok",
+				"TURUTAN_HTTP_USER":     "bob",
+				"TURUTAN_HTTP_PASSWORD": "pw",
+			},
+			expected: AuthConfig{Kind: AuthKindToken, Token: "tok"},
+		},
+		{
+			name: "fs never authenticated",
+			uri:  fsURI,
+			env: map[string]string{
+				"AWS_ACCESS_KEY_ID":     "akid",
+				"AWS_SECRET_ACCESS_KEY": "secret", // betterleaks:allow (test fixture, not a credential)
+				"GITHUB_TOKEN":          "gh",
+				"TURUTAN_OCI_TOKEN":     "ocitok",
+				"TURUTAN_HTTP_TOKEN":    "httptok",
+			},
+			expected: AuthConfig{Kind: AuthKindNone},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := ResolveAuthWithEnv(tt.registry, tt.uri, envGetter(tt.env))
+			got := ResolveAuthWithEnv(tt.uri, envGetter(tt.env))
 			if got != tt.expected {
 				t.Errorf("ResolveAuthWithEnv = %+v, want %+v", got.Redacted(), tt.expected.Redacted())
 			}

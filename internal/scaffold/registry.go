@@ -144,7 +144,7 @@ func ResolveRegistry(ctx context.Context, registryURI string) (*ResolvedRegistry
 	if err != nil {
 		return nil, err
 	}
-	auth := registry.ResolveAuth(trimmed, uri)
+	auth := registry.ResolveAuth(uri)
 	index, root, err := loadRegistryIndex(ctx, uri, auth)
 	if err != nil {
 		return nil, err
@@ -488,7 +488,7 @@ func FetchTemplateBundle(ctx context.Context, rr *ResolvedRegistry, manifest *re
 		return "", "", nil, fmt.Errorf("fetching template %q: %w", manifest.Name, err)
 	}
 	cleanup := func() { _ = os.RemoveAll(tmp) }
-	auth := registry.ResolveAuth(rr.Name, uri)
+	auth := registry.ResolveAuth(uri)
 	if err := backend.Fetch(ctx, uri, auth, tmp); err != nil {
 		cleanup()
 		return "", "", nil, err

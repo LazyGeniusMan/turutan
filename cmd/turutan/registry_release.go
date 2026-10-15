@@ -48,9 +48,13 @@ start at 0.1.0); same rebuilds the indexed version in place with no bump.
 archive, and re-records an already-listed version. Without --force the
 command refuses to overwrite any of them. Non-fs first releases need
 --uri-override because the host or bucket cannot be guessed; later
-releases adapt the indexed URI. Auth resolves from
-TURUTAN_REGISTRY_<NAME>_* and scheme environment variables; secrets are
-never logged.`,
+releases adapt the indexed URI. Auth resolves from scheme environment
+variables only (one credential per scheme): S3 (AWS_ACCESS_KEY_ID,
+AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL, AWS_REGION), git (GITHUB_TOKEN,
+TURUTAN_SSH_KEY, TURUTAN_SSH_PASSWORD), OCI (TURUTAN_OCI_USER,
+TURUTAN_OCI_PASSWORD, TURUTAN_OCI_TOKEN) and http(s) (TURUTAN_HTTP_USER,
+TURUTAN_HTTP_PASSWORD, TURUTAN_HTTP_TOKEN); fs is never authenticated.
+Secrets are never logged.`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRegistryRelease(cmd, args[0], args[1], args[2], flags)
@@ -136,7 +140,7 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 		return fmt.Errorf("registry release: %w", err)
 	}
 	defer cleanup()
-	auth := registry.ResolveAuth(uri.String(), uri)
+	auth := registry.ResolveAuth(uri)
 	backendURI := uri
 	if uri.IsRelative() {
 		backendURI, err = uri.ResolveRelativeTo(root)

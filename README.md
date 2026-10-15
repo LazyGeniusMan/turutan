@@ -40,12 +40,13 @@ turutan version        # version/commit/date plus license notice
 
 ## Remote authentication
 
-Registry credentials come from the environment only and are never
-logged. Per-registry overrides use `TURUTAN_REGISTRY_<NORMALIZED_URI>_USER`,
-`_PASS`, `_TOKEN` and `_ENDPOINT` (URI uppercased, non-alphanumerics to `_`); scheme defaults cover S3-compatible
-(`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL`,
-`AWS_REGION`), git (`GITHUB_TOKEN`, `TURUTAN_SSH_KEY`) and OCI
-(`TURUTAN_OCI_USER`, `TURUTAN_OCI_PASSWORD`, `TURUTAN_OCI_TOKEN`).
+Registry credentials come from the environment only, resolved by URI
+scheme (one credential per scheme type), and are never logged.
+S3-compatible: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+`AWS_ENDPOINT_URL`, `AWS_REGION`. Git: `GITHUB_TOKEN`, `TURUTAN_SSH_KEY`,
+`TURUTAN_SSH_PASSWORD`. OCI: `TURUTAN_OCI_USER`, `TURUTAN_OCI_PASSWORD`,
+`TURUTAN_OCI_TOKEN`. HTTP(S): `TURUTAN_HTTP_USER`, `TURUTAN_HTTP_PASSWORD`,
+`TURUTAN_HTTP_TOKEN`. The `fs` scheme is never authenticated.
 Host-key (`known_hosts`) and TLS verification is strict by default;
 `TURUTAN_INSECURE_SKIP_VERIFY=1` disables it with a loud warning
 (never in production).

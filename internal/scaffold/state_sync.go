@@ -391,7 +391,7 @@ func fetchPinnedTemplate(
 		}
 		uri = resolved
 	}
-	auth := registry.ResolveAuth(state.Registry, uri)
+	auth := registry.ResolveAuth(uri)
 	backend, err := registry.BackendFor(uri.Scheme)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", op, err)

@@ -257,9 +257,10 @@ func newRegistryAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <registry-name> <uri>",
 		Short: "Store a named registry reference in the user config",
-		Long: `Store a named registry reference (URI plus auth resolved from
-the environment) in the user config registries map. Accepts fs
-(relative or absolute), http(s), s3, git and oci URIs.
+		Long: `Store a named registry reference (URI) in the user config
+registries map. Accepts fs (relative or absolute), http(s), s3, git
+and oci URIs. Auth is never stored: it resolves from the environment
+by URI scheme at fetch time (one credential per scheme).
 
 The "turutan" name resolves to its default OCI address without an
 explicit add; overriding it requires --force. Overwriting any other
