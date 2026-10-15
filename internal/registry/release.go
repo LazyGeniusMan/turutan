@@ -63,12 +63,16 @@ func BumpVersion(base string, bump ReleaseBump) (string, error) {
 }
 
 // NextReleaseVersion returns the version for a new release: 0.1.0 when the
-// template is not indexed yet, otherwise the bumped latest version. The
-// "same" bump returns the indexed latest version for in-place rebuilds.
+// template is not indexed yet or is indexed but never released, otherwise
+// the bumped latest version. The "same" bump returns the indexed latest
+// version for in-place rebuilds.
 // ~keep
 func NextReleaseVersion(index *RegistryIndex, name string, bump ReleaseBump) (string, bool, error) {
 	existing, err := index.FindTemplate(name)
 	if err != nil {
+		return registryStarterVersion(), false, nil
+	}
+	if !existing.IsReleased() {
 		return registryStarterVersion(), false, nil
 	}
 	if bump == ReleaseSame {
@@ -170,16 +174,18 @@ func ManifestObjectKey(name, version string) string {
 
 // UpsertIndexRelease records a release in the index: the entry latest
 // fields follow the new manifest and the version moves to the front of the
-// newest-first releases history.
+// newest-first releases history. It also promotes created-but-unreleased
+// entries to released.
 // ~keep
 func UpsertIndexRelease(index *RegistryIndex, manifest TemplateManifest) {
+	uri := manifest.URI
 	for i := range index.Templates {
 		if index.Templates[i].Name == manifest.Name {
 			entry := &index.Templates[i]
 			entry.Version = manifest.Version
 			entry.Author = manifest.Author
 			entry.Contributors = manifest.Contributors
-			entry.URI = manifest.URI
+			entry.URI = &uri
 			entry.Digest = manifest.Digest
 			entry.MinEngine = manifest.MinEngine
 			entry.ManifestHash = manifest.ManifestHash
@@ -199,7 +205,7 @@ func UpsertIndexRelease(index *RegistryIndex, manifest TemplateManifest) {
 		Version:      manifest.Version,
 		Author:       manifest.Author,
 		Contributors: manifest.Contributors,
-		URI:          manifest.URI,
+		URI:          &uri,
 		Releases:     []string{manifest.Version},
 		Digest:       manifest.Digest,
 		MinEngine:    manifest.MinEngine,
@@ -224,8 +230,12 @@ func ReleaseSnapshotPath(name, version string) string {
 // ReleaseSnapshotPath) while git and oci adapt the indexed entry and
 // http(s)/s3 reuse it. First releases for non-fs schemes require
 // --uri-override because the host or bucket cannot be guessed.
+// Created-but-unreleased entries take the first-release path.
 // ~keep
 func BuildReleaseURI(scheme, name, version, override string, existing *RegistryTemplate) (URI, error) {
+	if existing != nil && !existing.IsReleased() {
+		existing = nil
+	}
 	trimmed := strings.TrimSpace(scheme)
 	if trimmed == "https" {
 		trimmed = "http"
@@ -247,7 +257,7 @@ func BuildReleaseURI(scheme, name, version, override string, existing *RegistryT
 		if existing.URI.Scheme != SchemeGit {
 			return URI{}, fmt.Errorf("git release of %q needs --uri-override: indexed uri is %q", name, existing.URI.String())
 		}
-		next := existing.URI
+		next := *existing.URI
 		next.Ref = "templates/" + name + "/" + version
 		if strings.TrimSpace(next.Subpath) == "" {
 			next.Subpath = "templates/" + name
@@ -263,7 +273,7 @@ func BuildReleaseURI(scheme, name, version, override string, existing *RegistryT
 		if existing.URI.Scheme != SchemeOCI {
 			return URI{}, fmt.Errorf("oci release of %q needs --uri-override: indexed uri is %q", name, existing.URI.String())
 		}
-		next := existing.URI
+		next := *existing.URI
 		next.Ref = version
 		next.Digest = ""
 		if err := next.Validate(); err != nil {
@@ -277,7 +287,7 @@ func BuildReleaseURI(scheme, name, version, override string, existing *RegistryT
 		if existing.URI.Scheme != SchemeHTTP && existing.URI.Scheme != SchemeHTTPS {
 			return URI{}, fmt.Errorf("http release of %q needs --uri-override: indexed uri is %q", name, existing.URI.String())
 		}
-		return existing.URI, nil
+		return *existing.URI, nil
 	case SchemeS3:
 		if existing == nil {
 			return URI{}, fmt.Errorf("s3 release needs --uri-override for the first release of %q", name)
@@ -285,7 +295,7 @@ func BuildReleaseURI(scheme, name, version, override string, existing *RegistryT
 		if existing.URI.Scheme != SchemeS3 {
 			return URI{}, fmt.Errorf("s3 release of %q needs --uri-override: indexed uri is %q", name, existing.URI.String())
 		}
-		return existing.URI, nil
+		return *existing.URI, nil
 	default:
 		return URI{}, fmt.Errorf("invalid scheme %q: want fs|http|s3|git|oci", scheme)
 	}

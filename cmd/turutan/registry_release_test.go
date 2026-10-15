@@ -42,37 +42,44 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		return loaded
 	}
 
-	t.Run("minor bump from create draft releases 0.2.0", func(t *testing.T) {
+	t.Run("first release from a created entry starts at 0.1.0 whatever the bump", func(t *testing.T) {
 		dir := setup(t)
 		out, err := execRegistryRelease(t, "foo", "minor", "fs")
 		require.NoError(t, err)
-		require.Contains(t, out, "foo@0.2.0")
-		manifestPath := filepath.Join(dir, "templates", "foo", "manifest", "0.2.0.json")
-		manifest, err := registry.LoadVersionedManifest(dir, "foo", "0.2.0")
+		require.Contains(t, out, "foo@0.1.0")
+		manifestPath := filepath.Join(dir, "templates", "foo", "manifest", "0.1.0.json")
+		manifest, err := registry.LoadVersionedManifest(dir, "foo", "0.1.0")
 		require.NoError(t, err)
 		require.Equal(t, "foo", manifest.Name)
-		require.Equal(t, "0.2.0", manifest.Version)
+		require.Equal(t, "0.1.0", manifest.Version)
 		require.Contains(t, out, manifest.Digest)
-		require.Equal(t, "templates/foo/releases/0.2.0.tar.gz", manifest.URI.String())
+		require.Equal(t, "templates/foo/releases/0.1.0.tar.gz", manifest.URI.String())
 		if _, err := os.Stat(manifestPath); err != nil {
 			t.Errorf("versioned manifest missing: %v", err)
 		}
-		if _, err := os.Stat(filepath.Join(dir, "templates", "foo", "releases", "0.2.0.tar.gz")); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, "templates", "foo", "releases", "0.1.0.tar.gz")); err != nil {
 			t.Errorf("release archive missing: %v", err)
 		}
 		loaded := load(t, dir)
 		found, err := loaded.FindTemplate("foo")
 		require.NoError(t, err)
-		require.Equal(t, "0.2.0", found.Version)
-		require.Equal(t, []string{"0.2.0"}, found.Releases)
+		require.Equal(t, "0.1.0", found.Version)
+		require.Equal(t, []string{"0.1.0"}, found.Releases)
 		require.Equal(t, manifest.Digest, found.Digest)
+		out, err = execRegistryRelease(t, "foo", "minor", "fs")
+		require.NoError(t, err)
+		require.Contains(t, out, "foo@0.2.0")
+		found, err = load(t, dir).FindTemplate("foo")
+		require.NoError(t, err)
+		require.Equal(t, "0.2.0", found.Version)
+		require.Equal(t, []string{"0.2.0", "0.1.0"}, found.Releases)
 	})
 
 	t.Run("major and patch bumps", func(t *testing.T) {
 		dir := setup(t)
 		_, err := execRegistryRelease(t, "foo", "patch", "fs")
-		require.NoError(t, err)
-		require.Equal(t, "0.1.1", load(t, dir).Templates[0].Version)
+		require.NoError(t, err, "first cut is 0.1.0 even for patch")
+		require.Equal(t, "0.1.0", load(t, dir).Templates[0].Version)
 		_, err = execRegistryRelease(t, "foo", "minor", "fs")
 		require.NoError(t, err)
 		require.Equal(t, "0.2.0", load(t, dir).Templates[0].Version)
@@ -81,7 +88,7 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		found, err := load(t, dir).FindTemplate("foo")
 		require.NoError(t, err)
 		require.Equal(t, "1.0.0", found.Version)
-		require.Equal(t, []string{"1.0.0", "0.2.0", "0.1.1"}, found.Releases)
+		require.Equal(t, []string{"1.0.0", "0.2.0", "0.1.0"}, found.Releases)
 		_ = dir
 	})
 
@@ -91,11 +98,23 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		require.NoError(t, err)
 		out, err := execRegistryRelease(t, "foo", "same", "fs", "--force")
 		require.NoError(t, err)
-		require.Contains(t, out, "foo@0.1.1")
+		require.Contains(t, out, "foo@0.1.0")
 		found, err := load(t, dir).FindTemplate("foo")
 		require.NoError(t, err)
-		require.Equal(t, "0.1.1", found.Version)
-		require.Equal(t, []string{"0.1.1"}, found.Releases)
+		require.Equal(t, "0.1.0", found.Version)
+		require.Equal(t, []string{"0.1.0"}, found.Releases)
+	})
+
+	t.Run("same bump on a created entry cuts 0.1.0", func(t *testing.T) {
+		dir := setup(t)
+		out, err := execRegistryRelease(t, "foo", "same", "fs", "--force")
+		require.NoError(t, err)
+		require.Contains(t, out, "foo@0.1.0")
+		found, err := load(t, dir).FindTemplate("foo")
+		require.NoError(t, err)
+		require.True(t, found.IsReleased())
+		require.Equal(t, []string{"0.1.0"}, found.Releases)
+		_ = dir
 	})
 
 	t.Run("new template without create starts at 0.1.0", func(t *testing.T) {
@@ -114,20 +133,17 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		require.Equal(t, "0.1.0", found.Version)
 	})
 
-	t.Run("existing versioned manifest needs force", func(t *testing.T) {
+	t.Run("same bump without force refuses to overwrite", func(t *testing.T) {
 		dir := setup(t)
 		_, err := execRegistryRelease(t, "foo", "patch", "fs")
 		require.NoError(t, err)
-		loaded := load(t, dir)
-		found, err := loaded.FindTemplate("foo")
+		_, err = execRegistryRelease(t, "foo", "same", "fs")
+		require.Error(t, err, "released version already has a manifest and archive")
+		_, err = execRegistryRelease(t, "foo", "same", "fs", "--force")
 		require.NoError(t, err)
-		found.Version = "0.1.0"
-		found.Releases = nil
-		require.NoError(t, registry.SaveIndexFile(filepath.Join(dir, registry.IndexFileName), loaded))
-		_, err = execRegistryRelease(t, "foo", "patch", "fs")
-		require.Error(t, err)
-		_, err = execRegistryRelease(t, "foo", "patch", "fs", "--force")
+		found, err := load(t, dir).FindTemplate("foo")
 		require.NoError(t, err)
+		require.Equal(t, []string{"0.1.0"}, found.Releases)
 		_ = dir
 	})
 
@@ -136,10 +152,10 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		_, err := execRegistryRelease(t, "foo", "minor", "fs",
 			"--author", "John Doe <john@example.com>")
 		require.NoError(t, err)
-		manifest, err := registry.LoadVersionedManifest(dir, "foo", "0.2.0")
+		manifest, err := registry.LoadVersionedManifest(dir, "foo", "0.1.0")
 		require.NoError(t, err)
 		require.Equal(t, "John Doe <john@example.com>", manifest.Author.String())
-		archive := filepath.Join(dir, "templates", "foo", "releases", "0.2.0.tar.gz")
+		archive := filepath.Join(dir, "templates", "foo", "releases", "0.1.0.tar.gz")
 		info, err := os.Stat(archive)
 		require.NoError(t, err)
 		require.Greater(t, info.Size(), int64(0))

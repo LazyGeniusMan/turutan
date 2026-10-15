@@ -473,6 +473,10 @@ func (u *URI) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
+	if strings.TrimSpace(raw) == "" {
+		*u = URI{}
+		return nil
+	}
 	parsed, err := ParseURI(raw)
 	if err != nil {
 		return err

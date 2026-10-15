@@ -3,6 +3,7 @@
 package registry
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -31,7 +32,8 @@ const exampleIndexJSON = `{
       "name": "minimal",
       "version": "0.1.0",
       "author": "Jane Doe <jane@example.com>",
-      "uri": "fs:/srv/registry/minimal"
+      "uri": "fs:/srv/registry/minimal",
+      "releases": ["0.1.0"]
     }
   ]
 }`
@@ -141,7 +143,7 @@ func TestIndexRelativeFSResolution(t *testing.T) {
 	t.Parallel()
 	index, err := ParseIndex([]byte(
 		`{"name":"local","version":"1.0.0","author":"A <a@b.co>","templates":[` +
-			`{"name":"app","version":"1.0.0","author":"A <a@b.co>","uri":"templates/app/releases/0.1.0.tar.gz"}]}`))
+			`{"name":"app","version":"0.1.0","author":"A <a@b.co>","uri":"templates/app/releases/0.1.0.tar.gz","releases":["0.1.0"]}]}`))
 	if err != nil {
 		t.Fatalf("ParseIndex error: %v", err)
 	}
@@ -199,6 +201,128 @@ func TestUpsertIndexReleaseHistory(t *testing.T) {
 	}
 	if err := manifest.Validate(); err != nil {
 		t.Errorf("Manifest().Validate error: %v", err)
+	}
+}
+
+func TestRegistryTemplateUnreleased(t *testing.T) {
+	t.Parallel()
+	author, err := ParseAuthor("A <a@b.co>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ParseURI("templates/app/releases/0.1.0.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		entry   RegistryTemplate
+		wantErr bool
+	}{
+		{
+			name:    "created entry with name and author only",
+			entry:   RegistryTemplate{Name: "app", Author: author},
+			wantErr: false,
+		},
+		{
+			name:    "bad name",
+			entry:   RegistryTemplate{Name: "Bad Name!", Author: author},
+			wantErr: true,
+		},
+		{
+			name:    "empty author",
+			entry:   RegistryTemplate{Name: "app"},
+			wantErr: true,
+		},
+		{
+			name:    "version without releases is a fake draft",
+			entry:   RegistryTemplate{Name: "app", Author: author, Version: "0.1.0"},
+			wantErr: true,
+		},
+		{
+			name:    "uri without releases is a fake draft",
+			entry:   RegistryTemplate{Name: "app", Author: author, URI: &snapshot},
+			wantErr: true,
+		},
+		{
+			name:    "digest without releases is a fake draft",
+			entry:   RegistryTemplate{Name: "app", Author: author, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+			wantErr: true,
+		},
+		{
+			name:    "manifest hash without releases is a fake draft",
+			entry:   RegistryTemplate{Name: "app", Author: author, ManifestHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			wantErr: true,
+		},
+		{
+			name:    "released entry without uri",
+			entry:   RegistryTemplate{Name: "app", Author: author, Version: "0.1.0", Releases: []string{"0.1.0"}},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			entry := tt.entry
+			err := entry.Validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("Validate succeeded, want error for %s", tt.name)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Validate error = %v, want nil", err)
+			}
+			if !tt.wantErr && entry.IsReleased() {
+				t.Errorf("IsReleased = true, want false for %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestUnreleasedEntryRoundTripOmitsReleaseFields(t *testing.T) {
+	t.Parallel()
+	author, err := ParseAuthor("A <a@b.co>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := &RegistryIndex{
+		Name: "r", Version: "0.1.0", Author: author,
+		Templates: []RegistryTemplate{{Name: "app", Author: author}},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, IndexFileName)
+	if err := SaveIndexFile(path, index); err != nil {
+		t.Fatalf("SaveIndexFile error: %v", err)
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- path is the explicit caller-supplied index file
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw struct {
+		Templates []map[string]any `json:"templates"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw.Templates) != 1 {
+		t.Fatalf("templates = %d, want 1", len(raw.Templates))
+	}
+	for key := range raw.Templates[0] {
+		switch key {
+		case "name", "author":
+		default:
+			t.Errorf("saved unreleased entry carries %q: %s", key, data)
+		}
+	}
+	loaded, err := LoadIndexFile(path)
+	if err != nil {
+		t.Fatalf("LoadIndexFile error: %v", err)
+	}
+	found, err := loaded.FindTemplate("app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found.IsReleased() || found.URI != nil || found.Version != "" {
+		t.Errorf("reloaded entry = %+v, want created-but-unreleased", found)
 	}
 }
 

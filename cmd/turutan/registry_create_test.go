@@ -35,7 +35,7 @@ func execRegistryCreate(t *testing.T, args ...string) (string, error) {
 }
 
 func TestRegistryCreateCmd(t *testing.T) {
-	t.Run("scaffolds starter and indexes it", func(t *testing.T) {
+	t.Run("scaffolds starter and records it unreleased", func(t *testing.T) {
 		dir := t.TempDir()
 		initRegistryAt(t, dir)
 		out, err := execRegistryCreate(t, "hello")
@@ -54,9 +54,18 @@ func TestRegistryCreateCmd(t *testing.T) {
 		require.NoError(t, err)
 		found, err := loaded.FindTemplate("hello")
 		require.NoError(t, err)
-		require.Equal(t, "0.1.0", found.Version)
+		require.False(t, found.IsReleased(), "fresh create must not look released")
+		require.Empty(t, found.Version)
+		require.Nil(t, found.URI)
+		require.Empty(t, found.Releases)
+		require.Empty(t, found.Digest)
 		require.Equal(t, "Jane Doe <jane@example.com>", found.Author.String())
-		require.Equal(t, "templates/hello/releases/0.1.0.tar.gz", found.URI.String())
+		raw, err := os.ReadFile(filepath.Join(dir, registry.IndexFileName)) // #nosec G304 -- dir is a test temp dir plus the fixed index file name
+		require.NoError(t, err)
+		for _, banned := range []string{"releases", "digest", "templates/hello"} {
+			require.NotContains(t, string(raw), banned,
+				"unreleased entry must not reference a release: %s", banned)
+		}
 	})
 
 	t.Run("finds registry root from subdirectory", func(t *testing.T) {
@@ -79,6 +88,51 @@ func TestRegistryCreateCmd(t *testing.T) {
 		require.NoError(t, err)
 		_, err = execRegistryCreate(t, "hello")
 		require.Error(t, err)
+		loaded, err := registry.LoadIndexFile(filepath.Join(dir, registry.IndexFileName))
+		require.NoError(t, err)
+		require.Len(t, loaded.Templates, 1)
+	})
+
+	t.Run("force moves the existing dir aside instead of deleting it", func(t *testing.T) {
+		dir := t.TempDir()
+		initRegistryAt(t, dir)
+		_, err := execRegistryCreate(t, "hello")
+		require.NoError(t, err)
+		marker := filepath.Join(dir, "templates", "hello", "author.txt")
+		require.NoError(t, os.WriteFile(marker, []byte("author content"), 0o600))
+		_, err = execRegistryCreate(t, "hello", "--force")
+		require.NoError(t, err)
+		content, err := os.ReadFile(filepath.Join(dir, "templates", "hello.bak", "author.txt")) // #nosec G304 -- dir is a test temp dir plus fixed fixture names
+		require.NoError(t, err, "force must back the author content up, not delete it")
+		require.Equal(t, "author content", string(content))
+		require.FileExists(t, filepath.Join(dir, "templates", "hello", ".turutan.yml"))
+		loaded, err := registry.LoadIndexFile(filepath.Join(dir, registry.IndexFileName))
+		require.NoError(t, err)
+		require.Len(t, loaded.Templates, 1)
+		found, err := loaded.FindTemplate("hello")
+		require.NoError(t, err)
+		require.False(t, found.IsReleased())
+	})
+
+	t.Run("force refuses when the backup already exists", func(t *testing.T) {
+		dir := t.TempDir()
+		initRegistryAt(t, dir)
+		_, err := execRegistryCreate(t, "hello")
+		require.NoError(t, err)
+		_, err = execRegistryCreate(t, "hello", "--force")
+		require.NoError(t, err)
+		_, err = execRegistryCreate(t, "hello", "--force")
+		require.Error(t, err, "second force must stop instead of burying the first backup")
+	})
+
+	t.Run("recreates the entry when only the dir is gone", func(t *testing.T) {
+		dir := t.TempDir()
+		initRegistryAt(t, dir)
+		_, err := execRegistryCreate(t, "hello")
+		require.NoError(t, err)
+		require.NoError(t, os.RemoveAll(filepath.Join(dir, "templates", "hello")))
+		_, err = execRegistryCreate(t, "hello")
+		require.Error(t, err, "indexed entry still refuses without force")
 		_, err = execRegistryCreate(t, "hello", "--force")
 		require.NoError(t, err)
 		loaded, err := registry.LoadIndexFile(filepath.Join(dir, registry.IndexFileName))

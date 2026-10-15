@@ -126,17 +126,22 @@ func newRegistryCreateCmd() *cobra.Command {
 		Long: `Create a starter template inside the current registry: the
 command walks up from the working directory to find the registry index,
 scaffolds templates/<name>/ with a minimal .turutan.yml, README.md and
-hello.txt.tmpl, and records the template in the index.
+hello.txt.tmpl, and records the template in the index as
+created-but-unreleased (name and author only: no version, URI, digest
+or releases history until the first registry release cuts one).
 
-Refuses to overwrite an existing template directory or index entry unless
---force is given.`,
+Refuses to touch an existing template directory or index entry unless
+--force is given. With --force a non-empty template directory is moved
+aside to <dir>.bak (refusing when that backup already exists) instead of
+being deleted, then the starter is written fresh and the index entry is
+replaced; an empty directory is reused in place.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRegistryCreate(cmd, args[0], flags)
 		},
 	}
 	cmd.Flags().BoolVar(&flags.force, "force", false,
-		"overwrite an existing template directory or index entry")
+		"move an existing template directory aside to <dir>.bak and replace the index entry")
 	return cmd
 }
 
@@ -144,6 +149,9 @@ func runRegistryCreate(cmd *cobra.Command, name string, flags *registryCreateFla
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("registry create: template name is empty")
+	}
+	if err := registry.ValidateTemplateName(name); err != nil {
+		return fmt.Errorf("registry create: %w", err)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -157,22 +165,14 @@ func runRegistryCreate(cmd *cobra.Command, name string, flags *registryCreateFla
 	if err != nil {
 		return fmt.Errorf("registry create: %w", err)
 	}
-	uri, err := registry.ParseURI(registry.ReleaseSnapshotPath(name, registryStarterVersion))
-	if err != nil {
-		return fmt.Errorf("registry create: %w", err)
-	}
-	manifest := registry.TemplateManifest{
-		Name:    name,
-		Version: registryStarterVersion,
-		Author:  index.Author,
-		URI:     uri,
-	}
-	if err := manifest.Validate(); err != nil {
-		return fmt.Errorf("registry create: %w", err)
-	}
 	dir := filepath.Join(root, "templates", filepath.FromSlash(name))
-	if _, err := os.Stat(dir); err == nil && !flags.force {
-		return fmt.Errorf("registry create: %q already exists (use --force to overwrite)", dir)
+	if _, err := os.Stat(dir); err == nil {
+		if !flags.force {
+			return fmt.Errorf("registry create: %q already exists (use --force to move it aside)", dir)
+		}
+		if err := moveRegistryDirAside(dir); err != nil {
+			return fmt.Errorf("registry create: %w", err)
+		}
 	}
 	if _, err := index.FindTemplate(name); err == nil && !flags.force {
 		return fmt.Errorf("registry create: template %q is already indexed (use --force to overwrite)", name)
@@ -180,7 +180,11 @@ func runRegistryCreate(cmd *cobra.Command, name string, flags *registryCreateFla
 	if err := writeRegistryStarter(dir, name); err != nil {
 		return err
 	}
-	upsertRegistryTemplate(index, manifest)
+	entry := registry.RegistryTemplate{Name: name, Author: index.Author}
+	if err := entry.Validate(); err != nil {
+		return fmt.Errorf("registry create: %w", err)
+	}
+	upsertRegistryTemplate(index, entry)
 	if err := registry.SaveIndexFile(indexPath, index); err != nil {
 		return fmt.Errorf("registry create: %w", err)
 	}
@@ -188,6 +192,32 @@ func runRegistryCreate(cmd *cobra.Command, name string, flags *registryCreateFla
 		return err
 	}
 	return nil
+}
+
+func moveRegistryDirAside(dir string) error {
+	empty, err := isEmptyDir(dir)
+	if err != nil {
+		return err
+	}
+	if empty {
+		return nil
+	}
+	backup := dir + ".bak"
+	if _, err := os.Stat(backup); err == nil {
+		return fmt.Errorf("backup %q already exists: remove it before retrying", backup)
+	}
+	if err := os.Rename(dir, backup); err != nil {
+		return fmt.Errorf("moving %q aside: %w", dir, err)
+	}
+	return nil
+}
+
+func isEmptyDir(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, fmt.Errorf("reading %q: %w", dir, err)
+	}
+	return len(entries) == 0, nil
 }
 
 func writeRegistryStarter(dir, name string) error {
@@ -208,20 +238,9 @@ func writeRegistryStarter(dir, name string) error {
 	return nil
 }
 
-func upsertRegistryTemplate(index *registry.RegistryIndex, manifest registry.TemplateManifest) {
-	entry := registry.RegistryTemplate{
-		Name:         manifest.Name,
-		Version:      manifest.Version,
-		Author:       manifest.Author,
-		Contributors: manifest.Contributors,
-		URI:          manifest.URI,
-		Digest:       manifest.Digest,
-		MinEngine:    manifest.MinEngine,
-		ManifestHash: manifest.ManifestHash,
-		License:      manifest.License,
-	}
+func upsertRegistryTemplate(index *registry.RegistryIndex, entry registry.RegistryTemplate) {
 	for i := range index.Templates {
-		if index.Templates[i].Name == manifest.Name {
+		if index.Templates[i].Name == entry.Name {
 			index.Templates[i] = entry
 			return
 		}
