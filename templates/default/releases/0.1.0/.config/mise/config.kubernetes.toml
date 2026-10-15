@@ -1,0 +1,6 @@
+[tools]
+flux2 = "2"
+helm = "4"
+kubectl = "1"
+"github:siderolabs/talos" = { prefix = "v1.15", prerelease = true }
+"github:owenlamont/ryl" = "0"

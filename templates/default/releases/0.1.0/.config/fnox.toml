@@ -1,0 +1,12 @@
+[daemon]
+enabled = true
+
+# ~keep
+# Configure a secret provider here. This file is custom-owned: `turutan
+# update` seeds it once and never overwrites it, so put real vault mappings
+# below freely. Generic provider example:
+# [providers.myprovider]
+# type = "my-provider-type"
+#
+# [secrets]
+# "MY_TOKEN" = { provider = "myprovider", value = "path/to/secret" }

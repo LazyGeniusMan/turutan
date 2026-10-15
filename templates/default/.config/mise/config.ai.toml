@@ -1,0 +1,23 @@
+[env]
+BASEMIND_ALLOW_HTTP = 1
+AI_RULEZ_PROFILE = "{{ mise_env | default(value=[]) | join(sep=',') }}"
+
+[tools]
+"github:Goldziher/ai-rulez" = "5"
+"github:Goldziher/basemind" = "0"
+"github:Goldziher/uncomment" = "3"
+
+[daemons.basemind-comms]
+run = "exec basemind comms daemon"
+
+[tasks."dev-setup:ai-rulez"]
+depends = "dev-setup:fnox"
+run = "ai-rulez migrate okf && ai-rulez generate"
+
+[tasks."dev-setup:basemind"]
+run = "basemind scan || basemind rescan"
+
+[tasks."dev-setup:basemind-comms"]
+depends = "dev-setup:basemind"
+daemons = "basemind-comms"
+run = "echo 'basemind comms is running '"

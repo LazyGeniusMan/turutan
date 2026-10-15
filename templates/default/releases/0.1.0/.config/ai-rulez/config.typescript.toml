@@ -1,0 +1,6 @@
+[profiles]
+typescript = [
+  "typescript",
+  "builtin:typescript",
+  "builtin:vite-plus",
+]

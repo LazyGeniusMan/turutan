@@ -1,0 +1,4 @@
+[tools]
+docker-cli = "29"
+docker-compose = "5"
+"github:owenlamont/ryl" = "0"

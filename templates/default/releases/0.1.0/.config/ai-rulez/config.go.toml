@@ -1,0 +1,12 @@
+[profiles]
+go = [
+  "go",
+  "builtin:go",
+]
+
+[[installed_skills]]
+name = "golang"
+source = "https://github.com/samber/cc-skills-golang"
+trust = "warn"
+include = ["golang-*"]
+domain = "go"

@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "tombi-toml.tombi",
+        "hverlin.mise-vscode"{{ if contains .profiles "go" }},
+        "golang.go"{{ end }}{{ if contains .profiles "python" }},
+        "charliermarsh.ruff",
+        "astral-sh.ty"{{ end }}{{ if contains .profiles "typescript" }},
+        "void-zero.vite-plus-extension-pack"{{ end }}
+    ]
+}

@@ -1,0 +1,43 @@
+[profiles]
+ai = [
+  "ai",
+  "builtin:agent-delegation",
+  "builtin:ai-governance",
+  "builtin:cicd",
+  "builtin:code-quality",
+  "builtin:default-commands",
+  "builtin:docker",
+  "builtin:documentation",
+  "builtin:git-workflow",
+  "builtin:observability",
+  "builtin:security",
+  "builtin:testing",
+  "builtin:token-efficiency",
+]
+
+[[installed_skills]]
+name = "ai-rulez"
+source = "https://github.com/Goldziher/ai-rulez"
+trust = "warn"
+include = ["ai-rulez"]
+domain = "ai"
+
+[[installed_skills]]
+name = "basemind"
+source = "https://github.com/Goldziher/basemind"
+trust = "warn"
+include = ["basemind*", "multi-agent-room"]
+domain = "ai"
+
+[[mcp_servers]]
+name = "ai-rulez"
+command = "ai-rulez"
+args = ["mcp", "--serve-skills"]
+env = { AI_RULEZ_PROFILE = "${AI_RULEZ_PROFILE}" }
+domain = "ai"
+
+[[mcp_servers]]
+name = "basemind"
+command = "basemind"
+args = ["serve"]
+domain = "ai"
