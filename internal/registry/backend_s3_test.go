@@ -109,7 +109,7 @@ func TestDefaultS3ClientFactory(t *testing.T) {
 		{"default endpoint", "s3://b/k.tgz", AuthConfig{}, false},
 		{
 			"with credentials", "s3://b/k.tgz",
-			AuthConfig{Kind: AuthKindS3, Username: "akid", Password: "secret"},
+			AuthConfig{Kind: AuthKindS3, Username: "akid", Password: "secret"}, // betterleaks:allow
 			false,
 		}, // betterleaks:allow (test fixture)
 		{"bad endpoint", "s3://b/k.tgz", AuthConfig{Endpoint: "ftp://x"}, true},
