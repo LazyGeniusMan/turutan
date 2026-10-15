@@ -24,7 +24,6 @@ import (
 type SyncOptions struct {
 	Conflict       ConflictMode
 	Force          bool
-	AllowHooks     bool
 	Preview        bool
 	NonInteractive bool
 	Verbose        bool
@@ -41,7 +40,6 @@ type InputOptions struct {
 	Force          bool
 	DataFile       string
 	Defaults       bool
-	AllowHooks     bool
 	Preview        bool
 	NonInteractive bool
 	Verbose        bool
@@ -186,7 +184,6 @@ func syncUpdateOptions(
 	return UpdateOptions{
 		Conflict:       opts.Conflict,
 		Force:          opts.Force,
-		AllowHooks:     opts.AllowHooks,
 		Preview:        opts.Preview,
 		NonInteractive: opts.NonInteractive,
 		Verbose:        opts.Verbose,
@@ -207,7 +204,6 @@ func inputUpdateOptions(
 		Force:          opts.Force,
 		DataFile:       opts.DataFile,
 		Defaults:       opts.Defaults,
-		AllowHooks:     opts.AllowHooks,
 		Preview:        opts.Preview,
 		NonInteractive: opts.NonInteractive,
 		Verbose:        opts.Verbose,
@@ -251,11 +247,6 @@ func runStateSync(
 	vlogf(stderr, uopts.Verbose, "sync: pinned commit %s", old)
 	merger := newMerger(
 		projectDir, state, manifest, preserved, uopts, fresh, old, stderr)
-	skip, err := gateMigrations(manifest, old, fresh, uopts, stdout, stdin)
-	if err != nil {
-		_ = os.RemoveAll(stage)
-		return nil, err
-	}
 	defer func() { _ = os.RemoveAll(stage) }()
 	if !uopts.Force {
 		if err := guardCleanTree(
@@ -267,13 +258,6 @@ func runStateSync(
 	if err != nil {
 		return nil, err
 	}
-	var migrated []string
-	if !skip {
-		migrated, err = runMigrations(projectDir, manifest, old, fresh, stderr)
-		if err != nil {
-			return nil, err
-		}
-	}
 	if changedLine != "" {
 		if _, err := fmt.Fprintln(stdout, changedLine); err != nil {
 			return nil, err
@@ -281,7 +265,7 @@ func runStateSync(
 	}
 	return finishStateSync(
 		projectDir, state, lock, data, fresh, rendered, stage,
-		stdout, updated, conflicts, migrated, old)
+		stdout, updated, conflicts, old)
 }
 
 func previewStateSync(
@@ -331,7 +315,7 @@ func finishStateSync(
 	rendered map[string]renderedEntry,
 	stage string,
 	stdout io.Writer,
-	updated, conflicts, migrated []string,
+	updated, conflicts []string,
 	old string,
 ) (*UpdateResult, error) {
 	paths := make([]string, 0, len(rendered))
@@ -367,7 +351,7 @@ func finishStateSync(
 	}
 	result := &UpdateResult{
 		Old: old, New: fresh,
-		Updated: updated, Conflicts: conflicts, Migrations: migrated,
+		Updated: updated, Conflicts: conflicts,
 	}
 	if _, err := fmt.Fprintf(stdout, "synced %s (%d files, %d conflicts)\n",
 		shortSHA(old), len(updated), len(conflicts)); err != nil {

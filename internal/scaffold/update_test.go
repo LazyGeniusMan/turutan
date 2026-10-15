@@ -335,156 +335,6 @@ func TestUpdatePreserve(t *testing.T) {
 	})
 }
 
-func TestUpdateMigrations(t *testing.T) {
-	t.Run("migrations run in manifest order", func(t *testing.T) {
-		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
-		manifest := "migrations:\n" +
-			"  - run: [\"echo first >> order.txt\"]\n" +
-			"  - run: [\"echo second >> order.txt\"]\n"
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml", string(manifest))
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "app.txt", "v2\n")
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.Force = true
-		opts.Stdin = strings.NewReader("y\n")
-		result, err := Update(context.Background(), projectDir, opts)
-		if err != nil {
-			t.Fatalf("Update error: %v", err)
-		}
-		if len(result.Migrations) != 2 {
-			t.Fatalf("Migrations = %v, want 2 in order", result.Migrations)
-		}
-		if result.Migrations[0] != "echo first >> order.txt" || result.Migrations[1] != "echo second >> order.txt" {
-			t.Errorf("Migrations = %v, want ordered echo commands", result.Migrations)
-		}
-		got, err := os.ReadFile(filepath.Join(projectDir, "order.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-		if err != nil {
-			t.Fatalf("reading order.txt: %v", err)
-		}
-		lines := strings.Split(strings.TrimSpace(string(got)), "\n")
-		if len(lines) != 2 || strings.TrimSpace(lines[0]) != "first" || strings.TrimSpace(lines[1]) != "second" {
-			t.Errorf("order.txt = %q, want first-then-second lines", got)
-		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-			t.Errorf("app.txt = %q, want template-new content alongside migrations", got)
-		}
-	})
-	t.Run("failing migration aborts update", func(t *testing.T) {
-		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
-		manifest := "migrations:\n  - run: [\"exit 3\"]\n"
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml", string(manifest))
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.Force = true
-		opts.Stdin = strings.NewReader("y\n")
-		if _, err := Update(context.Background(), projectDir, opts); err == nil {
-			t.Error("Update with failing migration succeeded, want error")
-		}
-	})
-}
-
-func TestUpdateMigrationsConsent(t *testing.T) {
-	setupMigrationProject := func(t *testing.T) (string, string) {
-		t.Helper()
-		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
-		manifest := "migrations:\n  - run: [\"echo hi >> marker.txt\"]\n"
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml", manifest)
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "app.txt", "v2\n")
-		return registryURI, projectDir
-	}
-	t.Run("non-interactive without allow-hooks refuses", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.Force = true
-		opts.NonInteractive = true
-		_, err := Update(context.Background(), projectDir, opts)
-		if err == nil {
-			t.Fatal("Update with migrations in non-interactive mode succeeded, want refusal")
-		}
-		if !strings.Contains(err.Error(), "--allow-hooks") {
-			t.Errorf("error = %q, want it to mention --allow-hooks", err)
-		}
-		if _, statErr := os.Stat(filepath.Join(projectDir, "marker.txt")); !os.IsNotExist(statErr) {
-			t.Error("marker.txt exists, want the refused migration skipped")
-		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v1\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-			t.Errorf("app.txt = %q, want old content kept after refusal", got)
-		}
-	})
-	t.Run("non-interactive with allow-hooks runs", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.Force = true
-		opts.NonInteractive = true
-		opts.AllowHooks = true
-		result, err := Update(context.Background(), projectDir, opts)
-		if err != nil {
-			t.Fatalf("Update error: %v", err)
-		}
-		if len(result.Migrations) != 1 {
-			t.Fatalf("Migrations = %v, want the single consented command", result.Migrations)
-		}
-		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-			t.Errorf("marker.txt = %q, want the migration output", got)
-		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-			t.Errorf("app.txt = %q, want template-new content", got)
-		}
-	})
-	t.Run("interactive consent runs migrations", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.Force = true
-		opts.Stdin = strings.NewReader("y\n")
-		result, err := Update(context.Background(), projectDir, opts)
-		if err != nil {
-			t.Fatalf("Update error: %v", err)
-		}
-		if len(result.Migrations) != 1 {
-			t.Errorf("Migrations = %v, want the consented command", result.Migrations)
-		}
-		if got, err := os.ReadFile(filepath.Join(projectDir, "marker.txt")); err != nil || strings.TrimSpace(string(got)) != "hi" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-			t.Errorf("marker.txt = %q, want the migration output", got)
-		}
-	})
-	t.Run("interactive decline skips migrations", func(t *testing.T) {
-		_, projectDir := setupMigrationProject(t)
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.Force = true
-		opts.Stdin = strings.NewReader("n\n")
-		result, err := Update(context.Background(), projectDir, opts)
-		if err != nil {
-			t.Fatalf("Update error: %v", err)
-		}
-		if len(result.Migrations) != 0 {
-			t.Errorf("Migrations = %v, want none after declined consent", result.Migrations)
-		}
-		if _, statErr := os.Stat(filepath.Join(projectDir, "marker.txt")); !os.IsNotExist(statErr) {
-			t.Error("marker.txt exists, want the declined migration skipped")
-		}
-		if got, _ := os.ReadFile(filepath.Join(projectDir, "app.txt")); string(got) != "v2\n" { // #nosec G304 -- test-only path under t.TempDir() with a constant segment
-			t.Errorf("app.txt = %q, want template-new content despite declined migrations", got)
-		}
-		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
-			t.Errorf("stdout = %q, want the skip notice", stdout.String())
-		}
-	})
-	t.Run("non-interactive without migrations passes", func(t *testing.T) {
-		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "app.txt", "v2\n")
-		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr)
-		opts.NonInteractive = true
-		if _, err := Update(context.Background(), projectDir, opts); err != nil {
-			t.Errorf("Update error: %v", err)
-		}
-	})
-}
-
 func TestUpdateLockAdvances(t *testing.T) {
 	t.Run("registry digest advances", func(t *testing.T) {
 		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
@@ -801,32 +651,6 @@ func TestInlineConflict(t *testing.T) {
 	}
 }
 
-func TestMatchesMigration(t *testing.T) {
-	tests := []struct {
-		name  string
-		from  string
-		old   string
-		fresh string
-		want  bool
-	}{
-		{name: "empty always applies", from: "", old: "aaa", fresh: "bbb", want: true},
-		{name: "old prefix matches", from: "aaa", old: "aaabbb", fresh: "ccc", want: true},
-		{name: "SHA identities cannot filter a range", from: "<2.0.0", old: "aaa", fresh: "bbb", want: true},
-		{name: "range applies when fresh satisfies", from: ">=2.0.0", old: "v1.9.0", fresh: "v2.1.0", want: true},
-		{name: "range applies when old satisfies", from: "<2.0.0", old: "v1.5.0", fresh: "v2.1.0", want: true},
-		{name: "range skips when neither version satisfies", from: ">=2.0.0", old: "v1.0.0", fresh: "v1.5.0", want: false},
-		{name: "range skips caret mismatch", from: "^1.0", old: "v2.0.0", fresh: "v2.1.0", want: false},
-		{name: "unparsable from matches all", from: "not-a-range", old: "v9.9.9", fresh: "v9.9.9", want: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := matchesMigration(tt.from, tt.old, tt.fresh); got != tt.want {
-				t.Errorf("matchesMigration(%q) = %v, want %v", tt.from, got, tt.want)
-			}
-		})
-	}
-}
-
 func manifestWithConflict(mode string) *config.Manifest {
 	return &config.Manifest{Conflict: mode}
 }
@@ -859,7 +683,7 @@ func initRegistryProfiles(t *testing.T, manifest string, files map[string]string
 	return target, registryURI
 }
 
-func updateProfiles(t *testing.T, regs string, projectDir string, profiles ...string) *UpdateResult {
+func updateProfiles(t *testing.T, _ string, projectDir string, profiles ...string) *UpdateResult {
 	t.Helper()
 	var stdout, stderr strings.Builder
 	opts := updateTestOptions(&stdout, &stderr)
@@ -918,7 +742,7 @@ func assertProfileAbsent(t *testing.T, projectDir, rel string) {
 	}
 }
 
-func assertCheckQuiet(t *testing.T, regs string, projectDir string) {
+func assertCheckQuiet(t *testing.T, _ string, projectDir string) {
 	t.Helper()
 	var stdout strings.Builder
 	result, err := Check(context.Background(), projectDir, checkOptions(&stdout))

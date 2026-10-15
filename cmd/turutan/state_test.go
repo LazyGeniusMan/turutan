@@ -65,7 +65,7 @@ func TestStateHelp(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("state input --help error: %v", err)
 		}
-		for _, want := range []string{"data-file", "defaults", "allow-hooks", "force", "conflict", "preview"} {
+		for _, want := range []string{"data-file", "defaults", "force", "conflict", "preview"} {
 			if !strings.Contains(out.String(), want) {
 				t.Errorf("help = %q, want flag --%s", out.String(), want)
 			}
@@ -83,7 +83,7 @@ func TestStateHelp(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("state sync --help error: %v", err)
 		}
-		for _, want := range []string{"force", "conflict", "allow-hooks", "preview"} {
+		for _, want := range []string{"force", "conflict", "preview"} {
 			if !strings.Contains(out.String(), want) {
 				t.Errorf("help = %q, want flag --%s", out.String(), want)
 			}
@@ -151,7 +151,7 @@ func TestStateSyncCmd(t *testing.T) {
 	})
 	t.Run("input flags register", func(t *testing.T) {
 		cmd := newStateInputCmd()
-		for _, name := range []string{"data-file", "defaults", "conflict", "force", "allow-hooks", "preview"} {
+		for _, name := range []string{"data-file", "defaults", "conflict", "force", "preview"} {
 			if cmd.Flags().Lookup(name) == nil {
 				t.Errorf("flag --%s missing", name)
 			}
@@ -162,7 +162,7 @@ func TestStateSyncCmd(t *testing.T) {
 	})
 	t.Run("sync flags register without ref", func(t *testing.T) {
 		cmd := newStateSyncCmd()
-		for _, name := range []string{"conflict", "force", "allow-hooks", "preview"} {
+		for _, name := range []string{"conflict", "force", "preview"} {
 			if cmd.Flags().Lookup(name) == nil {
 				t.Errorf("flag --%s missing", name)
 			}

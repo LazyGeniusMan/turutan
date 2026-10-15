@@ -371,39 +371,3 @@ func TestComputeDiffNoBase(t *testing.T) {
 		}
 	})
 }
-
-func TestComputeDiffRenames(t *testing.T) {
-	t.Run("upstream follows rename to new path", func(t *testing.T) {
-		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"old.txt": "hello\n"})
-		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{
-			".turutan.yml": "renames:\n  old.txt: new.txt\n",
-			"new.txt":      "hello\nmore\n",
-		})
-		fresh := removeTestTemplateFile(t, registryURI, testRegistryTemplate, "old.txt")
-		opts := diffOptions()
-		opts.Ref = fresh
-		opts.What = "upstream"
-		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
-		if err != nil {
-			t.Fatalf("ComputeDiff error: %v", err)
-		}
-		paths := diffPaths(diffs)
-		found := false
-		for _, p := range paths {
-			if p == "new.txt" {
-				found = true
-			}
-			if p == "old.txt" {
-				t.Errorf("paths = %v, want no stale old.txt entry", paths)
-			}
-		}
-		if !found {
-			t.Fatalf("paths = %v, want new-path drift", paths)
-		}
-		for _, d := range diffs {
-			if d.Path == "new.txt" && !strings.Contains(d.Unified, "+more") {
-				t.Errorf("new.txt Unified missing drift line:\n%s", d.Unified)
-			}
-		}
-	})
-}

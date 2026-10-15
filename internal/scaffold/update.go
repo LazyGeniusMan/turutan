@@ -9,15 +9,11 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
 	"github.com/CivNode/diff3-go"
-
-	"github.com/Masterminds/semver/v3"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
@@ -33,7 +29,6 @@ type UpdateOptions struct {
 	Force          bool
 	DataFile       string
 	Defaults       bool
-	AllowHooks     bool
 	NonInteractive bool
 	Verbose        bool
 	Engine         string
@@ -44,11 +39,10 @@ type UpdateOptions struct {
 }
 
 type UpdateResult struct {
-	Old        string
-	New        string
-	Updated    []string
-	Conflicts  []string
-	Migrations []string
+	Old       string
+	New       string
+	Updated   []string
+	Conflicts []string
 }
 
 type fetchedBundle struct {
@@ -83,7 +77,7 @@ func Update(
 			projectDir, state, lock, bundle, manifest, data,
 			opts, stdout, stderr, stdin)
 	}
-	rendered, old, fresh, merger, skipMigrations, stage, err := stageUpdate(
+	rendered, old, fresh, merger, stage, err := stageUpdate(
 		projectDir, state, bundle, manifest, data,
 		opts, stdout, stderr, stdin)
 	if err != nil {
@@ -99,16 +93,9 @@ func Update(
 	if err != nil {
 		return nil, err
 	}
-	var migrated []string
-	if !skipMigrations {
-		migrated, err = runMigrations(projectDir, manifest, old, fresh, stderr)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return finishUpdate(
 		projectDir, state, lock, bundle, data, fresh,
-		rendered, stage, manifest, stdout, updated, conflicts, migrated, old)
+		rendered, stage, manifest, stdout, updated, conflicts, old)
 }
 
 func filePresent(projectDir, path string) bool {
@@ -189,7 +176,7 @@ func previewPlan(
 	state *config.State,
 	preserved []string,
 ) []previewEntry {
-	lockMap, _ := renamedLockMap(lock, manifest.Renames)
+	lockMap := lockMapOf(lock)
 	paths := make([]string, 0, len(lockMap)+len(rendered))
 	seen := map[string]bool{}
 	for path := range lockMap {
@@ -272,25 +259,15 @@ func printPreview(stdout io.Writer, plan []previewEntry) error {
 	return nil
 }
 
-func renamedLockMap(
-	lock *config.Lock,
-	renames map[string]string,
-) (map[string]config.LockFile, map[string]string) {
+func lockMapOf(lock *config.Lock) map[string]config.LockFile {
 	lockMap := make(map[string]config.LockFile, len(lock.Files))
-	oldPaths := map[string]string{}
 	for _, entry := range lock.Files {
-		next := config.ResolveRenames(entry.Path, renames)
-		if _, taken := lockMap[next]; taken {
+		if _, taken := lockMap[entry.Path]; taken {
 			continue
 		}
-		moved := entry
-		moved.Path = next
-		lockMap[next] = moved
-		if next != entry.Path {
-			oldPaths[next] = entry.Path
-		}
+		lockMap[entry.Path] = entry
 	}
-	return lockMap, oldPaths
+	return lockMap
 }
 
 func finishUpdate(
@@ -304,7 +281,7 @@ func finishUpdate(
 	stage string,
 	manifest *config.Manifest,
 	stdout io.Writer,
-	updated, conflicts, migrated []string,
+	updated, conflicts []string,
 	old string,
 ) (*UpdateResult, error) {
 	if err := refreshStateLock(
@@ -317,7 +294,7 @@ func finishUpdate(
 	}
 	result := &UpdateResult{
 		Old: old, New: fresh,
-		Updated: updated, Conflicts: conflicts, Migrations: migrated,
+		Updated: updated, Conflicts: conflicts,
 	}
 	if _, err := fmt.Fprintf(stdout, "updated %s -> %s (%d files, %d conflicts)\n",
 		shortSHA(old), shortSHA(fresh), len(updated), len(conflicts)); err != nil {
@@ -447,22 +424,22 @@ func stageUpdate(
 	opts UpdateOptions,
 	stdout, stderr io.Writer,
 	stdin io.Reader,
-) (map[string]renderedEntry, string, string, *merger, bool, string, error) {
+) (map[string]renderedEntry, string, string, *merger, string, error) {
 	stage, err := os.MkdirTemp("", "turutan-update-*")
 	if err != nil {
-		return nil, "", "", nil, false, "", fmt.Errorf(
+		return nil, "", "", nil, "", fmt.Errorf(
 			"update: creating staging dir: %w", err)
 	}
 	rendered, err := renderStaged(
 		bundle, stage, manifest, data, opts, stdout, stdin)
 	if err != nil {
 		_ = os.RemoveAll(stage)
-		return nil, "", "", nil, false, "", err
+		return nil, "", "", nil, "", err
 	}
 	preserved, err := preservedGlobs(data, manifest)
 	if err != nil {
 		_ = os.RemoveAll(stage)
-		return nil, "", "", nil, false, "", err
+		return nil, "", "", nil, "", err
 	}
 	old := state.ResolvedCommit
 	fresh := bundle.digest
@@ -473,12 +450,7 @@ func stageUpdate(
 	}
 	logUpdateBase(stderr, opts.Verbose, projectDir, old, fresh)
 	merger := newMerger(projectDir, state, manifest, preserved, opts, fresh, old, stderr)
-	skip, err := gateMigrations(manifest, old, fresh, opts, stdout, stdin)
-	if err != nil {
-		_ = os.RemoveAll(stage)
-		return nil, "", "", nil, false, "", err
-	}
-	return rendered, old, fresh, merger, skip, stage, nil
+	return rendered, old, fresh, merger, stage, nil
 }
 
 func renderStaged(
@@ -657,13 +629,11 @@ type merger struct {
 	conflict   ConflictMode
 	newSHA     string
 	baseDir    string
-	oldPaths   map[string]string
 	stderr     io.Writer
 }
 
 func (m *merger) merge(rendered map[string]renderedEntry, lock *config.Lock) ([]string, []string, error) {
-	lockMap, oldPaths := renamedLockMap(lock, m.manifest.Renames)
-	m.oldPaths = oldPaths
+	lockMap := lockMapOf(lock)
 	paths := make([]string, 0, len(lockMap)+len(rendered))
 	seen := map[string]bool{}
 	for path := range lockMap {
@@ -681,10 +651,6 @@ func (m *merger) merge(rendered map[string]renderedEntry, lock *config.Lock) ([]
 		wrote, conflicted, err := m.mergeOne(
 			path, lockMap[path], rendered[path],
 			inLock(lockMap, path), inRendered(rendered, path))
-		if err != nil {
-			return nil, nil, err
-		}
-		wrote, err = m.followRename(path, wrote, inRendered(rendered, path))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -779,18 +745,7 @@ func (m *merger) readLocal(path string) ([]byte, bool, error) {
 	if !os.IsNotExist(err) {
 		return nil, false, fmt.Errorf("update: reading project file %q: %w", path, err)
 	}
-	old, ok := m.oldPaths[path]
-	if !ok || old == path {
-		return nil, false, nil
-	}
-	prior, err := filter.ReadFileWithinRoot(m.projectDir, old)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, fmt.Errorf("update: reading project file %q: %w", old, err)
-	}
-	return prior, true, nil
+	return nil, false, nil
 }
 
 func (m *merger) readBase(path string) ([]byte, bool, error) {
@@ -801,55 +756,7 @@ func (m *merger) readBase(path string) ([]byte, bool, error) {
 	if !os.IsNotExist(err) {
 		return nil, true, fmt.Errorf("update: reading base copy of %q: %w", path, err)
 	}
-	old, ok := m.oldPaths[path]
-	if !ok || old == path {
-		return nil, false, nil
-	}
-	prior, err := filter.ReadFileWithinRoot(m.baseDir, old)
-	if err == nil {
-		return prior, true, nil
-	}
-	if !os.IsNotExist(err) {
-		return nil, true, fmt.Errorf("update: reading base copy of %q: %w", old, err)
-	}
 	return nil, false, nil
-}
-
-func (m *merger) followRename(path string, wrote, hasFresh bool) (bool, error) {
-	old, ok := m.oldPaths[path]
-	if !ok || old == path {
-		return wrote, nil
-	}
-	if _, err := filter.StatWithinRoot(m.projectDir, old); err != nil {
-		if os.IsNotExist(err) {
-			return wrote, nil
-		}
-		return wrote, fmt.Errorf("update: stating renamed file %q: %w", old, err)
-	}
-	if !wrote && hasFresh {
-		preserved, err := userOwned(path, m.manifest, m.state, m.preserved)
-		if err != nil {
-			return wrote, err
-		}
-		if !preserved {
-			data, err := filter.ReadFileWithinRoot(m.projectDir, old)
-			if err != nil {
-				return wrote, fmt.Errorf("update: reading renamed file %q: %w", old, err)
-			}
-			if err := m.write(path, data); err != nil {
-				return wrote, err
-			}
-			wrote = true
-		}
-	}
-	if !wrote {
-		return false, nil
-	}
-	if err := filter.RemoveWithinRoot(m.projectDir, old); err != nil && !os.IsNotExist(err) {
-		return wrote, fmt.Errorf("update: removing renamed file %q: %w", old, err)
-	}
-	m.pruneEmptyParents(old)
-	return wrote, nil
 }
 
 func (m *merger) mergeDropped(path string, locked config.LockFile, local []byte, localExists bool) (bool, bool, error) {
@@ -1127,120 +1034,6 @@ func renderUpdateWithData(
 		}
 	}
 	return fmt.Errorf("update: too many missing values (over %d inputs)", maxInputAttempts)
-}
-
-func gateMigrations(
-	manifest *config.Manifest,
-	old, fresh string,
-	opts UpdateOptions,
-	stdout io.Writer,
-	stdin io.Reader,
-) (skip bool, err error) {
-	var pending []string
-	for _, migration := range manifest.Migrations {
-		if len(migration.Run) == 0 {
-			continue
-		}
-		if !matchesMigration(migration.From, old, fresh) {
-			continue
-		}
-		pending = append(pending, migration.Run...)
-	}
-	if len(pending) == 0 {
-		return false, nil
-	}
-	if opts.AllowHooks {
-		return false, nil
-	}
-	if opts.NonInteractive {
-		return false, fmt.Errorf(
-			"update: template declares migrations: refusing in " + "--non-interactive mode without --allow-hooks")
-	}
-	allow, err := askConfirm(stdout, stdin, fmt.Sprintf("template declares migrations %q; allow", pending))
-	if err != nil {
-		return false, err
-	}
-	if !allow {
-		if _, err := fmt.Fprintf(stdout, "turutan: template migrations %q skipped (consent declined)\n", pending); err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-	return false, nil
-}
-
-func runMigrations(
-	projectDir string,
-	manifest *config.Manifest,
-	old, fresh string,
-	stderr io.Writer,
-) ([]string, error) {
-	var executed []string
-	for _, migration := range manifest.Migrations {
-		if !matchesMigration(migration.From, old, fresh) {
-			continue
-		}
-		for _, cmd := range migration.Run {
-			if err := runMigrationCmd(projectDir, cmd, old, fresh, stderr); err != nil {
-				return executed, err
-			}
-			executed = append(executed, cmd)
-		}
-	}
-	return executed, nil
-}
-
-func matchesMigration(from, old, fresh string) bool {
-	if from == "" {
-		return true
-	}
-	if old != "" && (old == from || strings.HasPrefix(old, from) || strings.HasPrefix(from, old)) {
-		return true
-	}
-	if fresh != "" && (fresh == from || strings.HasPrefix(fresh, from) || strings.HasPrefix(from, fresh)) {
-		return true
-	}
-	constraint, err := semver.NewConstraint(from)
-	if err != nil {
-		return true
-	}
-	var versions []*semver.Version
-	for _, ident := range []string{old, fresh} {
-		if version, err := semver.NewVersion(strings.TrimPrefix(strings.TrimSpace(ident), "v")); err == nil {
-			versions = append(versions, version)
-		}
-	}
-	if len(versions) == 0 {
-		return true
-	}
-	return slices.ContainsFunc(versions, constraint.Check)
-}
-
-func runMigrationCmd(projectDir, cmd, old, fresh string, stderr io.Writer) error {
-	if cmd == "" {
-		return fmt.Errorf("update: migration has an empty run command")
-	}
-	argv := []string{"-c", cmd}
-	if !strings.ContainsAny(cmd, " \t\n|&;()<>$`\\\"'") {
-		if safe, joinErr := filter.SafeJoin(projectDir, filepath.FromSlash(cmd)); joinErr == nil {
-			if info, err := os.Stat(safe); err == nil && !info.IsDir() {
-				argv = []string{safe}
-			}
-		}
-	}
-	executed := exec.Command("sh", argv...) // #nosec G204 -- runs template-declared migration gated by --allow-hooks consent with filtered env (no secrets)
-	executed.Dir = projectDir
-	executed.Env = hookEnv("TURUTAN_OLD="+old, "TURUTAN_NEW="+fresh)
-	output, err := executed.CombinedOutput()
-	if len(output) > 0 {
-		if _, err := fmt.Fprintf(stderr, "turutan: migration %q output:\n%s", cmd, output); err != nil {
-			return err
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("update: migration %q failed: %w", cmd, err)
-	}
-	return nil
 }
 
 func refreshStateLock(

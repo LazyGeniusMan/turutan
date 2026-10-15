@@ -492,19 +492,6 @@ func inputValue(stdout io.Writer, stdin io.Reader, key string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-func askConfirm(stdout io.Writer, stdin io.Reader, prompt string) (bool, error) {
-	if _, err := fmt.Fprintf(stdout, "%s [y/N]: ", prompt); err != nil {
-		return false, err
-	}
-	line, _ := readInputLine(stdin)
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "y", "yes":
-		return true, nil
-	default:
-		return false, nil
-	}
-}
-
 func manifestConditionals(manifest *config.Manifest) []template.Conditional {
 	if manifest == nil {
 		return nil

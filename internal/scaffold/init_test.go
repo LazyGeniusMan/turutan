@@ -218,63 +218,6 @@ func TestInitFilesystem(t *testing.T) {
 			t.Error("init below min-engine succeeded, want error")
 		}
 	})
-	t.Run("hooks refused without consent", func(t *testing.T) {
-		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"./hooks/post.sh\"]\n", basicFiles)
-		opts := testOptions(&strings.Builder{})
-		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts); err == nil {
-			t.Error("hook-bearing template in non-interactive mode succeeded, want refusal")
-		}
-	})
-	t.Run("hooks consented with allow-hooks", func(t *testing.T) {
-		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"hooks/post.sh\"]\n", map[string]string{
-			"go.mod.tmpl":   "module {{.project_name}}\n",
-			"hooks/post.sh": "touch hook-ran.txt\n",
-		})
-		target := filepath.Join(t.TempDir(), "p")
-		var stdout strings.Builder
-		opts := testOptions(&stdout)
-		opts.AllowHooks = true
-		if err := Init(context.Background(), target, ref, opts); err != nil {
-			t.Fatalf("Init with --allow-hooks error: %v", err)
-		}
-		if !strings.Contains(stdout.String(), "ran 1 template hook") {
-			t.Errorf("hooks ran notice missing: %q", stdout.String())
-		}
-		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err != nil {
-			t.Errorf("hook did not run (hook-ran.txt missing): %v", err)
-		}
-	})
-	t.Run("interactive decline skips hooks with notice", func(t *testing.T) {
-		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
-		target := filepath.Join(t.TempDir(), "p")
-		var stdout strings.Builder
-		opts := testOptions(&stdout)
-		opts.NonInteractive = false
-		opts.Stdin = strings.NewReader("n\n")
-		if err := Init(context.Background(), target, ref, opts); err != nil {
-			t.Fatalf("Init with declined hooks error: %v", err)
-		}
-		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
-			t.Errorf("hooks skip notice missing: %q", stdout.String())
-		}
-		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err == nil {
-			t.Error("declined hook ran, want it skipped")
-		}
-	})
-	t.Run("interactive accept runs hooks", func(t *testing.T) {
-		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
-		target := filepath.Join(t.TempDir(), "p")
-		var stdout strings.Builder
-		opts := testOptions(&stdout)
-		opts.NonInteractive = false
-		opts.Stdin = strings.NewReader("y\n")
-		if err := Init(context.Background(), target, ref, opts); err != nil {
-			t.Fatalf("Init with accepted hooks error: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err != nil {
-			t.Errorf("accepted hook did not run: %v", err)
-		}
-	})
 	t.Run("interactive input supplies missing key", func(t *testing.T) {
 		_, ref := makeTestRegistry(t, "", map[string]string{"f.txt.tmpl": "{{.project_name}}-ok\n"})
 		target := filepath.Join(t.TempDir(), "proj")

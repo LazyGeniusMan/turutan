@@ -137,10 +137,7 @@ func computeUpstreamDiff(
 	if err != nil {
 		return nil, err
 	}
-	byNew := make(map[string][]byte, len(base))
-	for path, data := range base {
-		byNew[config.ResolveRenames(path, manifest.Renames)] = data
-	}
+	byNew := base
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
 		diff, changed, err := newFileDiff(

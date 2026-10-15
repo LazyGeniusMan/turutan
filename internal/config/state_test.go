@@ -388,63 +388,6 @@ func TestLoadManifestConditionals(t *testing.T) {
 	})
 }
 
-func TestValidateManifestFrom(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		from    string
-		wantErr bool
-	}{
-		{name: "empty from always applies", from: "", wantErr: false},
-		{name: "semver range passes", from: "<2.0.0", wantErr: false},
-		{name: "semver gte range passes", from: ">=1.0.0", wantErr: false},
-		{name: "hex prefix passes", from: "abc1234", wantErr: false},
-		{name: "full commit SHA passes", from: strings.Repeat("a", 40), wantErr: false},
-		{name: "typo fails fast", from: "not-a-range!!!", wantErr: true},
-		{name: "short hex fails", from: "abc123", wantErr: true},
-		{name: "non-hex word fails", from: "release-candidate", wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manifest := &Manifest{Migrations: []ManifestMigration{{From: tt.from, Run: []string{"echo hi"}}}}
-			err := ValidateManifest(manifest)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateManifest(From=%q) error = %v, wantErr %v", tt.from, err, tt.wantErr)
-			}
-		})
-	}
-	t.Run("bad from fails at load", func(t *testing.T) {
-		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("migrations:\n  - from: \"not-a-range!!!\"\n    run: [\"echo hi\"]\n")}}
-		if _, err := LoadManifest(fsys); err == nil {
-			t.Error("LoadManifest with bad migration from succeeded, want error")
-		}
-	})
-	t.Run("empty and valid from load", func(t *testing.T) {
-		data := []byte("migrations:\n  - run: [\"echo hi\"]\n  - from: \"<2.0.0\"\n    run: [\"echo yo\"]\n")
-		if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err != nil {
-			t.Errorf("LoadManifest error: %v", err)
-		}
-	})
-	t.Run("empty run rejected", func(t *testing.T) {
-		manifest := &Manifest{Migrations: []ManifestMigration{{Run: []string{}}}}
-		if err := ValidateManifest(manifest); err == nil {
-			t.Error("ValidateManifest with empty run succeeded, want error")
-		}
-	})
-	t.Run("nil run rejected", func(t *testing.T) {
-		manifest := &Manifest{Migrations: []ManifestMigration{{}}}
-		if err := ValidateManifest(manifest); err == nil {
-			t.Error("ValidateManifest with missing run succeeded, want error")
-		}
-	})
-	t.Run("empty run fails at load", func(t *testing.T) {
-		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("migrations:\n  - run: []\n")}}
-		if _, err := LoadManifest(fsys); err == nil {
-			t.Error("LoadManifest with empty run succeeded, want error")
-		}
-	})
-}
-
 func TestValidateManifestInputs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -573,30 +516,6 @@ func TestValidateManifestRootGlobs(t *testing.T) {
 	}
 }
 
-func TestValidateManifestRenames(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		renames map[string]string
-		wantErr bool
-	}{
-		{name: "empty accepted", renames: nil, wantErr: false},
-		{name: "valid accepted", renames: map[string]string{"old.txt": "new.txt"}, wantErr: false},
-		{name: "empty old rejected", renames: map[string]string{"": "new.txt"}, wantErr: true},
-		{name: "empty new rejected", renames: map[string]string{"old.txt": ""}, wantErr: true},
-		{name: "self-map rejected", renames: map[string]string{"a.txt": "a.txt"}, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := ValidateManifest(&Manifest{Renames: tt.renames})
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestValidateManifestLicense(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -675,29 +594,25 @@ func TestValidateManifestDocFiles(t *testing.T) {
 	}
 }
 
-func TestResolveRenames(t *testing.T) {
+func TestLegacyManifestKeysRejected(t *testing.T) {
 	t.Parallel()
-	t.Run("unmapped returns path", func(t *testing.T) {
-		t.Parallel()
-		if got := ResolveRenames("a.txt", map[string]string{"b.txt": "c.txt"}); got != "a.txt" {
-			t.Errorf("ResolveRenames = %q, want a.txt", got)
-		}
-	})
-	t.Run("follows chains", func(t *testing.T) {
-		t.Parallel()
-		renames := map[string]string{"a.txt": "b.txt", "b.txt": "c.txt"}
-		if got := ResolveRenames("a.txt", renames); got != "c.txt" {
-			t.Errorf("ResolveRenames = %q, want c.txt", got)
-		}
-	})
-	t.Run("cycle terminates", func(t *testing.T) {
-		t.Parallel()
-		renames := map[string]string{"a.txt": "b.txt", "b.txt": "a.txt"}
-		got := ResolveRenames("a.txt", renames)
-		if got != "a.txt" && got != "b.txt" {
-			t.Errorf("ResolveRenames = %q, want cycle guard", got)
-		}
-	})
+	for _, key := range []string{"hooks", "migrations", "renames"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+			var data []byte
+			switch key {
+			case "hooks":
+				data = []byte("hooks:\n  post: [\"echo hi\"]\n")
+			case "migrations":
+				data = []byte("migrations:\n  - run: [\"echo hi\"]\n")
+			case "renames":
+				data = []byte("renames:\n  old.txt: new.txt\n")
+			}
+			if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err == nil {
+				t.Errorf("LoadManifest with %s key succeeded, want strict-decoder error", key)
+			}
+		})
+	}
 }
 
 func TestDiffInputs(t *testing.T) {

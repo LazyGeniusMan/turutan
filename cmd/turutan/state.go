@@ -31,12 +31,11 @@ values), writes the answers back to state.yml, then re-renders.
 }
 
 type stateInputFlags struct {
-	dataFile   string
-	defaults   bool
-	conflict   string
-	force      bool
-	allowHooks bool
-	preview    bool
+	dataFile string
+	defaults bool
+	conflict string
+	force    bool
+	preview  bool
 }
 
 func newStateInputCmd() *cobra.Command {
@@ -51,8 +50,8 @@ Each prompt defaults to the stored state.yml value (falling back to the
 manifest default only when the key is absent) and follows the same
 ordering, validation and 'if'-predicate logic as init. The updated answers
 are written back to state.yml before the tree is merged with the same
-guards as update (clean tree unless --force, conflicts inline or rej,
-migrations gated by --allow-hooks). Never contacts the template upstream.`,
+guards as update (clean tree unless --force, conflicts inline or rej).
+Never contacts the template upstream.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runStateInput(cmd, flags)
@@ -62,7 +61,7 @@ migrations gated by --allow-hooks). Never contacts the template upstream.`,
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed project_name when stored data lack it")
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej)")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "re-render even when the tree differs from the lock")
-	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared migrations")
+
 	cmd.Flags().BoolVar(&flags.preview, "preview", false, "print the per-path file plan without writing")
 	return cmd
 }
@@ -80,7 +79,6 @@ func runStateInput(cmd *cobra.Command, flags *stateInputFlags) error {
 		Force:          flags.force,
 		DataFile:       flags.dataFile,
 		Defaults:       flags.defaults,
-		AllowHooks:     flags.allowHooks,
 		Preview:        flags.preview,
 		NonInteractive: appCfg.nonInteractive,
 		Engine:         version,
@@ -93,10 +91,9 @@ func runStateInput(cmd *cobra.Command, flags *stateInputFlags) error {
 }
 
 type stateSyncFlags struct {
-	conflict   string
-	force      bool
-	allowHooks bool
-	preview    bool
+	conflict string
+	force    bool
+	preview  bool
 }
 
 func newStateSyncCmd() *cobra.Command {
@@ -113,7 +110,7 @@ local-git checks out the stored SHA with no HEAD re-resolution; filesystem
 opens the stored path directly). The stored ResolvedCommit and RequestedRef
 are kept unchanged, no new-input warnings are printed, and the merge uses
 the same guards as update (clean tree unless --force, conflicts inline or
-rej, migrations gated by --allow-hooks).`,
+rej).`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runStateSync(cmd, flags)
@@ -121,7 +118,7 @@ rej, migrations gated by --allow-hooks).`,
 	}
 	cmd.Flags().StringVar(&flags.conflict, "conflict", "", "conflict record mode (inline|rej)")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "re-render even when the tree differs from the lock")
-	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared migrations")
+
 	cmd.Flags().BoolVar(&flags.preview, "preview", false, "print the per-path file plan without writing")
 	return cmd
 }
@@ -137,7 +134,6 @@ func runStateSync(cmd *cobra.Command, flags *stateSyncFlags) error {
 	_, err := scaffold.StateSync(cmd.Context(), ".", scaffold.SyncOptions{
 		Conflict:       conflict,
 		Force:          flags.force,
-		AllowHooks:     flags.allowHooks,
 		Preview:        flags.preview,
 		NonInteractive: appCfg.nonInteractive,
 		Engine:         version,

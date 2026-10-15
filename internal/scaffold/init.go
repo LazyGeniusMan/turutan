@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -65,7 +64,7 @@ func Init(
 	defer cleanupStage()
 	return finishRegistryInit(
 		rr, templateManifest, bundleDir, bundleURI, manifest, absTarget, data, staged,
-		opts, engine, stdout, stderr, stdin)
+		opts, engine, stdout, stderr)
 }
 
 func validateInitOpts(opts Options) error {
@@ -123,7 +122,6 @@ func finishRegistryInit(
 	opts Options,
 	engine string,
 	stdout, stderr io.Writer,
-	stdin io.Reader,
 ) error {
 	preserved, err := preservedGlobs(data, manifest)
 	if err != nil {
@@ -153,9 +151,6 @@ func finishRegistryInit(
 	}
 	if err := StoreBase(absTarget, digestHex, staged); err != nil {
 		return fmt.Errorf("init: %w", err)
-	}
-	if err := gateHooks(manifest, absTarget, opts, stdout, stderr, stdin); err != nil {
-		return err
 	}
 	if _, err := fmt.Fprintf(stdout, "initialized %s from %s (%d files)\n",
 		absTarget, ref, len(files)); err != nil {
@@ -594,72 +589,6 @@ func keepExisting(slash string, manifest *config.Manifest, opts Options, preserv
 		return false, fmt.Errorf("init: matching --skip entries: %w", err)
 	}
 	return skipped, nil
-}
-
-func gateHooks(
-	manifest *config.Manifest,
-	target string,
-	opts Options,
-	stdout, stderr io.Writer,
-	stdin io.Reader,
-) error {
-	hooks := append(append([]string{}, manifest.Hooks.Pre...), manifest.Hooks.Post...)
-	if len(hooks) == 0 {
-		return nil
-	}
-	if !opts.AllowHooks {
-		if opts.NonInteractive {
-			return fmt.Errorf(
-				"init: template declares hooks %q: refusing in "+"--non-interactive mode without --allow-hooks",
-				hooks)
-		}
-		allow, err := askConfirm(stdout, stdin, fmt.Sprintf("template declares hooks %q; allow", hooks))
-		if err != nil {
-			return err
-		}
-		if !allow {
-			if _, err := fmt.Fprintf(stdout, "turutan: template hooks %q skipped (consent declined)\n", hooks); err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-	for _, hook := range hooks {
-		if err := runHookCmd(target, hook, stderr); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(stdout, "turutan: ran %d template hook(s)\n", len(hooks)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func runHookCmd(target, hook string, stderr io.Writer) error {
-	if hook == "" {
-		return fmt.Errorf("init: hook has an empty command")
-	}
-	argv := []string{"-c", hook}
-	if !strings.ContainsAny(hook, " \t\n|&;()<>$`\"'") {
-		if safe, joinErr := filter.SafeJoin(target, filepath.FromSlash(hook)); joinErr == nil {
-			if info, err := os.Stat(safe); err == nil && !info.IsDir() {
-				argv = []string{safe}
-			}
-		}
-	}
-	executed := exec.Command("sh", argv...) // #nosec G204 -- runs template-declared hook gated by --allow-hooks consent with filtered env (no secrets)
-	executed.Dir = target
-	executed.Env = hookEnv()
-	output, err := executed.CombinedOutput()
-	if len(output) > 0 {
-		if _, err := fmt.Fprintf(stderr, "turutan: hook %q output:\n%s", hook, output); err != nil {
-			return err
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("init: hook %q failed: %w", hook, err)
-	}
-	return nil
 }
 
 func shortSHA(sha string) string {

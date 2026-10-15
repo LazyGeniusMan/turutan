@@ -12,13 +12,12 @@ import (
 )
 
 type updateFlags struct {
-	ref        string
-	conflict   string
-	force      bool
-	dataFile   string
-	defaults   bool
-	allowHooks bool
-	preview    bool
+	ref      string
+	conflict string
+	force    bool
+	dataFile string
+	defaults bool
+	preview  bool
 }
 
 func newUpdateCmd() *cobra.Command {
@@ -39,7 +38,6 @@ Run 'turutan diff' before 'turutan update' to review pending drift.`,
 	cmd.Flags().BoolVar(&flags.force, "force", false, "update even when the tree differs from the lock")
 	cmd.Flags().StringVar(&flags.dataFile, "data-file", "", "overlay stored data from a YAML/JSON file (see go doc text/template for data/dot terms)")
 	cmd.Flags().BoolVar(&flags.defaults, "defaults", false, "seed project_name when stored data lack it")
-	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared migrations")
 	cmd.Flags().BoolVar(&flags.preview, "preview", false, "print the per-path file plan without writing")
 	return cmd
 }
@@ -58,7 +56,6 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 		Force:          flags.force,
 		DataFile:       flags.dataFile,
 		Defaults:       flags.defaults,
-		AllowHooks:     flags.allowHooks,
 		Preview:        flags.preview,
 		NonInteractive: appCfg.nonInteractive,
 		Engine:         version,

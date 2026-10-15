@@ -14,13 +14,12 @@ import (
 )
 
 type initFlags struct {
-	dataFile   string
-	defaults   bool
-	conflict   string
-	skip       string
-	force      bool
-	allowHooks bool
-	template   string
+	dataFile string
+	defaults bool
+	conflict string
+	skip     string
+	force    bool
+	template string
 }
 
 func newInitCmd() *cobra.Command {
@@ -51,7 +50,6 @@ fetch URI for later check/diff/update runs.`,
 		"conflict record mode for future updates (inline|rej; stored in .config/turutan/state.yml)")
 	cmd.Flags().StringVar(&flags.skip, "skip", "", "comma-separated template paths kept as-is")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "init into a non-empty directory")
-	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared hooks")
 	cmd.Flags().StringVar(&flags.template, "template", "", "registry template (<registry-uri>/<template>[@version]; default built-in URI at latest)")
 	return cmd
 }
@@ -74,7 +72,6 @@ func runInit(cmd *cobra.Command, dir string, flags *initFlags) error {
 		Conflict:       conflict,
 		DataFile:       flags.dataFile,
 		Defaults:       flags.defaults,
-		AllowHooks:     flags.allowHooks,
 		Skip:           skip,
 		Engine:         version,
 		Verbose:        appCfg.verbose,

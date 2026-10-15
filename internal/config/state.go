@@ -37,8 +37,6 @@ var hex40 = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 var hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-var hexPrefix = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
-
 var manifestHashRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type State struct {
@@ -77,16 +75,6 @@ type Lock struct {
 	Files        []LockFile `json:"files"`
 }
 
-type ManifestHooks struct {
-	Pre  []string `yaml:"pre"`
-	Post []string `yaml:"post"`
-}
-
-type ManifestMigration struct {
-	From string   `yaml:"from"`
-	Run  []string `yaml:"run"`
-}
-
 // ManifestInput describes one template input value.
 // ~keep
 type ManifestInput struct {
@@ -115,11 +103,8 @@ type Manifest struct {
 	Excludes     []string                 `yaml:"excludes"`
 	Preserves    []string                 `yaml:"preserves"`
 	Conflict     string                   `yaml:"conflict"`
-	Hooks        ManifestHooks            `yaml:"hooks"`
-	Migrations   []ManifestMigration      `yaml:"migrations"`
 	Inputs       map[string]ManifestInput `yaml:"inputs"`
 	Conditionals []ManifestConditional    `yaml:"conditionals"`
-	Renames      map[string]string        `yaml:"renames"`
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
@@ -337,9 +322,6 @@ func ValidateManifest(manifest *Manifest) error {
 	if err := validateManifestConditionals(manifest.Conditionals); err != nil {
 		return err
 	}
-	if err := validateManifestRenames(manifest.Renames); err != nil {
-		return err
-	}
 	if manifest.MinEngine != "" {
 		if _, err := semver.NewConstraint(manifest.MinEngine); err != nil {
 			return fmt.Errorf("invalid manifest: bad min-engine %q: %w", manifest.MinEngine, err)
@@ -356,17 +338,6 @@ func ValidateManifest(manifest *Manifest) error {
 	}
 	if err := validateManifestPlantedOverlap(manifest.LicenseFiles, manifest.DocFiles); err != nil {
 		return err
-	}
-	for i, migration := range manifest.Migrations {
-		if len(migration.Run) == 0 {
-			return fmt.Errorf("invalid manifest: migrations[%d] has empty run: must list at least one command", i)
-		}
-		if slices.Contains(migration.Run, "") {
-			return fmt.Errorf("invalid manifest: migrations[%d] has an empty run command", i)
-		}
-		if err := validateMigrationFrom(migration.From); err != nil {
-			return fmt.Errorf("invalid manifest: migrations[%d]: %w", i, err)
-		}
 	}
 	return nil
 }
@@ -489,31 +460,6 @@ func validateManifestConditionals(conds []ManifestConditional) error {
 	return nil
 }
 
-func validateManifestRenames(renames map[string]string) error {
-	for old, new := range renames {
-		if strings.TrimSpace(old) == "" || strings.TrimSpace(new) == "" {
-			return fmt.Errorf("invalid manifest: rename %q -> %q must have non-empty paths", old, new)
-		}
-		if old == new {
-			return fmt.Errorf("invalid manifest: rename %q maps to itself", old)
-		}
-	}
-	return nil
-}
-
-func validateMigrationFrom(from string) error {
-	if from == "" {
-		return nil
-	}
-	if _, err := semver.NewConstraint(from); err == nil {
-		return nil
-	}
-	if hexPrefix.MatchString(from) {
-		return nil
-	}
-	return fmt.Errorf("bad migration from %q: must be a semver range or a 7-64 hex commit prefix", from)
-}
-
 // DiffInputs compares stored data against a new manifest and reports input
 // keys the project has never answered. Sync uses it to ask only for
 // genuinely new inputs instead of replaying every prompt on each sync.
@@ -546,30 +492,6 @@ func DiffInputs(oldData map[string]any, newManifest *Manifest) []string {
 	}
 	slices.Sort(out)
 	return out
-}
-
-// ResolveRenames follows the manifest renames chain for an old path.
-// Templates rename files across releases, so lock and base lookups must map
-// recorded paths forward instead of reporting every rename as delete+add.
-// ~keep
-func ResolveRenames(old string, renames map[string]string) string {
-	if len(renames) == 0 || old == "" {
-		return old
-	}
-	cur := old
-	seen := map[string]bool{cur: true}
-	for range len(renames) + 1 {
-		next, ok := renames[cur]
-		if !ok || next == "" || next == cur {
-			return cur
-		}
-		if seen[next] {
-			return cur
-		}
-		seen[next] = true
-		cur = next
-	}
-	return cur
 }
 
 func isRegistryURI(raw string) bool {

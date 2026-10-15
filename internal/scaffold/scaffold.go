@@ -30,7 +30,6 @@ type Options struct {
 	Conflict       ConflictMode
 	DataFile       string
 	Defaults       bool
-	AllowHooks     bool
 	Skip           []string
 	Engine         string
 	Verbose        bool
