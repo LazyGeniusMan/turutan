@@ -21,9 +21,10 @@ mise run pre-push:all   # release-style static binary with version ldflags
 
 # Author a registry, scaffold a starter template, cut a release.
 turutan registry init --author "Jane Doe <jane@example.com>" --name acme
-turutan registry create foo
+turutan registry create foo  # recorded as created-but-unreleased: no version yet
 turutan registry release foo minor fs
-# manifest: templates/foo/manifest/0.2.0.json, index releases prepended.
+# first cut is 0.1.0 whatever the bump: manifest templates/foo/manifest/0.1.0.json,
+# index releases prepended.
 
 # Point a name at the registry (fs/http/s3/git/oci URIs accepted).
 turutan registry add acme ./registry-dir
@@ -43,19 +44,21 @@ turutan version        # version/commit/date plus license notice
 
 ## Dogfood: this repo authors the turutan registry
 
-The registry is initialized and committed (`registry.json`, zero
-releases): `templates/default/` is unreleased source until the first CI
-dispatch cuts `0.1.0`. Template selection is explicit: `--template` flag
+The registry is initialized, its `default` template created-but-unreleased,
+and committed (`registry.json` carries the entry with zero releases):
+`templates/default/` is unreleased source until the first CI dispatch
+cuts `0.1.0`. Template selection is explicit: `--template` flag
 wins, then `TURUTAN_TEMPLATE`, then the user-config `template:`, defaulting
 to `turutan/default@latest` via the OCI fallback (unresolvable until that
 first publish).
 
 Local fs dogfood never mutates the committed index. `turutan:release`
-copies the committed empty `registry.json` plus `templates/` into the
-gitignored overlay `.tmp/turutan-dogfood/`, inits the overlay registry
-when missing, and cuts the fs release there (`same --force` on the
-unindexed template resolves to `0.1.0`), so local commands exercise real
-fs artifacts while the committed index stays empty.
+copies the committed `registry.json` (one entry, created, zero released)
+plus `templates/` into the gitignored overlay `.tmp/turutan-dogfood/`,
+inits the overlay registry when missing, and cuts the fs release there
+(`same --force` on the created-but-unreleased entry resolves the first
+cut to `0.1.0`), so local commands exercise real fs artifacts while the
+committed index stays release-free.
 Only the overlay outputs plus dogfood state stay gitignored:
 `templates/*/manifest/*.json`,
 `templates/*/releases/*.tar.gz`, `.config/turutan/state.yml` and
@@ -97,11 +100,15 @@ mise run turutan:release  # overlay copy, then registry release default same fs 
 TURUTAN_TEMPLATE=local/default@<v> turutan diff --ref <v>
 ```
 
-`registry release` bumps with `major|minor|patch` (new templates start at
-`0.1.0`) and rebuilds in place with `same --force` — no bump, just a
-fresh archive, manifest and index entry for the pinned version. `--force`
-is the rebuild switch: without it the command refuses to overwrite the
-versioned manifest, the release archive, or an already-listed version.
+`registry release` bumps with `major|minor|patch` (a created template
+with no releases starts at `0.1.0` whatever the bump) and rebuilds in
+place with `same --force` — no bump, just a fresh archive, manifest and
+index entry for the pinned version. `--force` is the rebuild switch:
+without it the command refuses to overwrite the versioned manifest, the
+release archive, or an already-listed version. `registry create --force`
+never deletes author content either: an existing non-empty template
+directory is moved aside to `<dir>.bak` (refusing when that backup
+already exists) before the starter is written fresh.
 The index entry keeps the latest manifest fields plus a newest-first
 `releases` history; versioned manifest files hold one version each.
 The fs archive bytes and the OCI layer bytes come from the same
@@ -133,9 +140,10 @@ bump the `TURUTAN_TEMPLATE` pin in `.config/mise/config.custom.toml`,
 state/lock/base back). Users stay on OCI:
 `turutan init ./myapp --template turutan/default@latest --defaults` needs
 no config. Publishing is a CI job (`.github/workflows/templates-publish.yml`,
-manual dispatch with a `major|minor|patch` input): on the committed empty
-index the first dispatch cuts `0.1.0` (unindexed templates always start at
-`0.1.0`, whatever the bump), pushes `default:<version>` to GHCR with
+manual dispatch with a `major|minor|patch` input): on the committed
+created-but-unreleased entry the first dispatch cuts `0.1.0` (templates
+with no releases always start at `0.1.0`, whatever the bump), pushes
+`default:<version>` to GHCR with
 `--uri-override`, and commits the bumped `registry.json` (tracked) plus
 force-adds the versioned manifest back (manifests stay gitignored until
 force-added). The first real release happens via that dispatch. The exact
@@ -163,6 +171,7 @@ template content carries its own license: each release records the
 template `.turutan.yml` license, and generated
 `.config/turutan/state.yml` records it as `templateLicense`
 (e.g. `"MIT-0"`). The registry is the source of truth for templates —
-this repo roots it (committed empty `registry.json`, unreleased
-`templates/default` source until the first publish cuts `0.1.0`); author
-with `registry init/create/release`.
+this repo roots it (committed `registry.json` with the
+created-but-unreleased `default` entry, unreleased `templates/default`
+source until the first publish cuts `0.1.0`); author with
+`registry init/create/release`.

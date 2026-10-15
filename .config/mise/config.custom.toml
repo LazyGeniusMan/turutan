@@ -88,7 +88,7 @@ description = "List template profiles offered and enabled"
 run = "${TURUTAN_BIN} profiles"
 
 [tasks."turutan:release"]
-description = "Rebuild the gitignored fs dogfood overlay from the committed empty index plus source tree; never mutates committed files"
+description = "Rebuild the gitignored fs dogfood overlay from the committed created-but-unreleased index plus source tree; never mutates committed files"
 run = """
 overlay=".tmp/turutan-dogfood"
 bin="$overlay/.bin/turutan"
