@@ -20,8 +20,8 @@ import (
 const defaultTestAuthor = "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)"
 
 // repoRootDir resolves the repository root from this test file location,
-// independent of the test working directory. It pins the unreleased source
-// tree only and never requires a committed registry index.
+// independent of the test working directory. It pins the committed empty
+// index plus the unreleased source tree: zero releases until CI dispatch.
 // ~keep
 func repoRootDir(t *testing.T) string {
 	t.Helper()
@@ -30,6 +30,8 @@ func repoRootDir(t *testing.T) string {
 	root := filepath.Join(filepath.Dir(file), "..", "..")
 	abs, err := filepath.Abs(root)
 	require.NoError(t, err)
+	require.FileExists(t, filepath.Join(abs, registry.IndexFileName),
+		"repo root must hold the committed empty registry index")
 	require.FileExists(t, filepath.Join(abs, "templates", "default", ".turutan.yml"),
 		"repo root must hold the unreleased default source tree")
 	return abs
@@ -37,8 +39,9 @@ func repoRootDir(t *testing.T) string {
 
 // releaseDefaultEphemeral copies the worktree source tree into a temp
 // registry root, cuts one fs release there, and returns the root plus the
-// indexed entry. Every subtest gets its own root: no worktree index or
-// manifest is ever read.
+// indexed entry. Every subtest gets its own root: the committed worktree
+// index (empty, zero releases) is never mutated nor read — each root seeds
+// its own equivalent empty index and cuts the unindexed first release.
 // ~keep
 func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) {
 	t.Helper()
@@ -87,13 +90,12 @@ func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) 
 	return regDir, entry
 }
 
-// TestDefaultTemplateRegistry pins the unreleased templates/default source
-// tree and the ephemeral fs release flow: the authoring manifest stays off
-// the legacy git source, the first cut starts at 0.1.0 with a relative fs
-// URI, bundle bytes stay deterministic and immutable, and the OCI
-// first-publish path needs --uri-override. Nothing is released yet, so no
-// subtest touches the worktree index or a committed manifest. It touches no
-// network.
+// TestDefaultTemplateRegistry pins the committed empty index (initialized,
+// zero releases) plus the unreleased templates/default source tree: the
+// authoring manifest stays off the legacy git source, the first cut starts
+// at 0.1.0 with a relative fs URI, bundle bytes stay deterministic and
+// immutable, and the OCI first-publish path needs --uri-override. The first
+// real release lands via CI manual dispatch. It touches no network.
 // ~keep
 func TestDefaultTemplateRegistry(t *testing.T) {
 	root := repoRootDir(t)
@@ -112,13 +114,20 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NotEmpty(t, manifest.Inputs["project_name"])
 	})
 
-	t.Run("worktree holds no committed release", func(t *testing.T) {
-		_, err := os.Stat(filepath.Join(root, registry.IndexFileName))
-		require.True(t, os.IsNotExist(err),
-			"unreleased tree must not carry a worktree registry index")
+	t.Run("worktree holds initialized empty index, zero releases", func(t *testing.T) {
+		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
+		require.NoError(t, err)
+		require.Equal(t, "turutan", index.Name)
+		require.Empty(t, index.Templates, "committed index must carry zero released versions")
+		raw, err := os.ReadFile(filepath.Join(root, registry.IndexFileName)) // #nosec G304 -- root is derived from this test file location plus the fixed index file name
+		require.NoError(t, err)
+		for _, banned := range []string{"digest", "releases", "oci://", "templates/default/releases"} {
+			require.NotContains(t, string(raw), banned,
+				"empty index must not reference a release: %s", banned)
+		}
 		entries, err := os.ReadDir(filepath.Join(treeDir, "manifest"))
 		if err == nil {
-			require.Empty(t, entries, "unreleased tree must not carry committed manifests")
+			require.Empty(t, entries, "zero releases means no committed manifests")
 		}
 	})
 

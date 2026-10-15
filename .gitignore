@@ -1,7 +1,6 @@
 .config/turutan/templates/
 .config/turutan/state.yml
 .config/turutan/lock.json
-registry.json
 templates/*/manifest/
 templates/*/releases/
 .config/ai-rulez.bak*

@@ -88,12 +88,13 @@ description = "List template profiles offered and enabled"
 run = "${TURUTAN_BIN} profiles"
 
 [tasks."turutan:release"]
-description = "Rebuild the gitignored fs dogfood overlay from the unreleased source tree; never mutates committed files"
+description = "Rebuild the gitignored fs dogfood overlay from the committed empty index plus source tree; never mutates committed files"
 run = """
 overlay=".tmp/turutan-dogfood"
 bin="$overlay/.bin/turutan"
 rm -rf "$overlay"
 mkdir -p "$overlay/templates" "$(dirname "$bin")"
+cp registry.json "$overlay/registry.json"
 cp -r templates/. "$overlay/templates/"
 go build -o "$bin" ./cmd/turutan
 if [ ! -f "$overlay/registry.json" ]; then
