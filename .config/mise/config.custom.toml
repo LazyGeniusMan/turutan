@@ -9,6 +9,8 @@ minimum_release_age_excludes = [
 
 [env]
 TURUTAN_BIN = "go run ./cmd/turutan"
+TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml"
+TURUTAN_TEMPLATE = "local/default@0.1.0"
 PROTON_PASS_KEY_PROVIDER = "{{ exec(command='sh scripts/proton-pass-detect-key-provider.sh') | trim }}"
 
 [tools]
@@ -60,3 +62,21 @@ if ! pass-cli info; then
     pass-cli login
 fi
 '''
+
+[tasks."turutan:release"]
+description = "Rebuild generated registry artifacts (index, archive, manifest) for the pinned version; bootstraps missing dogfood state"
+run = """
+if [ ! -f registry.json ]; then
+  ${TURUTAN_BIN:-turutan} registry init --name turutan --author "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)" --version 0.1.0
+fi
+${TURUTAN_BIN:-turutan} registry release default same fs --force
+if [ ! -f .config/turutan/state.yml ]; then
+  tmp=$(mktemp -d)
+  ${TURUTAN_BIN:-turutan} init "$tmp" --data-file .config/turutan/dogfood-data.yml --defaults --non-interactive
+  cp "$tmp/.config/turutan/state.yml" .config/turutan/state.yml
+  cp "$tmp/.config/turutan/lock.json" .config/turutan/lock.json
+  mkdir -p .config/turutan/templates
+  cp -r "$tmp/.config/turutan/templates/." .config/turutan/templates/
+  rm -rf "$tmp"
+fi
+"""

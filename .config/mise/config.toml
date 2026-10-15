@@ -72,54 +72,29 @@ run = "updatecli pipeline apply --config .config/updatecli/"
 [tasks.release]
 run = "goreleaser release --clean"
 
-[tasks."turutan:release"]
-description = "Rebuild generated registry artifacts (index, archive, manifest) for the pinned version; bootstraps missing dogfood state"
-env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
-run = """
-if [ ! -f registry.json ]; then
-  ${TURUTAN_BIN:-turutan} registry init --name turutan --author "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)" --version 0.1.0
-fi
-${TURUTAN_BIN:-turutan} registry release default same fs --force
-if [ ! -f .config/turutan/state.yml ]; then
-  tmp=$(mktemp -d)
-  ${TURUTAN_BIN:-turutan} init "$tmp" --data-file .config/turutan/dogfood-data.yml --defaults --non-interactive
-  cp "$tmp/.config/turutan/state.yml" .config/turutan/state.yml
-  cp "$tmp/.config/turutan/lock.json" .config/turutan/lock.json
-  mkdir -p .config/turutan/templates
-  cp -r "$tmp/.config/turutan/templates/." .config/turutan/templates/
-  rm -rf "$tmp"
-fi
-"""
-
 [tasks."turutan:diff"]
 description = "Show template drift for this project"
-depends = ["turutan:release"]
-env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} diff"
 
 [tasks."turutan:check"]
 description = "Check whether the template has updates"
-depends = ["turutan:release"]
-env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} check"
 
 [tasks."turutan:update"]
 description = "Merge template updates into this project"
-depends = ["turutan:release"]
-env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} update"
 
 [tasks."turutan:state-sync"]
 description = "Re-render hand-edited state inputs at the pinned commit"
-depends = ["turutan:release"]
-env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} state sync"
 
 [tasks."turutan:state-input"]
 description = "Re-answer stored inputs and re-render at the pinned commit"
-depends = ["turutan:release"]
-env = { TURUTAN_CONFIG = "{{ config_root }}/.config/turutan/dogfood-user.yml", TURUTAN_TEMPLATE = "local/default@0.1.0" }
 run = "${TURUTAN_BIN:-turutan} state input"
+
+[tasks."turutan:profiles"]
+description = "List template profiles offered and enabled"
+run = "${TURUTAN_BIN:-turutan} profiles"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"

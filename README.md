@@ -55,18 +55,23 @@ All generated registry artifacts are gitignored and rebuilt on demand:
 `registry.json`, `templates/*/manifest/`, `templates/*/releases/`,
 `.config/turutan/state.yml` and `.config/turutan/lock.json`. Only
 hand-written seeds stay committed (`dogfood-user.yml`,
-`dogfood-data.yml` — they hold no digests or absolute paths). Every
-`turutan:*` task depends on `turutan:release`, so a fresh clone works
-offline with one command:
+`dogfood-data.yml` — they hold no digests or absolute paths). The
+`turutan:*` tasks are plain user commands
+(`${TURUTAN_BIN:-turutan} <subcommand>`) with no dogfood wiring — that
+lives in `.config/mise/config.custom.toml`, the hand-edit file that never
+ships to template users (`turutan update` preserves it). It sets
+`TURUTAN_CONFIG` (`.config/turutan/dogfood-user.yml`: `local` registry →
+repo root), pins `TURUTAN_TEMPLATE=local/default@0.1.0`, and hosts the
+`turutan:release` author task. On a fresh clone run the release once, then
+everything works offline:
 
 ```sh
-mise run turutan:check   # rebuilds artifacts, uses local/default@0.1.0, no network
-mise run turutan:diff    # drift vs the pinned archive (exit 2 when drifted)
+mise run turutan:release  # one-time bootstrap on a fresh clone (see author loop)
+mise run turutan:check    # uses local/default@0.1.0, no network
+mise run turutan:diff     # drift vs the pinned archive (exit 2 when drifted)
 ```
 
-The mise `turutan:*` tasks point `TURUTAN_CONFIG` at
-`.config/turutan/dogfood-user.yml` (`local` registry → repo root) and pin
-`TURUTAN_TEMPLATE=local/default@0.1.0`. The repo's own
+The repo's own
 `.config/turutan/state.yml` tracks `local/default@0.1.0` with the data in
 `.config/turutan/dogfood-data.yml`, storing the pre-resolution relative
 URI (`templates/default/releases/0.1.0.tar.gz`) so the checkout moves
@@ -93,7 +98,7 @@ versioned manifest, the release archive, or an already-listed version.
 The index entry keeps the latest manifest fields plus a newest-first
 `releases` history; versioned manifest files hold one version each.
 
-Bump the `TURUTAN_TEMPLATE` pin in the mise tasks, `dogfood-user.yml` and
+Bump the `TURUTAN_TEMPLATE` pin in `.config/mise/config.custom.toml`, `dogfood-user.yml` and
 `.config/turutan/state.yml` (re-bootstrap via `turutan init` into a temp
 dir with `--data-file .config/turutan/dogfood-data.yml`, then copy the new
 state/lock/base back) to dogfood the new release. Users stay on OCI:
