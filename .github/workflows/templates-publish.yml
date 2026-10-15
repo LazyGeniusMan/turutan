@@ -45,6 +45,12 @@ jobs:
           TURUTAN_OCI_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           go build -o "${RUNNER_TEMP}/turutan" ./cmd/turutan
+          if [ ! -f registry.json ]; then
+            AUTHOR="Andriyansyah Nurrachman <git@yansyah.my.id>"
+            AUTHOR="$AUTHOR (https://yansyah.my.id)"
+            "${RUNNER_TEMP}/turutan" registry init \
+              --name turutan --author "$AUTHOR"
+          fi
           line="$("${RUNNER_TEMP}/turutan" registry release \
             default "${BUMP}" oci --uri-override \
             oci://ghcr.io/lazygeniusman/turutan/templates/default)"
@@ -52,7 +58,7 @@ jobs:
           version="${line#released default@}"
           version="${version%% *}"
           printf 'version=%s\n' "$version" >> "$GITHUB_ENV"
-          git add registry.json \
+          git add -f registry.json \
             "templates/default/manifest/${version}.json"
           git status --short
           git diff --cached --quiet || git commit -m \

@@ -23,7 +23,7 @@ mise run pre-push:all   # release-style static binary with version ldflags
 turutan registry init --author "Jane Doe <jane@example.com>" --name acme
 turutan registry create foo
 turutan registry release foo minor fs
-# manifest: templates/foo/manifest/0.2.0.yml, index releases prepended.
+# manifest: templates/foo/manifest/0.2.0.json, index releases prepended.
 
 # Point a name at the registry (fs/http/s3/git/oci URIs accepted).
 turutan registry add acme ./registry-dir
@@ -43,19 +43,20 @@ turutan version        # version/commit/date plus license notice
 
 ## Dogfood: this repo authors the turutan registry
 
-The committed `registry.json` plus `templates/default/manifest/*.json`
-are the published truth: every entry carries an OCI URI
-(`oci://ghcr.io/lazygeniusman/turutan/templates/default:<v>`) with the
-deterministic bundle digest, so CI reads the latest release from git.
-Template selection is explicit: `--template` flag wins, then
-`TURUTAN_TEMPLATE`, then the user-config `template:`, defaulting to
-`turutan/default@latest` via the OCI fallback.
+Nothing is released yet. `registry.json` plus `templates/default/manifest/*.json`
+are gitignored and absent from the worktree: `templates/default/` is
+unreleased source until the first CI dispatch cuts `0.1.0`. Template
+selection is explicit: `--template` flag wins, then `TURUTAN_TEMPLATE`,
+then the user-config `template:`, defaulting to `turutan/default@latest`
+via the OCI fallback (unresolvable until that first publish).
 
-Local fs dogfood never touches the committed set. `turutan:release`
-copies `registry.json` + `templates/` into the gitignored overlay
-`.tmp/turutan-dogfood/` and cuts the fs release there, so the worktree
-keeps its OCI URIs while local commands exercise real fs artifacts.
+Local fs dogfood never creates a worktree index. `turutan:release`
+copies `templates/` into the gitignored overlay
+`.tmp/turutan-dogfood/`, inits the overlay registry when missing, and cuts
+the fs release there, so local commands exercise real fs artifacts while
+the worktree stays unreleased.
 Only the overlay outputs plus dogfood state stay gitignored:
+`registry.json`, `templates/*/manifest/*.json`,
 `templates/*/releases/*.tar.gz`, `.config/turutan/state.yml` and
 `.config/turutan/lock.json`. Hand-written seeds stay committed
 (`dogfood-user.yml`, `dogfood-data.yml` — they hold no digests or
@@ -105,14 +106,15 @@ The index entry keeps the latest manifest fields plus a newest-first
 The fs archive bytes and the OCI layer bytes come from the same
 `BundleBytes` call over the same staged tree, so one digest covers both.
 
-Simulate the next release outside the worktree committed set: copy the
-committed set to a temp root, bump there, and dogfood a scratch project
-from it (relative registry addresses only, everything disposable):
+Simulate the next release outside the worktree: init a fresh temp root,
+release there, and dogfood a scratch project from it (relative registry
+addresses only, everything disposable):
 
 ```sh
 sim=$(mktemp -d)
-cp registry.json "$sim/registry.json" && cp -r templates "$sim/templates"
 go build -o "$sim/turutan-bin" ./cmd/turutan
+cp -r templates "$sim/templates"
+(cd "$sim" && ./turutan-bin registry init --name turutan --author "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)")
 printf -- '---\ntemplate: local/default@0.1.0\nregistries:\n  local: .\n' > "$sim/reg.yml"
 (cd "$sim" && TURUTAN_CONFIG="$sim/reg.yml" ./turutan-bin registry release default minor fs --force)
 (cd "$sim" && TURUTAN_CONFIG="$sim/reg.yml" TURUTAN_TEMPLATE=local/default@0.2.0 \
@@ -130,11 +132,13 @@ bump the `TURUTAN_TEMPLATE` pin in `.config/mise/config.custom.toml`,
 state/lock/base back). Users stay on OCI:
 `turutan init ./myapp --template turutan/default@latest --defaults` needs
 no config. Publishing is a CI job (`.github/workflows/templates-publish.yml`,
-manual dispatch with a `major|minor|patch` input): it reads the latest
-from git, pushes `default:<version>` to GHCR, and commits the bumped
-`registry.json` + versioned manifest back. The only hand-run publish is
-the very first OCI release for a new repo (no creds in a sandbox):
-`turutan registry release default <major|minor|patch> oci --uri-override
+manual dispatch with a `major|minor|patch` input): on an empty tree it
+inits the registry, pushes `default:<version>` to GHCR with
+`--uri-override`, and force-adds the bumped `registry.json` + versioned
+manifest back (they stay gitignored until that first commit lands). The
+first real release happens via that dispatch. The equivalent hand-run
+publish for a new repo (no creds in a sandbox) is `registry init` first,
+then `turutan registry release default <major|minor|patch> oci --uri-override
 oci://ghcr.io/lazygeniusman/turutan/templates/default` with
 `TURUTAN_OCI_USER` + `TURUTAN_OCI_PASSWORD` (or `TURUTAN_OCI_TOKEN`) set.
 
@@ -157,5 +161,6 @@ template content carries its own license: each release records the
 template `.turutan.yml` license, and generated
 `.config/turutan/state.yml` records it as `templateLicense`
 (e.g. `"MIT-0"`). The registry is the source of truth for templates —
-this repo roots it (`registry.json`, `templates/default`); author with
+this repo roots it (unreleased `templates/default` source until the first
+publish lands `registry.json`); author with
 `registry init/create/release`.

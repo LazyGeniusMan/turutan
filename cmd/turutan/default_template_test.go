@@ -17,8 +17,11 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-// repoRootDir resolves the repository root (the turutan registry root)
-// from this test file location, independent of the test working directory.
+const defaultTestAuthor = "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)"
+
+// repoRootDir resolves the repository root from this test file location,
+// independent of the test working directory. It pins the unreleased source
+// tree only and never requires a committed registry index.
 // ~keep
 func repoRootDir(t *testing.T) string {
 	t.Helper()
@@ -27,16 +30,70 @@ func repoRootDir(t *testing.T) string {
 	root := filepath.Join(filepath.Dir(file), "..", "..")
 	abs, err := filepath.Abs(root)
 	require.NoError(t, err)
-	require.FileExists(t, filepath.Join(abs, registry.IndexFileName),
-		"repo root must hold the registry index")
+	require.FileExists(t, filepath.Join(abs, "templates", "default", ".turutan.yml"),
+		"repo root must hold the unreleased default source tree")
 	return abs
 }
 
-// TestDefaultTemplateRegistry pins the recovered templates/default tree:
-// the authoring manifest migrated off the legacy git source, the committed
-// OCI release at 0.1.0 with its single-version manifest and index history,
-// bundle-bytes digest equivalence with the pushed OCI layer, and offline
-// latest-version resolution from the committed index. It touches no network.
+// releaseDefaultEphemeral copies the worktree source tree into a temp
+// registry root, cuts one fs release there, and returns the root plus the
+// indexed entry. Every subtest gets its own root: no worktree index or
+// manifest is ever read.
+// ~keep
+func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) {
+	t.Helper()
+	root := repoRootDir(t)
+	regDir := t.TempDir()
+	author, err := registry.ParseAuthor(defaultTestAuthor)
+	require.NoError(t, err)
+	index := &registry.RegistryIndex{Name: "turutan", Version: "0.1.0", Author: author}
+	require.NoError(t, registry.SaveIndexFile(filepath.Join(regDir, registry.IndexFileName), index))
+	srcDir := filepath.Join(root, "templates", "default")
+	dstDir := filepath.Join(regDir, "templates", "default")
+	require.NoError(t, registry.CopyTree(srcDir, dstDir))
+	loaded, err := registry.LoadIndexFile(filepath.Join(regDir, registry.IndexFileName))
+	require.NoError(t, err)
+	next, existed, err := registry.NextReleaseVersion(loaded, "default", registry.ReleasePatch)
+	require.NoError(t, err)
+	require.False(t, existed, "unindexed first release has no prior version")
+	require.Equal(t, "0.1.0", next)
+	uri, err := registry.BuildReleaseURI("fs", "default", next, "", nil)
+	require.NoError(t, err)
+	staged, cleanup, err := registry.StageReleaseTree(dstDir)
+	require.NoError(t, err)
+	defer cleanup()
+	backendURI, err := uri.ResolveRelativeTo(regDir)
+	require.NoError(t, err)
+	backend, err := registry.BackendFor(backendURI.Scheme)
+	require.NoError(t, err)
+	digest, err := backend.Bundle(t.Context(), staged, backendURI, registry.AuthConfig{})
+	require.NoError(t, err)
+	templateCfg, err := config.LoadManifest(os.DirFS(dstDir))
+	require.NoError(t, err)
+	manifestHash, err := registry.TemplateManifestHash(dstDir)
+	require.NoError(t, err)
+	manifest := registry.TemplateManifest{
+		Name: "default", Version: next, Author: author,
+		URI: uri, Digest: digest, MinEngine: templateCfg.MinEngine,
+		ManifestHash: manifestHash, License: templateCfg.License,
+	}
+	require.NoError(t, manifest.Validate())
+	_, err = registry.SaveVersionedManifest(regDir, &manifest)
+	require.NoError(t, err)
+	registry.UpsertIndexRelease(loaded, manifest)
+	require.NoError(t, registry.SaveIndexFile(filepath.Join(regDir, registry.IndexFileName), loaded))
+	entry, err := loaded.FindTemplate("default")
+	require.NoError(t, err)
+	return regDir, entry
+}
+
+// TestDefaultTemplateRegistry pins the unreleased templates/default source
+// tree and the ephemeral fs release flow: the authoring manifest stays off
+// the legacy git source, the first cut starts at 0.1.0 with a relative fs
+// URI, bundle bytes stay deterministic and immutable, and the OCI
+// first-publish path needs --uri-override. Nothing is released yet, so no
+// subtest touches the worktree index or a committed manifest. It touches no
+// network.
 // ~keep
 func TestDefaultTemplateRegistry(t *testing.T) {
 	root := repoRootDir(t)
@@ -55,58 +112,55 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NotEmpty(t, manifest.Inputs["project_name"])
 	})
 
-	t.Run("registry index tracks default at 0.1.0 with OCI uri", func(t *testing.T) {
-		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
-		require.NoError(t, err)
-		require.Equal(t, "turutan", index.Name)
-		entry, err := index.FindTemplate("default")
-		require.NoError(t, err)
+	t.Run("worktree holds no committed release", func(t *testing.T) {
+		_, err := os.Stat(filepath.Join(root, registry.IndexFileName))
+		require.True(t, os.IsNotExist(err),
+			"unreleased tree must not carry a worktree registry index")
+		entries, err := os.ReadDir(filepath.Join(treeDir, "manifest"))
+		if err == nil {
+			require.Empty(t, entries, "unreleased tree must not carry committed manifests")
+		}
+	})
+
+	t.Run("ephemeral fs release starts at 0.1.0 with relative uri", func(t *testing.T) {
+		regDir, entry := releaseDefaultEphemeral(t)
 		require.Equal(t, "0.1.0", entry.Version)
-		require.NotEmpty(t, entry.Releases)
-		require.Equal(t, "0.1.0", entry.Releases[0])
-		require.Equal(t, registry.SchemeOCI, entry.URI.Scheme)
-		require.Equal(t, "0.1.0", entry.URI.Ref)
-		require.Equal(t, registry.DefaultTemplateRef("0.1.0"), entry.URI.String())
+		require.Equal(t, []string{"0.1.0"}, entry.Releases)
+		require.Equal(t, registry.SchemeFS, entry.URI.Scheme)
+		require.Equal(t, registry.ReleaseSnapshotPath("default", "0.1.0"), entry.URI.String())
 		require.NotEmpty(t, entry.Digest)
-		staged, cleanup, err := registry.StageReleaseTree(treeDir)
+		staged, cleanup, err := registry.StageReleaseTree(filepath.Join(regDir, "templates", "default"))
 		require.NoError(t, err)
 		defer cleanup()
 		digest, err := registry.DigestDir(staged)
 		require.NoError(t, err)
 		require.Equal(t, entry.Digest, digest,
-			"committed digest must equal the staged bundle digest the OCI push records")
+			"ephemeral digest must equal the staged bundle digest")
 	})
 
 	t.Run("versioned manifest is a single version and matches index", func(t *testing.T) {
-		manifestPath := registry.VersionedManifestPath(root, "default", "0.1.0")
+		regDir, entry := releaseDefaultEphemeral(t)
+		manifestPath := registry.VersionedManifestPath(regDir, "default", "0.1.0")
 		require.FileExists(t, manifestPath)
-		require.Equal(t, filepath.Join(root, "templates", "default", "manifest", "0.1.0.json"), manifestPath)
-		versioned, err := registry.LoadVersionedManifest(root, "default", "0.1.0")
-		require.NoError(t, err)
-		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
-		require.NoError(t, err)
-		entry, err := index.FindTemplate("default")
+		versioned, err := registry.LoadVersionedManifest(regDir, "default", "0.1.0")
 		require.NoError(t, err)
 		require.Equal(t, entry.Version, versioned.Version)
 		require.Equal(t, entry.Digest, versioned.Digest)
 		require.Equal(t, entry.URI.String(), versioned.URI.String())
 	})
 
-	t.Run("bundle bytes equal the OCI layer bytes", func(t *testing.T) {
-		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
-		require.NoError(t, err)
-		entry, err := index.FindTemplate("default")
-		require.NoError(t, err)
-		versioned, err := registry.LoadVersionedManifest(root, "default", "0.1.0")
+	t.Run("bundle bytes equal the fs archive bytes", func(t *testing.T) {
+		regDir, entry := releaseDefaultEphemeral(t)
+		versioned, err := registry.LoadVersionedManifest(regDir, "default", "0.1.0")
 		require.NoError(t, err)
 		require.Equal(t, entry.Digest, versioned.Digest)
-		staged, cleanup, err := registry.StageReleaseTree(treeDir)
+		staged, cleanup, err := registry.StageReleaseTree(filepath.Join(regDir, "templates", "default"))
 		require.NoError(t, err)
 		defer cleanup()
 		blob, digest, err := registry.BundleBytes(staged)
 		require.NoError(t, err)
 		require.Equal(t, entry.Digest, digest,
-			"fs bundle bytes and the OCI layer share one BundleBytes path: digests must match")
+			"fs bundle bytes share one BundleBytes path: digests must match")
 		_, repeat, err := registry.BundleBytes(staged)
 		require.NoError(t, err)
 		require.Equal(t, digest, repeat, "bundle bytes must be deterministic")
@@ -124,14 +178,15 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 			"bundle must stay immutable: digest must match the release manifest")
 	})
 
-	t.Run("committed OCI index drives latest-version resolution", func(t *testing.T) {
+	t.Run("ephemeral fs index drives latest-version resolution", func(t *testing.T) {
+		regDir, _ := releaseDefaultEphemeral(t)
 		rr, err := scaffold.ResolveRegistry(t.Context(),
-			map[string]string{"local": "fs:" + filepath.ToSlash(root)}, "local")
+			map[string]string{"local": "fs:" + filepath.ToSlash(regDir)}, "local")
 		require.NoError(t, err)
 		entry, err := rr.Idx.FindTemplate("default")
 		require.NoError(t, err)
 		require.Equal(t, "0.1.0", entry.Version)
-		require.Equal(t, registry.DefaultTemplateRef("0.1.0"), entry.URI.String())
+		require.Equal(t, registry.ReleaseSnapshotPath("default", "0.1.0"), entry.URI.String())
 		manifest := entry.Manifest()
 		require.Equal(t, "default", manifest.Name)
 		require.Equal(t, "0.1.0", manifest.Version)
@@ -139,14 +194,16 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.Equal(t, entry.URI.String(), manifest.URI.String())
 	})
 
-	t.Run("state stores the relative uri", func(t *testing.T) {
-		state, err := config.LoadState(os.DirFS(root))
-		if err != nil {
-			t.Skipf("no dogfood state in test checkout: %v", err)
-		}
-		require.NotContains(t, state.TemplateURI, "fs:/",
-			"state must store the pre-resolution relative URI, got %q", state.TemplateURI)
-		require.Equal(t, "templates/default/releases/0.1.0.tar.gz", state.TemplateURI)
+	t.Run("oci first release needs uri override", func(t *testing.T) {
+		_, err := registry.BuildReleaseURI("oci", "default", "0.1.0", "", nil)
+		require.Error(t, err, "unindexed OCI first cut cannot guess the host")
+		const publishRepo = "oci://ghcr.io/lazygeniusman/turutan/templates/default"
+		uri, err := registry.BuildReleaseURI("oci", "default", "0.1.0", publishRepo, nil)
+		require.NoError(t, err)
+		require.Equal(t, registry.SchemeOCI, uri.Scheme)
+		require.Equal(t, "0.1.0", uri.Ref)
+		require.True(t, strings.HasPrefix(uri.String(), publishRepo+":"),
+			"publish uri must address the user-facing repo, got %q", uri.String())
 	})
 
 	t.Run("oci publish uri builds offline with override", func(t *testing.T) {
