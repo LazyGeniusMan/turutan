@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,10 +33,10 @@ func repoRootDir(t *testing.T) string {
 }
 
 // TestDefaultTemplateRegistry pins the recovered templates/default tree:
-// the authoring manifest migrated off the legacy git source, the fs
-// archive release at 0.1.0 with its single-version manifest and index
-// history, offline fetch from the archive, and the OCI publish URI users
-// need. It touches no network.
+// the authoring manifest migrated off the legacy git source, the committed
+// OCI release at 0.1.0 with its single-version manifest and index history,
+// bundle-bytes digest equivalence with the pushed OCI layer, and offline
+// latest-version resolution from the committed index. It touches no network.
 // ~keep
 func TestDefaultTemplateRegistry(t *testing.T) {
 	root := repoRootDir(t)
@@ -54,7 +55,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NotEmpty(t, manifest.Inputs["project_name"])
 	})
 
-	t.Run("registry index tracks default at 0.1.0 with relative archive uri", func(t *testing.T) {
+	t.Run("registry index tracks default at 0.1.0 with OCI uri", func(t *testing.T) {
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
 		require.NoError(t, err)
 		require.Equal(t, "turutan", index.Name)
@@ -63,11 +64,17 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.Equal(t, "0.1.0", entry.Version)
 		require.NotEmpty(t, entry.Releases)
 		require.Equal(t, "0.1.0", entry.Releases[0])
-		require.True(t, entry.URI.IsRelative(),
-			"dogfood release uri must stay fs-relative, got %q", entry.URI.String())
-		require.Equal(t, registry.ReleaseSnapshotPath("default", "0.1.0"), entry.URI.Path)
-		require.Equal(t, "templates/default/releases/0.1.0.tar.gz", entry.URI.String())
+		require.Equal(t, registry.SchemeOCI, entry.URI.Scheme)
+		require.Equal(t, "0.1.0", entry.URI.Ref)
+		require.Equal(t, registry.DefaultTemplateRef("0.1.0"), entry.URI.String())
 		require.NotEmpty(t, entry.Digest)
+		staged, cleanup, err := registry.StageReleaseTree(treeDir)
+		require.NoError(t, err)
+		defer cleanup()
+		digest, err := registry.DigestDir(staged)
+		require.NoError(t, err)
+		require.Equal(t, entry.Digest, digest,
+			"committed digest must equal the staged bundle digest the OCI push records")
 	})
 
 	t.Run("versioned manifest is a single version and matches index", func(t *testing.T) {
@@ -85,53 +92,51 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.Equal(t, entry.URI.String(), versioned.URI.String())
 	})
 
-	t.Run("release archive extracts minus meta", func(t *testing.T) {
-		archive := filepath.Join(root,
-			filepath.FromSlash(registry.ReleaseSnapshotPath("default", "0.1.0")))
-		require.FileExists(t, archive)
+	t.Run("bundle bytes equal the OCI layer bytes", func(t *testing.T) {
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
 		require.NoError(t, err)
 		entry, err := index.FindTemplate("default")
 		require.NoError(t, err)
+		versioned, err := registry.LoadVersionedManifest(root, "default", "0.1.0")
+		require.NoError(t, err)
+		require.Equal(t, entry.Digest, versioned.Digest)
+		staged, cleanup, err := registry.StageReleaseTree(treeDir)
+		require.NoError(t, err)
+		defer cleanup()
+		blob, digest, err := registry.BundleBytes(staged)
+		require.NoError(t, err)
+		require.Equal(t, entry.Digest, digest,
+			"fs bundle bytes and the OCI layer share one BundleBytes path: digests must match")
+		_, repeat, err := registry.BundleBytes(staged)
+		require.NoError(t, err)
+		require.Equal(t, digest, repeat, "bundle bytes must be deterministic")
 		dest := t.TempDir()
-		uri, err := entry.URI.ResolveRelativeTo(root)
-		require.NoError(t, err)
-		backend, err := registry.BackendFor(uri.Scheme)
-		require.NoError(t, err)
-		require.NoError(t, backend.Fetch(t.Context(), uri, registry.AuthConfig{}, dest))
+		require.NoError(t, registry.ExtractBundle(bytes.NewReader(blob), dest))
 		require.FileExists(t, filepath.Join(dest, ".turutan.yml"))
 		for _, meta := range []string{"manifest", "releases"} {
 			_, err := os.Stat(filepath.Join(dest, meta))
 			require.True(t, os.IsNotExist(err),
-				"archive must never bundle its own release history: %s", meta)
+				"bundle must never contain its own release history: %s", meta)
 		}
-		digest, err := registry.DigestDir(dest)
+		roundTrip, err := registry.DigestDir(dest)
 		require.NoError(t, err)
-		require.Equal(t, entry.Digest, digest,
-			"archive must stay immutable: digest must match the release manifest")
+		require.Equal(t, entry.Digest, roundTrip,
+			"bundle must stay immutable: digest must match the release manifest")
 	})
 
-	t.Run("fs fetch returns the stored relative uri", func(t *testing.T) {
-		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
+	t.Run("committed OCI index drives latest-version resolution", func(t *testing.T) {
+		rr, err := scaffold.ResolveRegistry(t.Context(),
+			map[string]string{"local": "fs:" + filepath.ToSlash(root)}, "local")
 		require.NoError(t, err)
-		entry, err := index.FindTemplate("default")
+		entry, err := rr.Idx.FindTemplate("default")
 		require.NoError(t, err)
-		rr := &scaffold.ResolvedRegistry{
-			Name: "local",
-			Root: root,
-			Idx:  index,
-		}
+		require.Equal(t, "0.1.0", entry.Version)
+		require.Equal(t, registry.DefaultTemplateRef("0.1.0"), entry.URI.String())
 		manifest := entry.Manifest()
-		dir, fetchURI, cleanup, err := scaffold.FetchTemplateBundle(t.Context(), rr, &manifest)
-		require.NoError(t, err)
-		defer cleanup()
-		require.Equal(t, "templates/default/releases/0.1.0.tar.gz", fetchURI)
-		require.FileExists(t, filepath.Join(dir, ".turutan.yml"))
-		for _, meta := range []string{"manifest", "releases"} {
-			_, err := os.Stat(filepath.Join(dir, meta))
-			require.True(t, os.IsNotExist(err),
-				"fetched bundle must not contain release metadata: %s", meta)
-		}
+		require.Equal(t, "default", manifest.Name)
+		require.Equal(t, "0.1.0", manifest.Version)
+		require.Equal(t, entry.Digest, manifest.Digest)
+		require.Equal(t, entry.URI.String(), manifest.URI.String())
 	})
 
 	t.Run("state stores the relative uri", func(t *testing.T) {
