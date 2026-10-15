@@ -88,12 +88,16 @@ description = "List template profiles offered and enabled"
 run = "${TURUTAN_BIN} profiles"
 
 [tasks."turutan:release"]
-description = "Rebuild generated registry artifacts (index, archive, manifest) for the pinned version; bootstraps missing dogfood state"
+description = "Rebuild the gitignored fs dogfood overlay from the committed OCI set; never mutates committed files"
 run = """
-if [ ! -f registry.json ]; then
-  ${TURUTAN_BIN:-turutan} registry init --name turutan --author "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)" --version 0.1.0
-fi
-${TURUTAN_BIN:-turutan} registry release default same fs --force
+overlay=".tmp/turutan-dogfood"
+bin="$overlay/.bin/turutan"
+rm -rf "$overlay"
+mkdir -p "$overlay/templates" "$(dirname "$bin")"
+cp registry.json "$overlay/registry.json"
+cp -r templates/. "$overlay/templates/"
+go build -o "$bin" ./cmd/turutan
+( cd "$overlay" && ./.bin/turutan registry release default same fs --force )
 if [ ! -f .config/turutan/state.yml ]; then
   tmp=$(mktemp -d)
   ${TURUTAN_BIN:-turutan} init "$tmp" --data-file .config/turutan/dogfood-data.yml --defaults --non-interactive
