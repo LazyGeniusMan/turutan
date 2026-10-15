@@ -339,4 +339,7 @@ func TestReleaseSnapshotArchivePath(t *testing.T) {
 	if !uri.IsRelative() {
 		t.Errorf("snapshot URI %q should stay relative", uri.String())
 	}
+	if want := "fs://" + got; uri.String() != want {
+		t.Errorf("snapshot URI.String() = %q, want %q", uri.String(), want)
+	}
 }

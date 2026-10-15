@@ -381,7 +381,7 @@ func (u URI) String() string {
 	switch u.Scheme {
 	case SchemeFS:
 		if u.IsRelative() {
-			return u.Path
+			return "fs://" + u.Path
 		}
 		return "fs:" + u.Path
 	case SchemeHTTP, SchemeHTTPS:

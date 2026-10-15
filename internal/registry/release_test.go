@@ -59,7 +59,7 @@ func TestBuildReleaseURIFromUnreleased(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildReleaseURI fs error: %v", err)
 	}
-	if uri.String() != ReleaseSnapshotPath("app", "0.1.0") {
+	if uri.String() != "fs://"+ReleaseSnapshotPath("app", "0.1.0") {
 		t.Errorf("uri = %q, want the versioned snapshot path", uri.String())
 	}
 	if _, err := BuildReleaseURI("oci", "app", "0.1.0", "", existing); err == nil {
@@ -97,7 +97,7 @@ func TestUpsertIndexReleasePromotesUnreleased(t *testing.T) {
 	if found.Version != "0.1.0" || len(found.Releases) != 1 || found.Releases[0] != "0.1.0" {
 		t.Errorf("entry = %+v, want version 0.1.0 with one release", found)
 	}
-	if found.URI == nil || found.URI.String() != ReleaseSnapshotPath("app", "0.1.0") {
+	if found.URI == nil || found.URI.String() != "fs://"+ReleaseSnapshotPath("app", "0.1.0") {
 		t.Errorf("uri = %+v, want the versioned snapshot path", found.URI)
 	}
 	if err := index.Validate(); err != nil {

@@ -33,7 +33,14 @@ func TestParseURI(t *testing.T) {
 			name:        "relative fs bare path",
 			input:       "templates/default",
 			expected:    URI{Scheme: SchemeFS, Path: "templates/default"},
-			expectedStr: "templates/default",
+			expectedStr: "fs://templates/default",
+			relative:    true,
+		},
+		{
+			name:        "relative fs explicit scheme",
+			input:       "fs://./.tmp/dogfood",
+			expected:    URI{Scheme: SchemeFS, Path: "./.tmp/dogfood"},
+			expectedStr: "fs://./.tmp/dogfood",
 			relative:    true,
 		},
 		{
@@ -210,7 +217,7 @@ func TestURIResolveRelativeTo(t *testing.T) {
 			name:     "fs against relative dir",
 			raw:      "a/b",
 			base:     "r",
-			expected: "r/a/b",
+			expected: "fs://r/a/b",
 		},
 		{
 			name:     "relative against http base",
@@ -252,6 +259,26 @@ func TestURIResolveRelativeTo(t *testing.T) {
 				t.Errorf("resolved = %q, want %q", got.String(), tt.expected)
 			}
 		})
+	}
+}
+
+func TestURIRelativeFSStringRoundTrip(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{"fs://./.tmp/dogfood", "fs://templates/default", "fs:./x/y"} {
+		first, err := ParseURI(raw)
+		if err != nil {
+			t.Fatalf("ParseURI(%q) error: %v", raw, err)
+		}
+		if !first.IsRelative() {
+			t.Fatalf("ParseURI(%q).IsRelative() = false, want true", raw)
+		}
+		second, err := ParseURI(first.String())
+		if err != nil {
+			t.Fatalf("ParseURI(%q.String() = %q) error: %v", raw, first.String(), err)
+		}
+		if second != first {
+			t.Errorf("round trip %q -> %q -> %+v, want %+v", raw, first.String(), second, first)
+		}
 	}
 }
 

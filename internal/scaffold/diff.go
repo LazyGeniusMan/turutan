@@ -394,7 +394,16 @@ func resolveRelativeAgainstRegistry(rel, base registry.URI) (registry.URI, error
 		return rel.ResolveRelativeTo(base.String())
 	}
 	if base.Scheme == registry.SchemeFS && base.IsRelative() {
-		return registry.URI{}, fmt.Errorf("relative uri %q needs an absolute registry URI", base.Path)
+		cwd, err := os.Getwd()
+		if err != nil {
+			return registry.URI{}, fmt.Errorf("resolving relative registry %q: %w", base.Path, err)
+		}
+		absBase, err := base.ResolveRelativeTo(cwd)
+		if err != nil {
+			return registry.URI{}, err
+		}
+		joined := strings.TrimSuffix(absBase.Path, "/") + "/" + strings.TrimPrefix(rel.Path, "/")
+		return registry.URI{Scheme: registry.SchemeFS, Path: joined}, nil
 	}
 	return registry.URI{}, fmt.Errorf("relative uri needs a local registry root")
 }

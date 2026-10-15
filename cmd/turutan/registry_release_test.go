@@ -53,7 +53,7 @@ func TestRegistryReleaseCmd(t *testing.T) {
 		require.Equal(t, "foo", manifest.Name)
 		require.Equal(t, "0.1.0", manifest.Version)
 		require.Contains(t, out, manifest.Digest)
-		require.Equal(t, "templates/foo/releases/0.1.0.tar.gz", manifest.URI.String())
+		require.Equal(t, "fs://templates/foo/releases/0.1.0.tar.gz", manifest.URI.String())
 		if _, err := os.Stat(manifestPath); err != nil {
 			t.Errorf("versioned manifest missing: %v", err)
 		}
