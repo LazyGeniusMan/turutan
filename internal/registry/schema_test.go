@@ -50,10 +50,10 @@ func TestSaveIndexFileStampsVersionAndSchema(t *testing.T) {
 	if !strings.Contains(string(data), `"schema_version": 1`) {
 		t.Errorf("index misses schema_version 1:\n%s", data)
 	}
-	if !strings.Contains(string(data), `"$schema": "./schemas/registry-index.schema.json"`) {
+	if !strings.Contains(string(data), `"$schema": ".config/turutan/schemas/registry-index.schema.json"`) {
 		t.Errorf("index misses its $schema reference:\n%s", data)
 	}
-	schema := readSchemaFile(t, filepath.Join(dir, "schemas", "registry-index.schema.json"))
+	schema := readSchemaFile(t, filepath.Join(dir, ".config", "turutan", "schemas", "registry-index.schema.json"))
 	if _, ok := schema["properties"]; !ok {
 		t.Errorf("index schema has no properties: %v", schema)
 	}
@@ -119,7 +119,7 @@ func TestSaveVersionedManifestSchemaRef(t *testing.T) {
 		if err != nil {
 			t.Fatalf("SaveVersionedManifest error: %v", err)
 		}
-		if want := "../../../schemas/template-manifest.schema.json"; manifest.Schema != want {
+		if want := "../../../.config/turutan/schemas/template-manifest.schema.json"; manifest.Schema != want {
 			t.Errorf("Schema = %q, want %q", manifest.Schema, want)
 		}
 		data, err := os.ReadFile(path) // #nosec G304 -- path is the SaveVersionedManifest result under t.TempDir()
@@ -136,7 +136,7 @@ func TestSaveVersionedManifestSchemaRef(t *testing.T) {
 		if loaded.SchemaVersion != SchemaVersion {
 			t.Errorf("loaded SchemaVersion = %d, want %d", loaded.SchemaVersion, SchemaVersion)
 		}
-		schema := readSchemaFile(t, filepath.Join(root, "schemas", "template-manifest.schema.json"))
+		schema := readSchemaFile(t, filepath.Join(root, ".config", "turutan", "schemas", "template-manifest.schema.json"))
 		if _, ok := schema["properties"]; !ok {
 			t.Errorf("manifest schema has no properties: %v", schema)
 		}
@@ -148,7 +148,7 @@ func TestSaveVersionedManifestSchemaRef(t *testing.T) {
 		if _, err := SaveVersionedManifest(root, manifest); err != nil {
 			t.Fatalf("SaveVersionedManifest error: %v", err)
 		}
-		if want := "../../../../schemas/template-manifest.schema.json"; manifest.Schema != want {
+		if want := "../../../../.config/turutan/schemas/template-manifest.schema.json"; manifest.Schema != want {
 			t.Errorf("Schema = %q, want %q", manifest.Schema, want)
 		}
 		if _, err := LoadVersionedManifest(root, "group/app", "0.1.0"); err != nil {
@@ -227,4 +227,45 @@ func TestGeneratedRegistrySchemasTrackStructs(t *testing.T) {
 		t.Parallel()
 		check(t, TemplateManifest{}, ManifestJSONSchema())
 	})
+}
+
+func TestSchemaRefsResolveToExistingFiles(t *testing.T) {
+	t.Parallel()
+	author, err := ParseAuthor("A <a@b.co>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri, err := ParseURI("templates/app/releases/0.1.0.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	index := &RegistryIndex{Name: "r", Version: "1.0.0", Author: author}
+	indexPath := filepath.Join(root, IndexFileName)
+	if err := SaveIndexFile(indexPath, index); err != nil {
+		t.Fatalf("SaveIndexFile error: %v", err)
+	}
+	if resolved := filepath.Join(filepath.Dir(indexPath), filepath.FromSlash(index.Schema)); resolved != filepath.Join(root, filepath.FromSlash(IndexSchemaFileName)) {
+		t.Errorf("index $schema %q resolves to %q, want %q", index.Schema, resolved, filepath.Join(root, filepath.FromSlash(IndexSchemaFileName)))
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(indexPath), filepath.FromSlash(index.Schema))); err != nil {
+		t.Errorf("index $schema %q does not resolve to an existing file: %v", index.Schema, err)
+	}
+	manifest := &TemplateManifest{Name: "app", Version: "0.1.0", Author: author, URI: uri}
+	manifestPath, err := SaveVersionedManifest(root, manifest)
+	if err != nil {
+		t.Fatalf("SaveVersionedManifest error: %v", err)
+	}
+	if resolved := filepath.Join(filepath.Dir(manifestPath), filepath.FromSlash(manifest.Schema)); resolved != filepath.Join(root, filepath.FromSlash(ManifestSchemaFileName)) {
+		t.Errorf("manifest $schema %q resolves to %q, want %q", manifest.Schema, resolved, filepath.Join(root, filepath.FromSlash(ManifestSchemaFileName)))
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(manifestPath), filepath.FromSlash(manifest.Schema))); err != nil {
+		t.Errorf("manifest $schema %q does not resolve to an existing file: %v", manifest.Schema, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(IndexSchemaFileName))); err != nil {
+		t.Errorf("missing index schema %q: %v", IndexSchemaFileName, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(ManifestSchemaFileName))); err != nil {
+		t.Errorf("missing manifest schema %q: %v", ManifestSchemaFileName, err)
+	}
 }

@@ -189,13 +189,18 @@ func LoadIndexFile(path string) (*RegistryIndex, error) {
 // ~keep
 func SaveIndexFile(path string, index *RegistryIndex) error {
 	index.SchemaVersion = SchemaVersion
-	index.Schema = IndexSchemaRef
+	dir := filepath.Dir(path)
+	schemaPath := filepath.Join(dir, filepath.FromSlash(IndexSchemaFileName))
+	ref, err := relativeSchemaRef(path, schemaPath)
+	if err != nil {
+		return fmt.Errorf("resolving index schema ref: %w", err)
+	}
+	index.Schema = ref
 	if err := index.Validate(); err != nil {
 		return err
 	}
-	if dir := filepath.Dir(path); dir != "" {
-		if err := schemagen.WriteFile(
-			filepath.Join(dir, filepath.FromSlash(IndexSchemaFileName)), IndexJSONSchema()); err != nil {
+	if dir != "" {
+		if err := schemagen.WriteFile(schemaPath, IndexJSONSchema()); err != nil {
 			return err
 		}
 	}

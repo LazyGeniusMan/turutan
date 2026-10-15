@@ -19,9 +19,9 @@ const SchemaVersion = 1
 // to their own location.
 // ~keep
 const (
-	IndexSchemaFileName    = "schemas/registry-index.schema.json"
-	ManifestSchemaFileName = "schemas/template-manifest.schema.json"
-	IndexSchemaRef         = "./schemas/registry-index.schema.json"
+	IndexSchemaFileName    = ".config/turutan/schemas/registry-index.schema.json"
+	ManifestSchemaFileName = ".config/turutan/schemas/template-manifest.schema.json"
+	IndexSchemaRef         = ".config/turutan/schemas/registry-index.schema.json"
 )
 
 // IndexJSONSchema returns the reflection-generated JSON Schema for

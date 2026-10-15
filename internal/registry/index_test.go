@@ -13,7 +13,7 @@ import (
 
 const exampleIndexJSON = `{
   "schema_version": 1,
-  "$schema": "./schemas/registry-index.schema.json",
+  "$schema": ".config/turutan/schemas/registry-index.schema.json",
   "name": "turutan",
   "version": "1.0.0",
   "author": "Turutan Maintainers <maintainers@example.com> (https://github.com/LazyGeniusMan/turutan)",

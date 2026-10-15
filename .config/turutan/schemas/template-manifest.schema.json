@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "contributors": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "digest": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "manifestHash": {
+      "type": "string"
+    },
+    "min-engine": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "uri": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "name",
+    "version",
+    "author",
+    "uri"
+  ],
+  "title": "turutan template manifest",
+  "type": "object"
+}
