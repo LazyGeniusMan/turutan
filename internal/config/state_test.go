@@ -56,18 +56,11 @@ func TestStateRoundTrip(t *testing.T) {
 			t.Errorf("ValidateState digest error: %v", err)
 		}
 	})
-	t.Run("legacy git kind rejected", func(t *testing.T) {
+	t.Run("unknown kind rejected", func(t *testing.T) {
 		state := validState()
-		state.SourceKind = "remote-git"
+		state.SourceKind = "s3"
 		if err := ValidateState(state); err == nil {
-			t.Error("ValidateState remote-git succeeded, want removal error")
-		}
-	})
-	t.Run("legacy filesystem kind rejected", func(t *testing.T) {
-		state := validState()
-		state.SourceKind = "filesystem"
-		if err := ValidateState(state); err == nil {
-			t.Error("ValidateState filesystem succeeded, want removal error")
+			t.Error("ValidateState unknown kind succeeded, want error")
 		}
 	})
 }
@@ -306,7 +299,7 @@ func TestLoadManifest(t *testing.T) {
 		}
 	})
 	t.Run("registry template manifest parses", func(t *testing.T) {
-		data := []byte("source: \"testreg/test@0.1.0\"\nmin-engine: \">=0.1.0\"\nlicense: MIT-0\n" +
+		data := []byte("min-engine: \">=0.1.0\"\nlicense: MIT-0\n" +
 			"excludes:\n  - \"gen/**\"\nconflict: inline\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
@@ -356,20 +349,11 @@ func TestLoadManifestConditionals(t *testing.T) {
 			t.Errorf("preserves = %v, want [keep.local]", cond.Preserves)
 		}
 	})
-	t.Run("legacy profiles key rejected", func(t *testing.T) {
+	t.Run("unknown key rejected", func(t *testing.T) {
 		t.Parallel()
-		data := []byte("profiles:\n  go:\n    label: Go\n    includes: [\"go.mod\"]\n")
+		data := []byte("unknown-field: true\n")
 		if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err == nil {
-			t.Error("LoadManifest with profiles key succeeded, want error (breaking change)")
-		}
-	})
-	t.Run("legacy ignore preserve keys rejected", func(t *testing.T) {
-		t.Parallel()
-		for _, key := range []string{"ignore", "preserve"} {
-			data := []byte(key + ": [\"a.txt\"]\n")
-			if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err == nil {
-				t.Errorf("LoadManifest with %s key succeeded, want error (breaking change)", key)
-			}
+			t.Error("LoadManifest with unknown key succeeded, want error")
 		}
 	})
 	t.Run("excludes and preserves parsed", func(t *testing.T) {
@@ -594,20 +578,12 @@ func TestValidateManifestDocFiles(t *testing.T) {
 	}
 }
 
-func TestLegacyManifestKeysRejected(t *testing.T) {
+func TestUnknownManifestKeysRejected(t *testing.T) {
 	t.Parallel()
-	for _, key := range []string{"hooks", "migrations", "renames"} {
+	for _, key := range []string{"unknown-field", "extra", "custom-key"} {
 		t.Run(key, func(t *testing.T) {
 			t.Parallel()
-			var data []byte
-			switch key {
-			case "hooks":
-				data = []byte("hooks:\n  post: [\"echo hi\"]\n")
-			case "migrations":
-				data = []byte("migrations:\n  - run: [\"echo hi\"]\n")
-			case "renames":
-				data = []byte("renames:\n  old.txt: new.txt\n")
-			}
+			data := []byte(key + ": true\n")
 			if _, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}}); err == nil {
 				t.Errorf("LoadManifest with %s key succeeded, want strict-decoder error", key)
 			}

@@ -94,7 +94,6 @@ type ManifestConditional struct {
 }
 
 type Manifest struct {
-	Source       string                   `yaml:"source"`
 	MinEngine    string                   `yaml:"min-engine"`
 	License      string                   `yaml:"license"`
 	LicenseFiles []string                 `yaml:"license-files"`
@@ -165,10 +164,6 @@ func ValidateState(state *State) error {
 		if _, err := semver.NewVersion(strings.TrimSpace(state.RequestedRef)); err != nil {
 			return fmt.Errorf("invalid state: requestedRef %q is not a semantic version: %w", state.RequestedRef, err)
 		}
-	case "remote-git", "local-git":
-		return fmt.Errorf("invalid state: sourceKind %q is no longer supported: re-init from a registry template", state.SourceKind)
-	case "filesystem":
-		return fmt.Errorf("invalid state: sourceKind %q is no longer supported: re-init from a registry template", state.SourceKind)
 	default:
 		return fmt.Errorf("invalid state: unknown sourceKind %q", state.SourceKind)
 	}
