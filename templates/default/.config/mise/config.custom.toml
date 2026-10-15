@@ -4,10 +4,11 @@
 # Seed-only: edit freely. Update re-renders the template copy but keeps the
 # file on disk, so local changes are preserved.
 #
-# Override the binary used by the turutan:* tasks (defaults to PATH lookup):
+# Override the binary used by the turutan:* tasks (defaults to PATH lookup)
+# by redefining the task here - this file loads last, so its tasks win:
 # ~keep
-# [env]
-# TURUTAN_BIN = "go run ./cmd/turutan"
+# [tasks."turutan:check"]
+# run = "go run ./cmd/turutan check"
 #
 # [tools]
 # "github:protonpass/pass-cli" = "2"

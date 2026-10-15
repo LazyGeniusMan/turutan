@@ -57,7 +57,7 @@ All generated registry artifacts are gitignored and rebuilt on demand:
 hand-written seeds stay committed (`dogfood-user.yml`,
 `dogfood-data.yml` — they hold no digests or absolute paths). The
 `turutan:*` tasks are plain user commands
-(`${TURUTAN_BIN:-turutan} <subcommand>`) with no dogfood wiring — that
+(`turutan <subcommand>`) with no dogfood wiring — that
 lives in `.config/mise/config.custom.toml`, the hand-edit file that never
 ships to template users (`turutan update` preserves it). It sets
 `TURUTAN_CONFIG` (`.config/turutan/dogfood-user.yml`: `local` registry →

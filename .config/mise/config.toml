@@ -74,27 +74,27 @@ run = "goreleaser release --clean"
 
 [tasks."turutan:diff"]
 description = "Show template drift for this project"
-run = "${TURUTAN_BIN:-turutan} diff"
+run = "turutan diff"
 
 [tasks."turutan:check"]
 description = "Check whether the template has updates"
-run = "${TURUTAN_BIN:-turutan} check"
+run = "turutan check"
 
 [tasks."turutan:update"]
 description = "Merge template updates into this project"
-run = "${TURUTAN_BIN:-turutan} update"
+run = "turutan update"
 
 [tasks."turutan:state-sync"]
 description = "Re-render hand-edited state inputs at the pinned commit"
-run = "${TURUTAN_BIN:-turutan} state sync"
+run = "turutan state sync"
 
 [tasks."turutan:state-input"]
 description = "Re-answer stored inputs and re-render at the pinned commit"
-run = "${TURUTAN_BIN:-turutan} state input"
+run = "turutan state input"
 
 [tasks."turutan:profiles"]
 description = "List template profiles offered and enabled"
-run = "${TURUTAN_BIN:-turutan} profiles"
+run = "turutan profiles"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"

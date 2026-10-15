@@ -63,6 +63,30 @@ if ! pass-cli info; then
 fi
 '''
 
+[tasks."turutan:diff"]
+description = "Show template drift for this project"
+run = "${TURUTAN_BIN} diff"
+
+[tasks."turutan:check"]
+description = "Check whether the template has updates"
+run = "${TURUTAN_BIN} check"
+
+[tasks."turutan:update"]
+description = "Merge template updates into this project"
+run = "${TURUTAN_BIN} update"
+
+[tasks."turutan:state-sync"]
+description = "Re-render hand-edited state inputs at the pinned commit"
+run = "${TURUTAN_BIN} state sync"
+
+[tasks."turutan:state-input"]
+description = "Re-answer stored inputs and re-render at the pinned commit"
+run = "${TURUTAN_BIN} state input"
+
+[tasks."turutan:profiles"]
+description = "List template profiles offered and enabled"
+run = "${TURUTAN_BIN} profiles"
+
 [tasks."turutan:release"]
 description = "Rebuild generated registry artifacts (index, archive, manifest) for the pinned version; bootstraps missing dogfood state"
 run = """
