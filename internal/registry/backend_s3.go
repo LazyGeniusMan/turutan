@@ -14,12 +14,18 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+// S3Backend uploads and downloads template bundles as S3 objects.
+// ~keep
 type S3Backend struct {
 	newClient S3ClientFactory
 }
 
+// S3ClientFactory opens an S3-compatible client for a uri with auth applied.
+// ~keep
 type S3ClientFactory func(uri URI, auth AuthConfig) (S3Client, error)
 
+// NewS3Backend returns an S3Backend using factory, defaulting to MinIO clients.
+// ~keep
 func NewS3Backend(factory S3ClientFactory) *S3Backend {
 	if factory == nil {
 		factory = DefaultS3ClientFactory
@@ -27,8 +33,12 @@ func NewS3Backend(factory S3ClientFactory) *S3Backend {
 	return &S3Backend{newClient: factory}
 }
 
+// Scheme reports the s3 scheme this backend handles.
+// ~keep
 func (b *S3Backend) Scheme() Scheme { return SchemeS3 }
 
+// Bundle archives srcDir and uploads it to the uri bucket key.
+// ~keep
 func (b *S3Backend) Bundle(ctx context.Context, srcDir string, uri URI, auth AuthConfig) (string, error) {
 	if err := requireScheme(uri, SchemeS3); err != nil {
 		return "", err
@@ -51,6 +61,8 @@ func (b *S3Backend) Bundle(ctx context.Context, srcDir string, uri URI, auth Aut
 	return digest, nil
 }
 
+// Fetch downloads the uri object and extracts its bundle into destDir.
+// ~keep
 func (b *S3Backend) Fetch(ctx context.Context, uri URI, auth AuthConfig, destDir string) error {
 	if err := requireScheme(uri, SchemeS3); err != nil {
 		return err
@@ -81,6 +93,8 @@ func s3ObjectKey(uri URI) string {
 	return uri.Path
 }
 
+// DefaultS3ClientFactory opens a MinIO client for any S3-compatible endpoint.
+// ~keep
 func DefaultS3ClientFactory(uri URI, auth AuthConfig) (S3Client, error) {
 	endpoint := uri.Endpoint
 	if endpoint == "" {

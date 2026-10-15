@@ -19,18 +19,26 @@ import (
 	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
+// OCIBackend pushes and pulls template bundles as OCI artifacts.
+// ~keep
 type OCIBackend struct {
 	newTarget OCITargetFactory
 }
 
+// OCITarget abstracts an OCI registry repository for push and pull.
+// ~keep
 type OCITarget interface {
 	content.Storage
 	Tag(ctx context.Context, desc ocispec.Descriptor, reference string) error
 	Resolve(ctx context.Context, reference string) (ocispec.Descriptor, error)
 }
 
+// OCITargetFactory opens the OCI repository for a uri with auth applied.
+// ~keep
 type OCITargetFactory func(ctx context.Context, uri URI, auth AuthConfig) (OCITarget, error)
 
+// NewOCIBackend returns an OCIBackend using factory, defaulting to remote registries.
+// ~keep
 func NewOCIBackend(factory OCITargetFactory) *OCIBackend {
 	if factory == nil {
 		factory = DefaultOCITargetFactory
@@ -38,8 +46,12 @@ func NewOCIBackend(factory OCITargetFactory) *OCIBackend {
 	return &OCIBackend{newTarget: factory}
 }
 
+// Scheme reports the oci scheme this backend handles.
+// ~keep
 func (b *OCIBackend) Scheme() Scheme { return SchemeOCI }
 
+// Bundle packs srcDir into an OCI artifact and pushes it under the uri tag.
+// ~keep
 func (b *OCIBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth AuthConfig) (string, error) {
 	if err := requireScheme(uri, SchemeOCI); err != nil {
 		return "", err
@@ -79,6 +91,8 @@ func (b *OCIBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth Au
 	return digestText, nil
 }
 
+// Fetch pulls the uri artifact and extracts its bundle into destDir.
+// ~keep
 func (b *OCIBackend) Fetch(ctx context.Context, uri URI, auth AuthConfig, destDir string) error {
 	if err := requireScheme(uri, SchemeOCI); err != nil {
 		return err
@@ -160,6 +174,8 @@ func fetchLayer(ctx context.Context, store *memory.Store, manifestDesc ocispec.D
 	return blob, nil
 }
 
+// DefaultOCITargetFactory opens the remote OCI repository for uri with auth wired in.
+// ~keep
 func DefaultOCITargetFactory(ctx context.Context, uri URI, auth AuthConfig) (OCITarget, error) {
 	repo, err := remote.NewRepository(uri.Host + "/" + uri.Path)
 	if err != nil {

@@ -20,10 +20,14 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/git"
 )
 
+// GitBackend publishes template trees as git tags and clones them back.
+// ~keep
 type GitBackend struct {
 	operator GitOperator
 }
 
+// GitOperator abstracts clone, commit and push so tests can stub git.
+// ~keep
 type GitOperator interface {
 	Clone(ctx context.Context, url, ref, dir string, depth int) (string, error)
 	Checkout(dir, sha string) error
@@ -49,6 +53,8 @@ func (defaultGitOperator) Push(ctx context.Context, dir, ref string, uri URI, au
 	return pushGitDir(ctx, dir, ref, uri, auth)
 }
 
+// NewGitBackend returns a GitBackend using operator, defaulting to real git.
+// ~keep
 func NewGitBackend(operator GitOperator) *GitBackend {
 	if operator == nil {
 		operator = defaultGitOperator{}
@@ -56,8 +62,12 @@ func NewGitBackend(operator GitOperator) *GitBackend {
 	return &GitBackend{operator: operator}
 }
 
+// Scheme reports the git scheme this backend handles.
+// ~keep
 func (b *GitBackend) Scheme() Scheme { return SchemeGit }
 
+// Bundle overlays srcDir onto the uri subpath, commits and pushes the tag.
+// ~keep
 func (b *GitBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth AuthConfig) (string, error) {
 	if err := requireScheme(uri, SchemeGit); err != nil {
 		return "", err
@@ -111,6 +121,8 @@ func (b *GitBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth Au
 	return digest, nil
 }
 
+// Fetch clones the uri ref and copies its subpath into destDir.
+// ~keep
 func (b *GitBackend) Fetch(ctx context.Context, uri URI, _ AuthConfig, destDir string) error {
 	if err := requireScheme(uri, SchemeGit); err != nil {
 		return err

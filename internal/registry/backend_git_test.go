@@ -62,12 +62,12 @@ func copyDirAll(srcDir, destDir string) error {
 			return err
 		}
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o750)
+			return os.MkdirAll(target, 0o750) // #nosec G122 -- test-only copy; target is SafeJoin-pinned to destDir under t.TempDir()
 		}
 		if d.Type()&fs.ModeSymlink != 0 || !d.Type().IsRegular() {
 			return nil
 		}
-		data, err := os.ReadFile(full)
+		data, err := os.ReadFile(full) // #nosec G304, G122 -- test-only copy under t.TempDir() walking srcDir with symlinks skipped
 		if err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func copyDirAll(srcDir, destDir string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		return os.WriteFile(target, data, info.Mode().Perm()) // #nosec G703, G122 -- test-only copy; target is SafeJoin-pinned to destDir under t.TempDir()
 	})
 }
 

@@ -31,7 +31,7 @@ func writeFixtureTemplate(t *testing.T, dir string) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Chmod(filepath.Join(dir, "scripts", "run.sh"), 0o755); err != nil {
+	if err := os.Chmod(filepath.Join(dir, "scripts", "run.sh"), 0o755); err != nil { // #nosec G302 -- test fixture needs the executable bit to verify bundles preserve exec perms
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "emptydir"), 0o750); err != nil {

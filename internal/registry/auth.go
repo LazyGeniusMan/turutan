@@ -58,6 +58,8 @@ func (a AuthConfig) HasCredentials() bool {
 	return a.Password != "" || a.Token != "" || a.SSHKey != ""
 }
 
+// BasicAuth returns the configured username and password when either is set.
+// ~keep
 func (a AuthConfig) BasicAuth() (username, password string, ok bool) {
 	if a.Username == "" && a.Password == "" {
 		return "", "", false
@@ -65,6 +67,8 @@ func (a AuthConfig) BasicAuth() (username, password string, ok bool) {
 	return a.Username, a.Password, true
 }
 
+// BearerToken returns the configured token for Authorization headers.
+// ~keep
 func (a AuthConfig) BearerToken() (string, bool) {
 	if a.Token == "" {
 		return "", false

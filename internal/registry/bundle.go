@@ -21,6 +21,8 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
+// Bundle media and artifact types label template bundles in OCI registries.
+// ~keep
 const (
 	BundleMediaType    = "application/vnd.turutan.template.v1+tar+gzip"
 	BundleArtifactType = "application/vnd.turutan.template.v1"
@@ -81,6 +83,8 @@ func collectBundleEntries(srcDir string) ([]bundleEntry, error) {
 	return entries, nil
 }
 
+// WriteBundle archives srcDir deterministically into w and returns its digest.
+// ~keep
 func WriteBundle(srcDir string, w io.Writer) (string, error) {
 	entries, err := collectBundleEntries(srcDir)
 	if err != nil {
@@ -128,6 +132,8 @@ func WriteBundle(srcDir string, w io.Writer) (string, error) {
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+// BundleBytes archives srcDir into memory and returns the bytes with its digest.
+// ~keep
 func BundleBytes(srcDir string) ([]byte, string, error) {
 	var buf bytes.Buffer
 	digest, err := WriteBundle(srcDir, &buf)
@@ -137,6 +143,8 @@ func BundleBytes(srcDir string) ([]byte, string, error) {
 	return buf.Bytes(), digest, nil
 }
 
+// DigestDir returns the deterministic bundle digest of srcDir without writing it.
+// ~keep
 func DigestDir(srcDir string) (string, error) {
 	digest, err := WriteBundle(srcDir, io.Discard)
 	if err != nil {
@@ -145,6 +153,8 @@ func DigestDir(srcDir string) (string, error) {
 	return digest, nil
 }
 
+// ExtractBundle unpacks a bundle archive into destDir, rejecting escapes and bombs.
+// ~keep
 func ExtractBundle(r io.Reader, destDir string) error {
 	abs, err := filepath.Abs(destDir)
 	if err != nil {
@@ -207,6 +217,8 @@ func ExtractBundle(r io.Reader, destDir string) error {
 	}
 }
 
+// CopyTree replicates srcDir into destDir, skipping .git and symlinks.
+// ~keep
 func CopyTree(srcDir, destDir string) error {
 	absSrc, err := filepath.Abs(srcDir)
 	if err != nil {
@@ -237,12 +249,12 @@ func CopyTree(srcDir, destDir string) error {
 			return err
 		}
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o750)
+			return os.MkdirAll(target, 0o750) // #nosec G122 -- target is SafeJoin-pinned to destDir from WalkDir-relative rel with symlinks skipped
 		}
 		if d.Type()&fs.ModeSymlink != 0 || !d.Type().IsRegular() {
 			return nil
 		}
-		data, err := os.ReadFile(full) // #nosec G304 -- full comes from walking absSrc with symlinks skipped
+		data, err := os.ReadFile(full) // #nosec G304, G122 -- full comes from walking absSrc with symlinks skipped
 		if err != nil {
 			return err
 		}
@@ -250,10 +262,12 @@ func CopyTree(srcDir, destDir string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		return os.WriteFile(target, data, info.Mode().Perm()) // #nosec G703, G122 -- target is SafeJoin-pinned to destDir from WalkDir-relative rel
 	})
 }
 
+// CopyTreeFiltered replicates srcDir minus release metadata, for clean fetches.
+// ~keep
 func CopyTreeFiltered(srcDir, destDir string) error {
 	absSrc, err := filepath.Abs(srcDir)
 	if err != nil {
@@ -297,7 +311,7 @@ func CopyTreeFiltered(srcDir, destDir string) error {
 			return err
 		}
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o750)
+			return os.MkdirAll(target, 0o750) // #nosec G122 -- target is SafeJoin-pinned to destDir from WalkDir-relative rel with symlinks skipped
 		}
 		if d.Type()&fs.ModeSymlink != 0 || !d.Type().IsRegular() {
 			return nil
@@ -310,6 +324,6 @@ func CopyTreeFiltered(srcDir, destDir string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		return os.WriteFile(target, data, info.Mode().Perm()) // #nosec G703, G122 -- target is SafeJoin-pinned to destDir from WalkDir-relative rel
 	})
 }

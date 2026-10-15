@@ -19,11 +19,15 @@ const (
 	maxErrorSnippet  = 512
 )
 
+// HTTPBackend uploads and downloads template bundles over HTTP(S).
+// ~keep
 type HTTPBackend struct {
 	client *http.Client
 	scheme Scheme
 }
 
+// NewHTTPBackend returns an HTTPBackend with a default client and scheme fallback.
+// ~keep
 func NewHTTPBackend(client *http.Client, scheme Scheme) *HTTPBackend {
 	if client == nil {
 		client = &http.Client{Timeout: httpFetchTimeout}
@@ -34,8 +38,12 @@ func NewHTTPBackend(client *http.Client, scheme Scheme) *HTTPBackend {
 	return &HTTPBackend{client: client, scheme: scheme}
 }
 
+// Scheme reports the HTTP(S) scheme this backend was built for.
+// ~keep
 func (b *HTTPBackend) Scheme() Scheme { return b.scheme }
 
+// Bundle archives srcDir and uploads it with PUT, falling back to POST.
+// ~keep
 func (b *HTTPBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth AuthConfig) (string, error) {
 	if err := requireHTTPScheme(uri); err != nil {
 		return "", err
@@ -61,6 +69,8 @@ func (b *HTTPBackend) Bundle(ctx context.Context, srcDir string, uri URI, auth A
 	return digest, nil
 }
 
+// Fetch downloads the uri bundle and extracts it into destDir.
+// ~keep
 func (b *HTTPBackend) Fetch(ctx context.Context, uri URI, auth AuthConfig, destDir string) error {
 	if err := requireHTTPScheme(uri); err != nil {
 		return err
