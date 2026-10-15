@@ -59,7 +59,8 @@ jobs:
           version="${version%% *}"
           printf 'version=%s\n' "$version" >> "$GITHUB_ENV"
           git add registry.json  # index is tracked ~keep
-          git add -f "templates/default/manifest/${version}.json"  # manifests stay ignored ~keep
+          # manifests are committed truth ~keep
+          git add "templates/default/manifest/${version}.json"
           git status --short
           git diff --cached --quiet || git commit -m \
             "chore: publish templates/default ${version}"

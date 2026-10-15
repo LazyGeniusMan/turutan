@@ -60,7 +60,6 @@ inits the overlay registry when missing, and cuts the fs release there
 cut to `0.1.0`), so local commands exercise real fs artifacts while the
 committed index stays release-free.
 Only the overlay outputs plus dogfood state stay gitignored:
-`templates/*/manifest/*.json`,
 `templates/*/releases/*.tar.gz`, `.config/turutan/state.yml` and
 `.config/turutan/lock.json`. Hand-written seeds stay committed
 (`dogfood-user.yml`, `dogfood-data.yml` — they hold no digests or
@@ -145,8 +144,8 @@ created-but-unreleased entry the first dispatch cuts `0.1.0` (templates
 with no releases always start at `0.1.0`, whatever the bump), pushes
 `default:<version>` to GHCR with
 `--uri-override`, and commits the bumped `registry.json` (tracked) plus
-force-adds the versioned manifest back (manifests stay gitignored until
-force-added). The first real release happens via that dispatch. The exact
+the versioned manifest (committed truth alongside the index).
+The first real release happens via that dispatch. The exact
 manual first-publish command (no creds in a sandbox) is `turutan registry
 release default patch oci --uri-override
 oci://ghcr.io/lazygeniusman/turutan/templates/default` with
