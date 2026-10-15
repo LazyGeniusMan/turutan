@@ -1,4 +1,6 @@
 version: 1
+schema_version: 1
+$schema: ./schemas/state.schema.json
 template: fs://.tmp/dogfood/default@0.1.0
 sourceKind: registry
 registry: fs://.tmp/dogfood

@@ -285,7 +285,7 @@ func finishUpdate(
 	old string,
 ) (*UpdateResult, error) {
 	if err := refreshStateLock(
-		projectDir, state, lock, bundle, data, fresh, rendered,
+		projectDir, state, lock, bundle, data, fresh, rendered, manifest,
 	); err != nil {
 		return nil, err
 	}
@@ -1044,6 +1044,7 @@ func refreshStateLock(
 	data map[string]any,
 	fresh string,
 	rendered map[string]renderedEntry,
+	manifest *config.Manifest,
 ) error {
 	paths := make([]string, 0, len(rendered))
 	for path := range rendered {
@@ -1072,6 +1073,9 @@ func refreshStateLock(
 	state.TemplateURI = bundle.uri
 	state.TemplateDigest = withDigestPrefix(fresh)
 	if err := config.SaveState(projectDir, state); err != nil {
+		return fmt.Errorf("update: %w", err)
+	}
+	if err := config.SaveStateDataSchema(projectDir, manifest); err != nil {
 		return fmt.Errorf("update: %w", err)
 	}
 	lock.Source = state.Template

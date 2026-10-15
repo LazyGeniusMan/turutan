@@ -161,15 +161,16 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 		return fmt.Errorf("registry release: %w", err)
 	}
 	manifest := registry.TemplateManifest{
-		Name:         name,
-		Version:      next,
-		Author:       author,
-		Contributors: contributors,
-		URI:          uri,
-		Digest:       digest,
-		MinEngine:    templateCfg.MinEngine,
-		ManifestHash: manifestHash,
-		License:      templateCfg.License,
+		SchemaVersion: registry.SchemaVersion,
+		Name:          name,
+		Version:       next,
+		Author:        author,
+		Contributors:  contributors,
+		URI:           uri,
+		Digest:        digest,
+		MinEngine:     templateCfg.MinEngine,
+		ManifestHash:  manifestHash,
+		License:       templateCfg.License,
 	}
 	if err := manifest.Validate(); err != nil {
 		return fmt.Errorf("registry release: %w", err)

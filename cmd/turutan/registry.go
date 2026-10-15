@@ -95,7 +95,10 @@ func runRegistryInit(cmd *cobra.Command, flags *registryInitFlags) error {
 		}
 		path = existing
 	}
-	index := &registry.RegistryIndex{Name: name, Version: versionText, Author: author}
+	index := &registry.RegistryIndex{
+		SchemaVersion: registry.SchemaVersion,
+		Name:          name, Version: versionText, Author: author,
+	}
 	if err := index.Validate(); err != nil {
 		return fmt.Errorf("registry init: %w", err)
 	}

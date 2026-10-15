@@ -41,6 +41,8 @@ var manifestHashRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type State struct {
 	Version         int            `yaml:"version"`
+	SchemaVersion   int            `yaml:"schema_version"`
+	Schema          string         `yaml:"$schema,omitempty"`
 	Template        string         `yaml:"template"`
 	SourceKind      string         `yaml:"sourceKind"`
 	Registry        string         `yaml:"registry,omitempty"`
@@ -50,7 +52,6 @@ type State struct {
 	RequestedRef    string         `yaml:"requestedRef,omitempty"`
 	ResolvedCommit  string         `yaml:"resolvedCommit"`
 	Data            map[string]any `yaml:"data,omitempty"`
-	DataSchema      int            `yaml:"dataSchema,omitempty"`
 	Skip            []string       `yaml:"skip,omitempty"`
 	Conflict        string         `yaml:"conflict,omitempty"`
 	Engine          string         `yaml:"engine"`
@@ -64,15 +65,17 @@ type LockFile struct {
 }
 
 type Lock struct {
-	Source       string     `json:"source"`
-	Ref          string     `json:"ref,omitempty"`
-	ResolvedSHA  string     `json:"resolved_sha"`
-	Registry     string     `json:"registry,omitempty"`
-	URI          string     `json:"uri,omitempty"`
-	Digest       string     `json:"digest,omitempty"`
-	Subpath      string     `json:"subpath,omitempty"`
-	ManifestHash string     `json:"manifest_hash"`
-	Files        []LockFile `json:"files"`
+	SchemaVersion int        `json:"schema_version"`
+	Schema        string     `json:"$schema,omitempty"`
+	Source        string     `json:"source"`
+	Ref           string     `json:"ref,omitempty"`
+	ResolvedSHA   string     `json:"resolved_sha"`
+	Registry      string     `json:"registry,omitempty"`
+	URI           string     `json:"uri,omitempty"`
+	Digest        string     `json:"digest,omitempty"`
+	Subpath       string     `json:"subpath,omitempty"`
+	ManifestHash  string     `json:"manifest_hash"`
+	Files         []LockFile `json:"files"`
 }
 
 // ManifestInput describes one template input value.
@@ -123,7 +126,12 @@ func LoadState(fsys fs.FS) (*State, error) {
 
 func SaveState(dir string, state *State) error {
 	state.Version = StateVersion
+	state.SchemaVersion = StateVersion
+	state.Schema = StateSchemaRef
 	if err := ValidateState(state); err != nil {
+		return err
+	}
+	if err := writeGeneratedSchema(dir, StateSchemaFileName, StateJSONSchema()); err != nil {
 		return err
 	}
 	return writeYAML(dir, StateFileName, state)
@@ -132,6 +140,11 @@ func SaveState(dir string, state *State) error {
 func ValidateState(state *State) error {
 	if state.Version != StateVersion {
 		return fmt.Errorf("unsupported state version %d: this engine reads v%d only", state.Version, StateVersion)
+	}
+	if state.SchemaVersion != StateVersion {
+		return fmt.Errorf(
+			"unsupported state schema_version %d: this engine reads v%d only",
+			state.SchemaVersion, StateVersion)
 	}
 	if state.Template == "" {
 		return fmt.Errorf("invalid state: template is empty")
@@ -197,9 +210,14 @@ func LoadLock(fsys fs.FS) (*Lock, error) {
 }
 
 func SaveLock(dir string, lock *Lock) error {
+	lock.SchemaVersion = StateVersion
+	lock.Schema = LockSchemaRef
 	slices.SortFunc(lock.Files, func(a, b LockFile) int { return cmp.Compare(a.Path, b.Path) })
 	lock.ManifestHash = ComputeManifestHash(lock.Files)
 	if err := ValidateLock(lock); err != nil {
+		return err
+	}
+	if err := writeGeneratedSchema(dir, LockSchemaFileName, LockJSONSchema()); err != nil {
 		return err
 	}
 	return writeJSON(dir, LockFileName, lock)
@@ -208,6 +226,11 @@ func SaveLock(dir string, lock *Lock) error {
 func ValidateLock(lock *Lock) error {
 	if lock == nil {
 		return fmt.Errorf("invalid lock: lock is nil")
+	}
+	if lock.SchemaVersion != StateVersion {
+		return fmt.Errorf(
+			"invalid lock: unsupported schema_version %d: this engine reads v%d only",
+			lock.SchemaVersion, StateVersion)
 	}
 	if lock.Source == "" {
 		return fmt.Errorf("invalid lock: source is empty")

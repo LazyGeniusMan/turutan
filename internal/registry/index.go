@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/LazyGeniusMan/turutan/internal/schemagen"
 )
 
 // IndexFileName is the registry index file name (JSON only).
@@ -64,15 +66,16 @@ func (t *RegistryTemplate) Validate() error {
 		return fmt.Errorf("%w: released template %q must carry a uri", ErrInvalidIndex, t.Name)
 	}
 	manifest := TemplateManifest{
-		Name:         t.Name,
-		Version:      t.Version,
-		Author:       t.Author,
-		Contributors: t.Contributors,
-		URI:          *t.URI,
-		Digest:       t.Digest,
-		MinEngine:    t.MinEngine,
-		ManifestHash: t.ManifestHash,
-		License:      t.License,
+		SchemaVersion: SchemaVersion,
+		Name:          t.Name,
+		Version:       t.Version,
+		Author:        t.Author,
+		Contributors:  t.Contributors,
+		URI:           *t.URI,
+		Digest:        t.Digest,
+		MinEngine:     t.MinEngine,
+		ManifestHash:  t.ManifestHash,
+		License:       t.License,
 	}
 	if err := manifest.Validate(); err != nil {
 		return err
@@ -121,14 +124,15 @@ func (t *RegistryTemplate) validateUnreleased() error {
 // ~keep
 func (t *RegistryTemplate) Manifest() TemplateManifest {
 	out := TemplateManifest{
-		Name:         t.Name,
-		Version:      t.Version,
-		Author:       t.Author,
-		Contributors: t.Contributors,
-		Digest:       t.Digest,
-		MinEngine:    t.MinEngine,
-		ManifestHash: t.ManifestHash,
-		License:      t.License,
+		SchemaVersion: SchemaVersion,
+		Name:          t.Name,
+		Version:       t.Version,
+		Author:        t.Author,
+		Contributors:  t.Contributors,
+		Digest:        t.Digest,
+		MinEngine:     t.MinEngine,
+		ManifestHash:  t.ManifestHash,
+		License:       t.License,
 	}
 	if t.URI != nil {
 		out.URI = *t.URI
@@ -142,10 +146,12 @@ func (t *RegistryTemplate) Manifest() TemplateManifest {
 //
 //nolint:revive // ~keep: RegistryIndex is the mandated public name used across registry subcommands.
 type RegistryIndex struct {
-	Name      string             `json:"name"`
-	Version   string             `json:"version"`
-	Author    Author             `json:"author"`
-	Templates []RegistryTemplate `json:"templates"`
+	SchemaVersion int                `json:"schema_version"`
+	Schema        string             `json:"$schema,omitempty"`
+	Name          string             `json:"name"`
+	Version       string             `json:"version"`
+	Author        Author             `json:"author"`
+	Templates     []RegistryTemplate `json:"templates"`
 }
 
 // ParseIndex decodes and validates index JSON, rejecting unknown fields.
@@ -177,11 +183,21 @@ func LoadIndexFile(path string) (*RegistryIndex, error) {
 	return index, nil
 }
 
-// SaveIndexFile validates the index and writes it to path as indented JSON.
+// SaveIndexFile validates the index and writes it to path as indented JSON,
+// stamping the current schema_version with its relative $schema reference
+// and regenerating the registry index schema beside it.
 // ~keep
 func SaveIndexFile(path string, index *RegistryIndex) error {
+	index.SchemaVersion = SchemaVersion
+	index.Schema = IndexSchemaRef
 	if err := index.Validate(); err != nil {
 		return err
+	}
+	if dir := filepath.Dir(path); dir != "" {
+		if err := schemagen.WriteFile(
+			filepath.Join(dir, filepath.FromSlash(IndexSchemaFileName)), IndexJSONSchema()); err != nil {
+			return err
+		}
 	}
 	data, err := marshalJSONIndent(index)
 	if err != nil {
@@ -204,6 +220,11 @@ func SaveIndexFile(path string, index *RegistryIndex) error {
 func (r *RegistryIndex) Validate() error {
 	if r == nil {
 		return fmt.Errorf("%w: index is nil", ErrInvalidIndex)
+	}
+	if r.SchemaVersion != SchemaVersion {
+		return fmt.Errorf(
+			"%w: unsupported schema_version %d: this engine reads v%d only",
+			ErrInvalidIndex, r.SchemaVersion, SchemaVersion)
 	}
 	if !validResourceName(r.Name) {
 		return fmt.Errorf("%w: name %q must match [a-z0-9._/-]", ErrInvalidIndex, r.Name)

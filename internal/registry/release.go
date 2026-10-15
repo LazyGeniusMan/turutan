@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/LazyGeniusMan/turutan/internal/schemagen"
 )
 
 // ReleaseBump is the version component incremented by `registry release`.
@@ -145,13 +147,25 @@ func ParseVersionedManifest(data []byte) (*TemplateManifest, error) {
 	return &manifest, nil
 }
 
-// SaveVersionedManifest writes the canonical versioned manifest JSON file.
+// SaveVersionedManifest writes the canonical versioned manifest JSON file,
+// stamping the current schema_version with its $schema reference relative
+// to the manifest location and regenerating the manifest schema.
 // ~keep
 func SaveVersionedManifest(root string, manifest *TemplateManifest) (string, error) {
+	manifest.SchemaVersion = SchemaVersion
+	path := VersionedManifestPath(root, manifest.Name, manifest.Version)
+	ref, err := relativeSchemaRef(path, filepath.Join(root, filepath.FromSlash(ManifestSchemaFileName)))
+	if err != nil {
+		return "", fmt.Errorf("resolving manifest schema ref: %w", err)
+	}
+	manifest.Schema = ref
 	if err := manifest.Validate(); err != nil {
 		return "", err
 	}
-	path := VersionedManifestPath(root, manifest.Name, manifest.Version)
+	if err := schemagen.WriteFile(
+		filepath.Join(root, filepath.FromSlash(ManifestSchemaFileName)), ManifestJSONSchema()); err != nil {
+		return "", err
+	}
 	data, err := marshalJSONIndent(manifest)
 	if err != nil {
 		return "", fmt.Errorf("encoding versioned manifest %q: %w", path, err)

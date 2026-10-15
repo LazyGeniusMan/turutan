@@ -84,7 +84,8 @@ func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) 
 	manifestHash, err := registry.TemplateManifestHash(dstDir)
 	require.NoError(t, err)
 	manifest := registry.TemplateManifest{
-		Name: "default", Version: next, Author: author,
+		SchemaVersion: registry.SchemaVersion,
+		Name:          "default", Version: next, Author: author,
 		URI: uri, Digest: digest, MinEngine: templateCfg.MinEngine,
 		ManifestHash: manifestHash, License: templateCfg.License,
 	}

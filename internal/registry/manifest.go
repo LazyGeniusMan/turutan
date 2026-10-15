@@ -26,15 +26,17 @@ var (
 // newest-first releases list.
 // ~keep
 type TemplateManifest struct {
-	Name         string   `json:"name"`
-	Version      string   `json:"version"`
-	Author       Author   `json:"author"`
-	Contributors []Author `json:"contributors,omitempty"`
-	URI          URI      `json:"uri"`
-	Digest       string   `json:"digest,omitempty"`
-	MinEngine    string   `json:"min-engine,omitempty"`
-	ManifestHash string   `json:"manifestHash,omitempty"`
-	License      string   `json:"license,omitempty"`
+	SchemaVersion int      `json:"schema_version"`
+	Schema        string   `json:"$schema,omitempty"`
+	Name          string   `json:"name"`
+	Version       string   `json:"version"`
+	Author        Author   `json:"author"`
+	Contributors  []Author `json:"contributors,omitempty"`
+	URI           URI      `json:"uri"`
+	Digest        string   `json:"digest,omitempty"`
+	MinEngine     string   `json:"min-engine,omitempty"`
+	ManifestHash  string   `json:"manifestHash,omitempty"`
+	License       string   `json:"license,omitempty"`
 }
 
 // Validate reports whether the manifest is internally consistent: names,
@@ -44,6 +46,11 @@ type TemplateManifest struct {
 func (m *TemplateManifest) Validate() error {
 	if m == nil {
 		return fmt.Errorf("%w: manifest is nil", ErrInvalidManifest)
+	}
+	if m.SchemaVersion != SchemaVersion {
+		return fmt.Errorf(
+			"%w: unsupported schema_version %d: this engine reads v%d only",
+			ErrInvalidManifest, m.SchemaVersion, SchemaVersion)
 	}
 	if !validResourceName(m.Name) {
 		return fmt.Errorf("%w: name %q must match [a-z0-9._/-]", ErrInvalidManifest, m.Name)

@@ -145,7 +145,7 @@ func finishRegistryInit(
 	ref := RegistryStateRef(rr.Name, templateManifest.Name, templateManifest.Version)
 	if err := writeRegistryStateAndLock(
 		absTarget, rr.Name, ref, templateManifest.Version, bundleURI, digest,
-		data, opts, files, engine, license,
+		data, opts, files, engine, license, manifest,
 	); err != nil {
 		return err
 	}
@@ -168,6 +168,7 @@ func writeRegistryStateAndLock(
 	opts Options,
 	files []config.LockFile,
 	engine, license string,
+	manifest *config.Manifest,
 ) error {
 	digestHex := strings.TrimPrefix(strings.TrimSpace(digest), "sha256:")
 	if digestHex == "" {
@@ -193,6 +194,9 @@ func writeRegistryStateAndLock(
 		TemplateLicense: license,
 	}
 	if err := config.SaveState(target, state); err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+	if err := config.SaveStateDataSchema(target, manifest); err != nil {
 		return fmt.Errorf("init: %w", err)
 	}
 	lock := &config.Lock{

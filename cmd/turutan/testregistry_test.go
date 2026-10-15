@@ -110,7 +110,8 @@ func releaseCmdRegistry(t *testing.T, regDir, name string) string {
 		t.Fatal(err)
 	}
 	entry := registry.TemplateManifest{
-		Name: name, Version: version, Author: author, Contributors: contributors,
+		SchemaVersion: registry.SchemaVersion,
+		Name:          name, Version: version, Author: author, Contributors: contributors,
 		URI:    uri,
 		Digest: digest, MinEngine: templateCfg.MinEngine,
 		ManifestHash: manifestHash, License: templateCfg.License,

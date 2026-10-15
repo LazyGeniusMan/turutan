@@ -13,7 +13,8 @@ func unreleasedTestIndex(t *testing.T) *RegistryIndex {
 		t.Fatal(err)
 	}
 	return &RegistryIndex{
-		Name: "r", Version: "0.1.0", Author: author,
+		SchemaVersion: SchemaVersion,
+		Name:          "r", Version: "0.1.0", Author: author,
 		Templates: []RegistryTemplate{{Name: "app", Author: author}},
 	}
 }

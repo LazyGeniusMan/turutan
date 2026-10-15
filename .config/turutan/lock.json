@@ -1,4 +1,6 @@
 {
+  "schema_version": 1,
+  "$schema": "./schemas/lock.schema.json",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
   "resolved_sha": "353daf3daab0628f31f9b558547a216d99b30743f3d69e640a8d848ad67d7b11",

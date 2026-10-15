@@ -14,6 +14,7 @@ import (
 func validState() *State {
 	return &State{
 		Version:         StateVersion,
+		SchemaVersion:   StateVersion,
 		Template:        "oci://ghcr.io/acme/templates/web@1.2.0",
 		SourceKind:      "registry",
 		Registry:        "oci://ghcr.io/acme/templates",
@@ -201,13 +202,14 @@ func TestLockRoundTrip(t *testing.T) {
 
 func validLock() *Lock {
 	return &Lock{
-		Source:       "oci://ghcr.io/acme/templates/web@1.2.0",
-		Ref:          "1.2.0",
-		ResolvedSHA:  strings.Repeat("a", 64),
-		Registry:     "oci://ghcr.io/acme/templates",
-		URI:          "oci://ghcr.io/acme/web:1.2.0",
-		Digest:       "sha256:" + strings.Repeat("a", 64),
-		ManifestHash: "sha256:" + strings.Repeat("b", 64),
+		SchemaVersion: StateVersion,
+		Source:        "oci://ghcr.io/acme/templates/web@1.2.0",
+		Ref:           "1.2.0",
+		ResolvedSHA:   strings.Repeat("a", 64),
+		Registry:      "oci://ghcr.io/acme/templates",
+		URI:           "oci://ghcr.io/acme/web:1.2.0",
+		Digest:        "sha256:" + strings.Repeat("a", 64),
+		ManifestHash:  "sha256:" + strings.Repeat("b", 64),
 		Files: []LockFile{
 			{Path: "a.txt", SHA256: strings.Repeat("c", 64), Bytes: 1},
 			{Path: "b.txt", SHA256: strings.Repeat("d", 64), Bytes: 0},
@@ -632,14 +634,14 @@ func TestStateLockLocations(t *testing.T) {
 	digest := "sha256:" + commit
 	stateFile := func(engine string) *fstest.MapFile {
 		return &fstest.MapFile{Data: []byte(
-			"version: 1\ntemplate: oci://ghcr.io/acme/templates/web@1.2.0\nsourceKind: registry\n" +
+			"version: 1\nschema_version: 1\ntemplate: oci://ghcr.io/acme/templates/web@1.2.0\nsourceKind: registry\n" +
 				"registry: oci://ghcr.io/acme/templates\ntemplateURI: oci://ghcr.io/acme/web:1.2.0\n" +
 				"templateDigest: " + digest + "\nrequestedRef: 1.2.0\n" +
 				"resolvedCommit: " + commit + "\nengine: " + engine + "\n" +
 				"templateLicense: MIT-0\n")}
 	}
 	lockFile := &fstest.MapFile{Data: []byte(
-		`{"source":"oci://ghcr.io/acme/templates/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
+		`{"schema_version":1,"source":"oci://ghcr.io/acme/templates/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
 			`"registry":"oci://ghcr.io/acme/templates","uri":"oci://ghcr.io/acme/web:1.2.0",` +
 			`"digest":"` + digest + `","manifest_hash":"` + digest + `","files":[]}`)}
 	t.Run("yaml state loads", func(t *testing.T) {

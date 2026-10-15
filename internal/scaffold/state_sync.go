@@ -265,7 +265,7 @@ func runStateSync(
 	}
 	return finishStateSync(
 		projectDir, state, lock, data, fresh, rendered, stage,
-		stdout, updated, conflicts, old)
+		manifest, stdout, updated, conflicts, old)
 }
 
 func previewStateSync(
@@ -314,6 +314,7 @@ func finishStateSync(
 	fresh string,
 	rendered map[string]renderedEntry,
 	stage string,
+	manifest *config.Manifest,
 	stdout io.Writer,
 	updated, conflicts []string,
 	old string,
@@ -336,6 +337,9 @@ func finishStateSync(
 	}
 	state.Data = data
 	if err := config.SaveState(projectDir, state); err != nil {
+		return nil, fmt.Errorf("sync: %w", err)
+	}
+	if err := config.SaveStateDataSchema(projectDir, manifest); err != nil {
 		return nil, fmt.Errorf("sync: %w", err)
 	}
 	lock.Source = state.Template

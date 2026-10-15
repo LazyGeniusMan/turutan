@@ -12,6 +12,8 @@ import (
 )
 
 const exampleIndexJSON = `{
+  "schema_version": 1,
+  "$schema": "./schemas/registry-index.schema.json",
   "name": "turutan",
   "version": "1.0.0",
   "author": "Turutan Maintainers <maintainers@example.com> (https://github.com/LazyGeniusMan/turutan)",
@@ -142,7 +144,7 @@ func TestIndexRoundTrip(t *testing.T) {
 func TestIndexRelativeFSResolution(t *testing.T) {
 	t.Parallel()
 	index, err := ParseIndex([]byte(
-		`{"name":"local","version":"1.0.0","author":"A <a@b.co>","templates":[` +
+		`{"schema_version":1,"name":"local","version":"1.0.0","author":"A <a@b.co>","templates":[` +
 			`{"name":"app","version":"0.1.0","author":"A <a@b.co>","uri":"templates/app/releases/0.1.0.tar.gz","releases":["0.1.0"]}]}`))
 	if err != nil {
 		t.Fatalf("ParseIndex error: %v", err)

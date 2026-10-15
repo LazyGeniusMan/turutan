@@ -12,14 +12,15 @@ func validManifest() *TemplateManifest {
 	author, _ := ParseAuthor("Jane Doe <jane@example.com> (https://example.com)")
 	uri, _ := ParseURI("oci://ghcr.io/lazygeniusman/turutan/templates/default:1.2.0")
 	return &TemplateManifest{
-		Name:         "default",
-		Version:      "1.2.0",
-		Author:       author,
-		URI:          uri,
-		Digest:       "sha256:" + strings.Repeat("a", 64),
-		MinEngine:    ">= 0.2.0",
-		ManifestHash: "sha256:" + strings.Repeat("b", 64),
-		License:      "MIT-0",
+		SchemaVersion: SchemaVersion,
+		Name:          "default",
+		Version:       "1.2.0",
+		Author:        author,
+		URI:           uri,
+		Digest:        "sha256:" + strings.Repeat("a", 64),
+		MinEngine:     ">= 0.2.0",
+		ManifestHash:  "sha256:" + strings.Repeat("b", 64),
+		License:       "MIT-0",
 	}
 }
 

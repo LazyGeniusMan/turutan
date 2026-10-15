@@ -1,4 +1,6 @@
 {
+  "schema_version": 1,
+  "$schema": "./schemas/registry-index.schema.json",
   "name": "turutan",
   "version": "0.1.0",
   "author": "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)",
