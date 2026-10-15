@@ -20,10 +20,6 @@ turutan registry release foo minor fs
 # first cut is 0.1.0 whatever the bump: manifest templates/foo/manifest/0.1.0.json,
 # index releases prepended.
 
-# Point a name at the registry for authoring (fs/http/s3/git/oci URIs accepted).
-# Project lock/state store the registry URI directly, never the name.
-turutan registry add acme ./registry-dir
-
 # Scaffold from a registry template URI at latest (default built-in URI).
 # Use the full <registry-uri>/<template>[@version] form; bare names are rejected.
 turutan init ./myapp --template oci://ghcr.io/acme/templates/foo --defaults

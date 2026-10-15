@@ -158,9 +158,6 @@ func TestIndexRelativeFSResolution(t *testing.T) {
 
 func TestDefaultConstants(t *testing.T) {
 	t.Parallel()
-	if DefaultRegistryName != "turutan" {
-		t.Errorf("DefaultRegistryName = %q", DefaultRegistryName)
-	}
 	uri, err := ParseURI(DefaultRegistryURI)
 	if err != nil {
 		t.Fatalf("DefaultRegistryURI invalid: %v", err)

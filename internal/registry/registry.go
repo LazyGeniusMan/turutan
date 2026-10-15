@@ -7,12 +7,10 @@
 // ~keep
 package registry
 
-// Reserved default registry identity. DefaultRegistryName is reserved for
-// the built-in registry; DefaultRegistryURI is its OCI address and
+// Reserved default registry identity. DefaultRegistryURI is its OCI address and
 // DefaultTemplateRepo addresses the default template without a tag.
 // ~keep
 const (
-	DefaultRegistryName = "turutan"
 	DefaultRegistryURI  = "oci://ghcr.io/lazygeniusman/turutan/templates"
 	DefaultTemplateName = "default"
 	DefaultTemplateRepo = "oci://ghcr.io/lazygeniusman/turutan/templates/default"
