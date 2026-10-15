@@ -157,6 +157,12 @@ func ValidateState(state *State) error {
 		if strings.TrimSpace(state.Registry) == "" {
 			return fmt.Errorf("invalid state: registry is empty")
 		}
+		if !isRegistryURI(state.Registry) {
+			return fmt.Errorf("invalid state: registry %q is not a URI", state.Registry)
+		}
+		if !isURITemplateRef(state.Template, state.Registry) {
+			return fmt.Errorf("invalid state: template %q is not a <registry-uri>/<template>@<version> ref", state.Template)
+		}
 		if strings.TrimSpace(state.TemplateURI) == "" {
 			return fmt.Errorf("invalid state: templateURI is empty")
 		}
@@ -227,6 +233,12 @@ func ValidateLock(lock *Lock) error {
 		return fmt.Errorf("invalid lock: source is empty")
 	}
 	if lock.Registry != "" {
+		if !isRegistryURI(lock.Registry) {
+			return fmt.Errorf("invalid lock: registry %q is not a URI", lock.Registry)
+		}
+		if !isURITemplateRef(lock.Source, lock.Registry) {
+			return fmt.Errorf("invalid lock: source %q is not a <registry-uri>/<template>@<version> ref", lock.Source)
+		}
 		if !hex64.MatchString(lock.ResolvedSHA) && !manifestHashRe.MatchString(lock.ResolvedSHA) {
 			return fmt.Errorf(
 				"invalid lock: resolved_sha %q is not a 64-hex digest or sha256: digest",
@@ -558,6 +570,29 @@ func ResolveRenames(old string, renames map[string]string) string {
 		cur = next
 	}
 	return cur
+}
+
+func isRegistryURI(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false
+	}
+	return strings.Contains(trimmed, "://") || strings.HasPrefix(trimmed, "fs:")
+}
+
+func isURITemplateRef(template, registryURI string) bool {
+	tmpl := strings.TrimSpace(template)
+	reg := strings.TrimSuffix(strings.TrimSpace(registryURI), "/")
+	if tmpl == "" || reg == "" {
+		return false
+	}
+	if !isRegistryURI(tmpl) {
+		return false
+	}
+	if !strings.Contains(tmpl, "@") {
+		return false
+	}
+	return strings.HasPrefix(tmpl, reg+"/")
 }
 
 func writeJSON(dir, name string, value any) error {

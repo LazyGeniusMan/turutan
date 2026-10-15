@@ -20,12 +20,14 @@ turutan registry release foo minor fs
 # first cut is 0.1.0 whatever the bump: manifest templates/foo/manifest/0.1.0.json,
 # index releases prepended.
 
-# Point a name at the registry (fs/http/s3/git/oci URIs accepted).
+# Point a name at the registry for authoring (fs/http/s3/git/oci URIs accepted).
+# Project lock/state store the registry URI directly, never the name.
 turutan registry add acme ./registry-dir
 
-# Scaffold from a registry template (default turutan/default at latest).
-turutan init ./myapp --template acme/foo --defaults
-turutan init ./myapp --template acme/foo@0.2.0 --defaults  # pinned release
+# Scaffold from a registry template URI at latest (default built-in URI).
+# Use the full <registry-uri>/<template>[@version] form; bare names are rejected.
+turutan init ./myapp --template oci://ghcr.io/acme/templates/foo --defaults
+turutan init ./myapp --template oci://ghcr.io/acme/templates/foo@0.2.0 --defaults  # pinned release
 
 cd myapp
 turutan check          # exit 0 up-to-date, 2 update available
@@ -39,8 +41,8 @@ turutan version        # version/commit/date plus license notice
 ## Remote authentication
 
 Registry credentials come from the environment only and are never
-logged. Per-registry overrides use `TURUTAN_REGISTRY_<NAME>_USER`,
-`_PASS`, `_TOKEN` and `_ENDPOINT`; scheme defaults cover S3-compatible
+logged. Per-registry overrides use `TURUTAN_REGISTRY_<NORMALIZED_URI>_USER`,
+`_PASS`, `_TOKEN` and `_ENDPOINT` (URI uppercased, non-alphanumerics to `_`); scheme defaults cover S3-compatible
 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL`,
 `AWS_REGION`), git (`GITHUB_TOKEN`, `TURUTAN_SSH_KEY`) and OCI
 (`TURUTAN_OCI_USER`, `TURUTAN_OCI_PASSWORD`, `TURUTAN_OCI_TOKEN`).

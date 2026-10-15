@@ -112,20 +112,20 @@ func (a AuthConfig) String() string {
 	return out
 }
 
-// ResolveAuth resolves auth for registry and uri from the process
-// environment.
+// ResolveAuth resolves auth for a registry URI and content uri from the
+// process environment.
 // ~keep
-func ResolveAuth(registry string, uri URI) AuthConfig {
-	return ResolveAuthWithEnv(registry, uri, os.Getenv)
+func ResolveAuth(registryURI string, uri URI) AuthConfig {
+	return ResolveAuthWithEnv(registryURI, uri, os.Getenv)
 }
 
-// ResolveAuthWithEnv resolves auth for registry and uri using getenv, so
-// callers can inject test environments. Per-registry variables
-// TURUTAN_REGISTRY_<NAME>_USER, _PASS, _TOKEN and _ENDPOINT win over
-// scheme-generic variables.
+// ResolveAuthWithEnv resolves auth for a registry URI and content uri using
+// getenv, so callers can inject test environments. Per-registry variables
+// TURUTAN_REGISTRY_<NORMALIZED_URI>_USER, _PASS, _TOKEN and _ENDPOINT win
+// over scheme-generic variables.
 // ~keep
-func ResolveAuthWithEnv(registry string, uri URI, getenv func(string) string) AuthConfig {
-	prefix := EnvRegistryPrefix + normalizeRegistryName(registry) + "_"
+func ResolveAuthWithEnv(registryURI string, uri URI, getenv func(string) string) AuthConfig {
+	prefix := EnvRegistryPrefix + normalizeRegistryName(registryURI) + "_"
 	cfg := AuthConfig{Kind: AuthKindNone}
 	if username := getenv(prefix + "USER"); username != "" {
 		cfg.Username = username

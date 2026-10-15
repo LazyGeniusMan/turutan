@@ -136,7 +136,7 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 		return fmt.Errorf("registry release: %w", err)
 	}
 	defer cleanup()
-	auth := registry.ResolveAuth(index.Name, uri)
+	auth := registry.ResolveAuth(uri.String(), uri)
 	backendURI := uri
 	if uri.IsRelative() {
 		backendURI, err = uri.ResolveRelativeTo(root)

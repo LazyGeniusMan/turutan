@@ -29,7 +29,6 @@ const maxDirtyShown = 5
 
 type UpdateOptions struct {
 	Ref            string
-	Registries     map[string]string
 	Conflict       ConflictMode
 	Force          bool
 	DataFile       string
@@ -379,19 +378,21 @@ func fetchUpdateTemplate(
 	if state.SourceKind != "registry" {
 		return nil, nil, fmt.Errorf("update: unknown sourceKind %q", state.SourceKind)
 	}
-	registryName := strings.TrimSpace(state.Registry)
-	templateName := ""
-	if registryName == "" {
-		var version string
-		registryName, templateName, version = ResolveRegistryName(state.Template)
-		_ = version
-	} else {
-		_, templateName, _ = splitStoredRef(state.Template)
+	registryURI := strings.TrimSpace(state.Registry)
+	if registryURI == "" {
+		return nil, nil, fmt.Errorf("update: stored registry is empty")
+	}
+	storedRegistry, templateName, _, err := SplitStoredRef(state.Template)
+	if err != nil {
+		return nil, nil, fmt.Errorf("update: %w", err)
+	}
+	if storedRegistry != registryURI {
+		return nil, nil, fmt.Errorf("update: stored template %q does not match registry %q", state.Template, registryURI)
 	}
 	if templateName == "" {
 		return nil, nil, fmt.Errorf("update: stored template %q has no template name", state.Template)
 	}
-	rr, err := ResolveRegistry(ctx, opts.Registries, registryName)
+	rr, err := ResolveRegistry(ctx, registryURI)
 	if err != nil {
 		return nil, nil, fmt.Errorf("update: %w", err)
 	}
@@ -1267,7 +1268,10 @@ func refreshStateLock(
 		}
 		final = append(final, config.FileEntry(path, data))
 	}
-	_, templateName, _ := ResolveRegistryName(state.Template)
+	_, templateName, _, err := SplitStoredRef(state.Template)
+	if err != nil {
+		return fmt.Errorf("update: %w", err)
+	}
 	state.RequestedRef = bundle.version
 	state.ResolvedCommit = fresh
 	state.Data = data

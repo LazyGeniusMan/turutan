@@ -3,10 +3,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
@@ -22,10 +20,10 @@ const (
 )
 
 // makeCmdRegistry builds an fs registry with one released template for CLI
-// tests. It returns the registry dir, the registries map for scaffold calls
+// tests. It returns the registry dir, the registry URI for scaffold calls
 // and the --template flag value tracking latest.
 // ~keep
-func makeCmdRegistry(t *testing.T, manifest string, files map[string]string) (string, map[string]string, string) {
+func makeCmdRegistry(t *testing.T, manifest string, files map[string]string) (string, string, string) {
 	t.Helper()
 	regDir := t.TempDir()
 	author, err := registry.ParseAuthor(cmdTestAuthorText)
@@ -53,8 +51,8 @@ func makeCmdRegistry(t *testing.T, manifest string, files map[string]string) (st
 		}
 	}
 	releaseCmdRegistry(t, regDir, cmdTestTemplate)
-	regs := map[string]string{cmdTestRegistry: "fs:" + filepath.ToSlash(regDir)}
-	return regDir, regs, cmdTestRegistry + "/" + cmdTestTemplate
+	registryURI := "fs:" + filepath.ToSlash(regDir)
+	return regDir, registryURI, registryURI + "/" + cmdTestTemplate
 }
 
 // releaseCmdRegistry cuts a patch release of the template in regDir,
@@ -145,23 +143,12 @@ func updateCmdRegistryFile(t *testing.T, regDir, name, path, content string) str
 	return releaseCmdRegistry(t, regDir, name)
 }
 
-// useCmdRegistryConfig points the CLI registry resolution at regs by writing
-// a temp user config and overriding TURUTAN_CONFIG for the test.
+// useCmdRegistryConfig is a no-op retained for test call compatibility.
+// Project operations resolve the registry URI directly without any name
+// lookup, so no user config is needed.
 // ~keep
-func useCmdRegistryConfig(t *testing.T, regs map[string]string) {
+func useCmdRegistryConfig(t *testing.T, _ string) {
 	t.Helper()
-	var b strings.Builder
-	b.WriteString("registries:\n")
-	for name, uri := range regs {
-		if _, err := fmt.Fprintf(&b, "  %s: %q\n", name, uri); err != nil {
-			t.Fatal(err)
-		}
-	}
-	path := filepath.Join(t.TempDir(), config.ConfigFileName)
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv(config.EnvConfigOverride, path)
 }
 
 func scaffoldRef(t *testing.T, flag string) scaffold.RegistryRef {

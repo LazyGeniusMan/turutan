@@ -23,7 +23,7 @@ func exitCodeOf(err error) int {
 	return 1
 }
 
-func initTestProject(t *testing.T, files map[string]string) (string, string, map[string]string) {
+func initTestProject(t *testing.T, files map[string]string) (string, string, string) {
 	t.Helper()
 	regDir, regs, flag := makeCmdRegistry(t, "", files)
 	dst := filepath.Join(t.TempDir(), "proj")
@@ -36,7 +36,7 @@ func initTestProject(t *testing.T, files map[string]string) (string, string, map
 		Stderr:         &bytes.Buffer{},
 		Stdin:          bytes.NewReader(nil),
 	}
-	if err := scaffold.Init(context.Background(), dst, scaffoldRef(t, flag), regs, opts); err != nil {
+	if err := scaffold.Init(context.Background(), dst, scaffoldRef(t, flag), opts); err != nil {
 		t.Fatalf("Init error: %v", err)
 	}
 	useCmdRegistryConfig(t, regs)

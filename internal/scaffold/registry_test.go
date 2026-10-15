@@ -19,10 +19,10 @@ const (
 )
 
 // makeTestRegistry builds an fs registry with one template and returns the
-// registries map plus a latest-tracking ref for it. Files land in
+// registry URI plus a latest-tracking ref for it. Files land in
 // templates/test/ alongside the authoring manifest text.
 // ~keep
-func makeTestRegistry(t *testing.T, manifest string, files map[string]string) (map[string]string, RegistryRef) {
+func makeTestRegistry(t *testing.T, manifest string, files map[string]string) (string, RegistryRef) {
 	t.Helper()
 	regDir := t.TempDir()
 	author, err := registry.ParseAuthor("Test Author <test@example.com>")
@@ -39,8 +39,8 @@ func makeTestRegistry(t *testing.T, manifest string, files map[string]string) (m
 	}
 	writeTestFiles(t, tmplDir, files)
 	releaseTestTemplate(t, regDir, testRegistryTemplate)
-	regs := map[string]string{testRegistryName: "fs:" + filepath.ToSlash(regDir)}
-	return regs, RegistryRef{Registry: testRegistryName, Template: testRegistryTemplate}
+	registryURI := "fs:" + filepath.ToSlash(regDir)
+	return registryURI, RegistryRef{Registry: registryURI, Template: testRegistryTemplate}
 }
 
 func withManifest(files map[string]string, manifest string) map[string]string {
@@ -146,18 +146,18 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 // writeTestRegistryFiles writes files into the registry template without
 // cutting a release, for batching multiple changes into one release.
 // ~keep
-func writeTestRegistryFiles(t *testing.T, regs map[string]string, name string, files map[string]string) {
+func writeTestRegistryFiles(t *testing.T, registryURI string, name string, files map[string]string) {
 	t.Helper()
-	regDir := testRegistryDir(t, regs)
+	regDir := testRegistryDir(t, registryURI)
 	writeTestFiles(t, filepath.Join(regDir, "templates", name), files)
 }
 
 // removeTestTemplateFile removes a file from the registry template and cuts
 // a new patch release.
 // ~keep
-func removeTestTemplateFile(t *testing.T, regs map[string]string, name, path string) string {
+func removeTestTemplateFile(t *testing.T, registryURI string, name, path string) string {
 	t.Helper()
-	regDir := testRegistryDir(t, regs)
+	regDir := testRegistryDir(t, registryURI)
 	full := filepath.Join(regDir, "templates", name, filepath.FromSlash(path))
 	if err := os.Remove(full); err != nil {
 		t.Fatal(err)
@@ -168,9 +168,9 @@ func removeTestTemplateFile(t *testing.T, regs map[string]string, name, path str
 // updateTestTemplateFile rewrites a file in the test registry template and
 // cuts a new patch release, so check/update tests can observe drift.
 // ~keep
-func updateTestTemplateFile(t *testing.T, regs map[string]string, name, path, content string) string {
+func updateTestTemplateFile(t *testing.T, registryURI string, name, path, content string) string {
 	t.Helper()
-	regDir := testRegistryDir(t, regs)
+	regDir := testRegistryDir(t, registryURI)
 	full := filepath.Join(regDir, "templates", name, filepath.FromSlash(path))
 	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 		t.Fatal(err)
@@ -181,31 +181,30 @@ func updateTestTemplateFile(t *testing.T, regs map[string]string, name, path, co
 	return releaseTestTemplate(t, regDir, name)
 }
 
-func testRegistryDir(t *testing.T, regs map[string]string) string {
+func testRegistryDir(t *testing.T, registryURI string) string {
 	t.Helper()
-	raw, ok := regs[testRegistryName]
-	if !ok {
-		t.Fatalf("test registries lack %q", testRegistryName)
+	if strings.TrimSpace(registryURI) == "" {
+		t.Fatalf("test registry URI is empty")
 	}
-	return strings.TrimPrefix(raw, "fs:")
+	return strings.TrimPrefix(registryURI, "fs:")
 }
 
 // mustInitTestProject inits target from the test registry and fails fast.
 // ~keep
-func mustInitTestProject(t *testing.T, target string, regs map[string]string, ref RegistryRef, opts Options) {
+func mustInitTestProject(t *testing.T, target string, ref RegistryRef, opts Options) {
 	t.Helper()
-	if err := Init(t.Context(), target, ref, regs, opts); err != nil {
+	if err := Init(t.Context(), target, ref, opts); err != nil {
 		t.Fatalf("Init error: %v", err)
 	}
 }
 
 // initRegistryProject builds a one-template registry and inits a project
-// from its latest release, returning the project dir and registries map.
+// from its latest release, returning the project dir and registry URI.
 // ~keep
-func initRegistryProject(t *testing.T, manifest string, files map[string]string) (string, map[string]string) {
+func initRegistryProject(t *testing.T, manifest string, files map[string]string) (string, string) {
 	t.Helper()
-	regs, ref := makeTestRegistry(t, manifest, files)
+	registryURI, ref := makeTestRegistry(t, manifest, files)
 	target := filepath.Join(t.TempDir(), "proj")
-	mustInitTestProject(t, target, regs, ref, testOptions(&strings.Builder{}))
-	return target, regs
+	mustInitTestProject(t, target, ref, testOptions(&strings.Builder{}))
+	return target, registryURI
 }

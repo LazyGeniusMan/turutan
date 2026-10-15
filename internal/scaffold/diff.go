@@ -44,13 +44,12 @@ const (
 )
 
 type DiffOptions struct {
-	Ref        string
-	Registries map[string]string
-	Engine     string
-	NoColor    bool
-	Verbose    bool
-	What       string
-	Stderr     io.Writer
+	Ref     string
+	Engine  string
+	NoColor bool
+	Verbose bool
+	What    string
+	Stderr  io.Writer
 }
 
 type FileDiff struct {
@@ -312,24 +311,25 @@ func fetchDiffBundle(
 	ctx context.Context,
 	state *config.State,
 	want string,
-	registries map[string]string,
 ) (string, func(), error) {
 	if want == "" || want == state.RequestedRef {
-		return fetchPinnedBundle(ctx, state, "diff", registries)
+		return fetchPinnedBundle(ctx, state, "diff")
 	}
-	registryName := strings.TrimSpace(state.Registry)
-	templateName := ""
-	if registryName == "" {
-		var version string
-		registryName, templateName, version = ResolveRegistryName(state.Template)
-		_ = version
-	} else {
-		_, templateName, _ = splitStoredRef(state.Template)
+	registryURI := strings.TrimSpace(state.Registry)
+	if registryURI == "" {
+		return "", nil, fmt.Errorf("diff: stored registry is empty")
+	}
+	storedRegistry, templateName, _, err := SplitStoredRef(state.Template)
+	if err != nil {
+		return "", nil, fmt.Errorf("diff: %w", err)
+	}
+	if storedRegistry != registryURI {
+		return "", nil, fmt.Errorf("diff: stored template %q does not match registry %q", state.Template, registryURI)
 	}
 	if templateName == "" {
 		return "", nil, fmt.Errorf("diff: stored template %q has no template name", state.Template)
 	}
-	rr, err := ResolveRegistry(ctx, registries, registryName)
+	rr, err := ResolveRegistry(ctx, registryURI)
 	if err != nil {
 		return "", nil, fmt.Errorf("diff: %w", err)
 	}
@@ -344,20 +344,17 @@ func fetchDiffBundle(
 	return dir, cleanup, nil
 }
 
-func fetchPinnedBundle(ctx context.Context, state *config.State, op string, registries map[string]string) (string, func(), error) {
+func fetchPinnedBundle(ctx context.Context, state *config.State, op string) (string, func(), error) {
 	uri, err := registry.ParseURI(state.TemplateURI)
 	if err != nil {
 		return "", nil, fmt.Errorf("%s: %w", op, err)
 	}
 	if uri.IsRelative() {
-		rr, err := ResolveRegistry(ctx, registries, state.Registry)
+		baseURI, err := registry.ParseURI(strings.TrimSpace(state.Registry))
 		if err != nil {
 			return "", nil, fmt.Errorf("%s: %w", op, err)
 		}
-		if rr.Root == "" {
-			return "", nil, fmt.Errorf("%s: relative uri %q needs a local registry root", op, uri.Path)
-		}
-		resolved, err := uri.ResolveRelativeTo(rr.Root)
+		resolved, err := resolveRelativeAgainstRegistry(uri, baseURI)
 		if err != nil {
 			return "", nil, fmt.Errorf("%s: %w", op, err)
 		}
@@ -391,13 +388,27 @@ func fetchPinnedBundle(ctx context.Context, state *config.State, op string, regi
 	return tmp, cleanup, nil
 }
 
+func resolveRelativeAgainstRegistry(rel, base registry.URI) (registry.URI, error) {
+	if base.Scheme == registry.SchemeFS && !base.IsRelative() {
+		joined := base.Path + "/" + strings.TrimPrefix(rel.Path, "/")
+		return registry.URI{Scheme: registry.SchemeFS, Path: joined}, nil
+	}
+	if base.Scheme == registry.SchemeHTTP || base.Scheme == registry.SchemeHTTPS {
+		return rel.ResolveRelativeTo(base.String())
+	}
+	if base.Scheme == registry.SchemeFS && base.IsRelative() {
+		return registry.URI{}, fmt.Errorf("relative uri %q needs an absolute registry URI", base.Path)
+	}
+	return registry.URI{}, fmt.Errorf("relative uri needs a local registry root")
+}
+
 func renderDiffTemplate(
 	ctx context.Context,
 	state *config.State,
 	want string,
 	opts DiffOptions,
 ) (map[string]renderedEntry, *config.Manifest, error) {
-	bundleDir, cleanup, err := fetchDiffBundle(ctx, state, want, opts.Registries)
+	bundleDir, cleanup, err := fetchDiffBundle(ctx, state, want)
 	if err != nil {
 		return nil, nil, err
 	}

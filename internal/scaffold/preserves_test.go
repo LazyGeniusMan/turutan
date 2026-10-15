@@ -39,8 +39,8 @@ func writeLocalFile(t *testing.T, projectDir, rel, content string) {
 
 func TestPreservedGlobsUnion(t *testing.T) {
 	t.Parallel()
-	regs, _ := makeTestRegistry(t, preservesSeedManifest, preservesSeedFiles)
-	manifest, err := config.LoadManifest(os.DirFS(filepath.Join(testRegistryDir(t, regs), "templates", testRegistryTemplate)))
+	registryURI, _ := makeTestRegistry(t, preservesSeedManifest, preservesSeedFiles)
+	manifest, err := config.LoadManifest(os.DirFS(filepath.Join(testRegistryDir(t, registryURI), "templates", testRegistryTemplate)))
 	if err != nil {
 		t.Fatalf("LoadManifest error: %v", err)
 	}
@@ -74,19 +74,19 @@ func TestPreservedGlobsUnion(t *testing.T) {
 }
 
 func TestPreserveInitSeedOnce(t *testing.T) {
-	regs, ref := makeTestRegistry(t, preservesSeedManifest, preservesSeedFiles)
+	registryURI, ref := makeTestRegistry(t, preservesSeedManifest, preservesSeedFiles)
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
-	if err := Init(context.Background(), target, ref, regs, testOptions(&stdout)); err != nil {
+	if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
 		t.Fatalf("Init error: %v", err)
 	}
 	writeLocalFile(t, target, "keep.local", "local\n")
-	writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n", "keep.txt": "keep v2\n"})
-	releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+	writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n", "keep.txt": "keep v2\n"})
+	releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 	var reStdout strings.Builder
 	reOpts := testOptions(&reStdout)
 	reOpts.Force = true
-	if err := Init(context.Background(), target, ref, regs, reOpts); err != nil {
+	if err := Init(context.Background(), target, ref, reOpts); err != nil {
 		t.Fatalf("re-init error: %v", err)
 	}
 	assertProfileFile(t, target, "keep.local", "local\n")
@@ -94,18 +94,18 @@ func TestPreserveInitSeedOnce(t *testing.T) {
 }
 
 func TestPreserveUpdateSeedOnce(t *testing.T) {
-	setup := func(t *testing.T) (map[string]string, string) {
+	setup := func(t *testing.T) (string, string) {
 		t.Helper()
-		projectDir, regs := initRegistryProject(t, preservesSeedManifest, preservesSeedFiles)
-		return regs, projectDir
+		projectDir, registryURI := initRegistryProject(t, preservesSeedManifest, preservesSeedFiles)
+		return registryURI, projectDir
 	}
 	t.Run("both changed keeps local preserved but updates core", func(t *testing.T) {
-		regs, projectDir := setup(t)
+		registryURI, projectDir := setup(t)
 		writeLocalFile(t, projectDir, "keep.local", "local\n")
-		writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n", "keep.txt": "keep v2\n"})
-		releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n", "keep.txt": "keep v2\n"})
+		releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
@@ -114,15 +114,15 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 		assertProfileFile(t, projectDir, "keep.txt", "keep v2\n")
 	})
 	t.Run("added present keeps local preserved", func(t *testing.T) {
-		regs, projectDir := setup(t)
+		registryURI, projectDir := setup(t)
 		if err := os.Remove(filepath.Join(projectDir, "keep.local")); err != nil {
 			t.Fatal(err)
 		}
 		writeLocalFile(t, projectDir, "keep.local", "local\n")
-		writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n"})
-		releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n"})
+		releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
@@ -130,11 +130,11 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 		assertProfileFile(t, projectDir, "keep.local", "local\n")
 	})
 	t.Run("added absent seeds preserved", func(t *testing.T) {
-		regs, projectDir := setup(t)
-		writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"extra.local": "seed extra\n"})
-		releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+		registryURI, projectDir := setup(t)
+		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"extra.local": "seed extra\n"})
+		releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -146,14 +146,14 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 		}
 	})
 	t.Run("locked deleted preserved stays deleted", func(t *testing.T) {
-		regs, projectDir := setup(t)
+		registryURI, projectDir := setup(t)
 		if err := os.Remove(filepath.Join(projectDir, "keep.local")); err != nil {
 			t.Fatal(err)
 		}
-		writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n"})
-		releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"keep.local": "seed v2\n"})
+		releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
@@ -163,11 +163,11 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 		}
 	})
 	t.Run("dropped keeps local preserved with note", func(t *testing.T) {
-		regs, projectDir := setup(t)
+		registryURI, projectDir := setup(t)
 		writeLocalFile(t, projectDir, "keep.local", "local\n")
-		removeTestTemplateFile(t, regs, testRegistryTemplate, "keep.local")
+		removeTestTemplateFile(t, registryURI, testRegistryTemplate, "keep.local")
 		var stdout, stderr strings.Builder
-		opts := updateCLIOptions(&stdout, &stderr, regs)
+		opts := updateCLIOptions(&stdout, &stderr, registryURI)
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
 		}
@@ -177,20 +177,20 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 		}
 	})
 	t.Run("dirty guard ignores preserved edits", func(t *testing.T) {
-		regs, projectDir := setup(t)
+		_, projectDir := setup(t)
 		writeLocalFile(t, projectDir, "keep.local", "local\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.NonInteractive = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update without --force error: %v", err)
 		}
 	})
 	t.Run("dirty guard still fires for core files", func(t *testing.T) {
-		regs, projectDir := setup(t)
+		_, projectDir := setup(t)
 		writeLocalFile(t, projectDir, "keep.txt", "keep // local\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.NonInteractive = true
 		_, err := Update(context.Background(), projectDir, opts)
 		if err == nil {
@@ -203,19 +203,19 @@ func TestPreserveUpdateSeedOnce(t *testing.T) {
 }
 
 func TestPreservePreviewAndDiff(t *testing.T) {
-	regs, ref := makeTestRegistry(t, preservesSeedManifest, preservesSeedFiles)
+	registryURI, ref := makeTestRegistry(t, preservesSeedManifest, preservesSeedFiles)
 	projectDir := filepath.Join(t.TempDir(), "proj")
-	mustInitTestProject(t, projectDir, regs, ref, testOptions(&strings.Builder{}))
+	mustInitTestProject(t, projectDir, ref, testOptions(&strings.Builder{}))
 	writeLocalFile(t, projectDir, "keep.local", "local\n")
-	writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{
+	writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{
 		"keep.local": "seed v2\n",
 		"keep.txt":   "keep v2\n",
 		"extra.txt":  "extra\n",
 	})
-	releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+	releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 	t.Run("preview hides present preserved lists absent", func(t *testing.T) {
 		var stdout, stderr strings.Builder
-		opts := updateCLIOptions(&stdout, &stderr, regs)
+		opts := updateCLIOptions(&stdout, &stderr, registryURI)
 		opts.Preview = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("preview error: %v", err)
@@ -233,7 +233,7 @@ func TestPreservePreviewAndDiff(t *testing.T) {
 	})
 	t.Run("diff hides preserved drift", func(t *testing.T) {
 		writeLocalFile(t, projectDir, "keep.txt", "keep // local\n")
-		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions(regs))
+		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -249,17 +249,17 @@ func TestPreservePreviewAndDiff(t *testing.T) {
 }
 
 func TestConditionalPreservesOnlyIfAbsent(t *testing.T) {
-	setup := func(t *testing.T, profiles ...string) (map[string]string, string) {
+	setup := func(t *testing.T, profiles ...string) (string, string) {
 		t.Helper()
-		projectDir, regs := initRegistryProfiles(t, preservesSeedManifest, preservesSeedFiles, profiles...)
-		return regs, projectDir
+		projectDir, registryURI := initRegistryProfiles(t, preservesSeedManifest, preservesSeedFiles, profiles...)
+		return registryURI, projectDir
 	}
 	t.Run("inactive conditional preserves sync normally", func(t *testing.T) {
-		regs, projectDir := setup(t)
-		writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"docs.local": "seed docs v2\n"})
-		releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+		registryURI, projectDir := setup(t)
+		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"docs.local": "seed docs v2\n"})
+		releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		opts.NonInteractive = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
@@ -268,12 +268,12 @@ func TestConditionalPreservesOnlyIfAbsent(t *testing.T) {
 		assertProfileFile(t, projectDir, "docs.local", "seed docs v2\n")
 	})
 	t.Run("active conditional preserves keep local", func(t *testing.T) {
-		regs, projectDir := setup(t, "docs")
+		registryURI, projectDir := setup(t, "docs")
 		writeLocalFile(t, projectDir, "docs.local", "local docs\n")
-		writeTestRegistryFiles(t, regs, testRegistryTemplate, map[string]string{"docs.local": "seed docs v2\n"})
-		releaseTestTemplate(t, testRegistryDir(t, regs), testRegistryTemplate)
+		writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{"docs.local": "seed docs v2\n"})
+		releaseTestTemplate(t, testRegistryDir(t, registryURI), testRegistryTemplate)
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		opts.NonInteractive = true
 		dataFile := profilesDataFile(t, "docs")

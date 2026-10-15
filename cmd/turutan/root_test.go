@@ -278,10 +278,10 @@ func TestResolveInitTemplateLayers(t *testing.T) {
 		user string
 		want string
 	}{
-		{name: "flag wins over env and user", flag: "a/t@1.0.0", env: "b/u@1.0.0", user: "c/v@1.0.0", want: "a/t@1.0.0"},
-		{name: "env wins over user", env: "b/u@2.0.0", user: "c/v@1.0.0", want: "b/u@2.0.0"},
-		{name: "user config used when above empty", user: "c/v", want: "c/v"},
-		{name: "empty means turutan default", want: "turutan/default"},
+		{name: "flag wins over env and user", flag: "oci://example.com/org/a/t@1.0.0", env: "oci://example.com/org/b/u@1.0.0", user: "oci://example.com/org/c/v@1.0.0", want: "oci://example.com/org/a/t@1.0.0"},
+		{name: "env wins over user", env: "oci://example.com/org/b/u@2.0.0", user: "oci://example.com/org/c/v@1.0.0", want: "oci://example.com/org/b/u@2.0.0"},
+		{name: "user config used when above empty", user: "oci://example.com/org/c/v", want: "oci://example.com/org/c/v"},
+		{name: "empty means default URI", want: "oci://ghcr.io/lazygeniusman/turutan/templates/default"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

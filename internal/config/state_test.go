@@ -14,9 +14,9 @@ import (
 func validState() *State {
 	return &State{
 		Version:         StateVersion,
-		Template:        "acme/web@1.2.0",
+		Template:        "oci://ghcr.io/acme/templates/web@1.2.0",
 		SourceKind:      "registry",
-		Registry:        "acme",
+		Registry:        "oci://ghcr.io/acme/templates",
 		TemplateURI:     "oci://ghcr.io/acme/web:1.2.0",
 		TemplateDigest:  "sha256:" + strings.Repeat("a", 64),
 		RequestedRef:    "1.2.0",
@@ -208,10 +208,10 @@ func TestLockRoundTrip(t *testing.T) {
 
 func validLock() *Lock {
 	return &Lock{
-		Source:       "acme/web@1.2.0",
+		Source:       "oci://ghcr.io/acme/templates/web@1.2.0",
 		Ref:          "1.2.0",
 		ResolvedSHA:  strings.Repeat("a", 64),
-		Registry:     "acme",
+		Registry:     "oci://ghcr.io/acme/templates",
 		URI:          "oci://ghcr.io/acme/web:1.2.0",
 		Digest:       "sha256:" + strings.Repeat("a", 64),
 		ManifestHash: "sha256:" + strings.Repeat("b", 64),
@@ -741,15 +741,15 @@ func TestStateLockLocations(t *testing.T) {
 	digest := "sha256:" + commit
 	stateFile := func(engine string) *fstest.MapFile {
 		return &fstest.MapFile{Data: []byte(
-			"version: 1\ntemplate: acme/web@1.2.0\nsourceKind: registry\n" +
-				"registry: acme\ntemplateURI: oci://ghcr.io/acme/web:1.2.0\n" +
+			"version: 1\ntemplate: oci://ghcr.io/acme/templates/web@1.2.0\nsourceKind: registry\n" +
+				"registry: oci://ghcr.io/acme/templates\ntemplateURI: oci://ghcr.io/acme/web:1.2.0\n" +
 				"templateDigest: " + digest + "\nrequestedRef: 1.2.0\n" +
 				"resolvedCommit: " + commit + "\nengine: " + engine + "\n" +
 				"templateLicense: MIT-0\n")}
 	}
 	lockFile := &fstest.MapFile{Data: []byte(
-		`{"source":"acme/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
-			`"registry":"acme","uri":"oci://ghcr.io/acme/web:1.2.0",` +
+		`{"source":"oci://ghcr.io/acme/templates/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
+			`"registry":"oci://ghcr.io/acme/templates","uri":"oci://ghcr.io/acme/web:1.2.0",` +
 			`"digest":"` + digest + `","manifest_hash":"` + digest + `","files":[]}`)}
 	t.Run("yaml state loads", func(t *testing.T) {
 		t.Parallel()
@@ -790,8 +790,8 @@ func TestStateLockLocations(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		state := &State{
-			Template: "acme/web@1.2.0", SourceKind: "registry",
-			Registry: "acme", TemplateURI: "oci://ghcr.io/acme/web:1.2.0",
+			Template: "oci://ghcr.io/acme/templates/web@1.2.0", SourceKind: "registry",
+			Registry: "oci://ghcr.io/acme/templates", TemplateURI: "oci://ghcr.io/acme/web:1.2.0",
 			TemplateDigest: digest, RequestedRef: "1.2.0",
 			ResolvedCommit: commit, Engine: "turutan/0.1.0",
 			TemplateLicense: TemplateLicenseMIT0,
@@ -810,7 +810,7 @@ func TestStateLockLocations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("reading saved state: %v", err)
 		}
-		if !strings.Contains(string(data), "template: acme/web@1.2.0") {
+		if !strings.Contains(string(data), "template: oci://ghcr.io/acme/templates/web@1.2.0") {
 			t.Errorf("saved state = %q, want yaml with template key", data)
 		}
 		if err := SaveLock(dir, &Lock{

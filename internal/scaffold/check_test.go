@@ -10,15 +10,15 @@ import (
 	"testing"
 )
 
-func checkOptions(stdout *strings.Builder, regs map[string]string) CheckOptions {
-	return CheckOptions{Stdout: stdout, Registries: regs}
+func checkOptions(stdout *strings.Builder) CheckOptions {
+	return CheckOptions{Stdout: stdout}
 }
 
 func TestCheckRegistry(t *testing.T) {
 	t.Run("up to date on clean init", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		var stdout strings.Builder
-		result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
 			t.Fatalf("Check error: %v", err)
 		}
@@ -33,10 +33,10 @@ func TestCheckRegistry(t *testing.T) {
 		}
 	})
 	t.Run("new release reports available", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
-		fresh := updateTestTemplateFile(t, regs, testRegistryTemplate, "hello.txt", "v2\n")
+		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, "hello.txt", "v2\n")
 		var stdout strings.Builder
-		result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
 			t.Fatalf("Check error: %v", err)
 		}
@@ -54,10 +54,10 @@ func TestCheckRegistry(t *testing.T) {
 		}
 	})
 	t.Run("ref pins the stored version", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
-		updateTestTemplateFile(t, regs, testRegistryTemplate, "hello.txt", "v2\n")
+		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "hello.txt", "v2\n")
 		var stdout strings.Builder
-		opts := checkOptions(&stdout, regs)
+		opts := checkOptions(&stdout)
 		opts.Ref = testRegistryVersion
 		result, err := Check(context.Background(), projectDir, opts)
 		if err != nil {
@@ -68,21 +68,21 @@ func TestCheckRegistry(t *testing.T) {
 		}
 	})
 	t.Run("unknown ref errors", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		var stdout strings.Builder
-		opts := checkOptions(&stdout, regs)
+		opts := checkOptions(&stdout)
 		opts.Ref = "9.9.9"
 		if _, err := Check(context.Background(), projectDir, opts); err == nil {
 			t.Error("Check with unknown ref succeeded, want error")
 		}
 	})
 	t.Run("project-only edit stays up to date", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("local edit\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
 			t.Fatalf("Check error: %v", err)
 		}
@@ -91,13 +91,13 @@ func TestCheckRegistry(t *testing.T) {
 		}
 	})
 	t.Run("preserved local edit stays up to date", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t,
+		projectDir, _ := initRegistryProject(t,
 			"preserves:\n  - \"keep.txt\"\n", map[string]string{"keep.txt": "template keep\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		var stdout strings.Builder
-		result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
 			t.Fatalf("Check error: %v", err)
 		}
@@ -107,7 +107,7 @@ func TestCheckRegistry(t *testing.T) {
 	})
 	t.Run("missing state errors", func(t *testing.T) {
 		var stdout strings.Builder
-		if _, err := Check(context.Background(), t.TempDir(), checkOptions(&stdout, nil)); err == nil {
+		if _, err := Check(context.Background(), t.TempDir(), checkOptions(&stdout)); err == nil {
 			t.Error("Check without state succeeded, want error")
 		}
 	})
@@ -115,11 +115,11 @@ func TestCheckRegistry(t *testing.T) {
 
 func TestCheckRegistryMinEngine(t *testing.T) {
 	t.Run("unsatisfiable floor stays best-effort", func(t *testing.T) {
-		projectDir, regs := initRegistryProject(t,
+		projectDir, registryURI := initRegistryProject(t,
 			"min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		updateTestTemplateFile(t, regs, testRegistryTemplate, ".turutan.yml", "min-engine: \">=99.0.0\"\n")
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml", "min-engine: \">=99.0.0\"\n")
 		var stdout strings.Builder
-		opts := checkOptions(&stdout, regs)
+		opts := checkOptions(&stdout)
 		opts.Engine = "0.1.0"
 		result, err := Check(context.Background(), projectDir, opts)
 		if err != nil {
@@ -135,11 +135,11 @@ func TestCheckRegistryInputs(t *testing.T) {
 	t.Run("new input reports available with inputs line", func(t *testing.T) {
 		const manifest = "inputs:\n" +
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n"
-		projectDir, regs := initRegistryProject(t, manifest, map[string]string{"hello.txt": "v1\n"})
-		updateTestTemplateFile(t, regs, testRegistryTemplate, ".turutan.yml",
+		projectDir, registryURI := initRegistryProject(t, manifest, map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, ".turutan.yml",
 			manifest+"  service_name:\n    label: \"Service name\"\n    type: string\n")
 		var stdout strings.Builder
-		result, err := Check(context.Background(), projectDir, checkOptions(&stdout, regs))
+		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {
 			t.Fatalf("Check error: %v", err)
 		}

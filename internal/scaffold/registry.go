@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/git"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 )
@@ -22,9 +21,10 @@ const (
 	ociIndexTag          = "latest"
 )
 
-// RegistryRef is a parsed --template value: registry/template@version with
-// an optional version. A bare template name resolves to the default
-// registry; a missing version resolves to latest.
+// RegistryRef is a parsed --template value: <registry-uri>/<template>[@version]
+// with an optional version. Registry holds the canonical registry URI
+// (oci://, https://, fs:, s3://, git+...). A bare template name resolves to
+// the default registry URI; a missing version resolves to latest.
 // ~keep
 type RegistryRef struct {
 	Registry string
@@ -32,60 +32,82 @@ type RegistryRef struct {
 	Version  string
 }
 
-// String returns the canonical registry/template@version form, omitting an
-// empty version.
+// String returns the canonical <registry-uri>/<template>[@version] form,
+// omitting an empty version.
 // ~keep
 func (r RegistryRef) String() string {
+	base := strings.TrimSuffix(strings.TrimSpace(r.Registry), "/")
 	if r.Version == "" {
-		return r.Registry + "/" + r.Template
+		return base + "/" + r.Template
 	}
-	return r.Registry + "/" + r.Template + "@" + r.Version
+	return base + "/" + r.Template + "@" + r.Version
 }
 
-// ParseRegistryRef parses --template values. Slashes after the first belong
-// to the template name, so nested template paths survive the split.
+// ParseRegistryRef parses --template values in URI form:
+// <registry-uri>/<template>[@version]. The registry part must parse via
+// ParseURI; the template part must be a valid template name. A bare
+// template name without slash or scheme resolves under the default
+// registry URI. Legacy name/template forms without a URI scheme are
+// rejected.
 // ~keep
 func ParseRegistryRef(raw string) (RegistryRef, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return RegistryRef{}, fmt.Errorf("template is empty: want registry/template[@version]")
+		return RegistryRef{}, fmt.Errorf("template is empty: want <registry-uri>/<template>[@version]")
 	}
-	ref, version, _ := strings.Cut(trimmed, "@")
-	if strings.Contains(version, "@") {
+	if strings.Count(trimmed, "@") > 1 {
 		return RegistryRef{}, fmt.Errorf("template %q has more than one @", raw)
 	}
-	if strings.TrimSpace(version) != "" {
-		if _, err := registry.ParseStrict(strings.TrimSpace(version)); err != nil {
+	ref, version, _ := strings.Cut(trimmed, "@")
+	version = strings.TrimSpace(version)
+	if version != "" {
+		if _, err := registry.ParseStrict(version); err != nil {
 			return RegistryRef{}, fmt.Errorf("template %q: %w", raw, err)
 		}
 	}
-	head, template, _ := strings.Cut(ref, "/")
-	head = strings.TrimSpace(head)
-	template = strings.TrimSpace(template)
-	if template == "" {
-		head = registry.DefaultRegistryName
-		template = strings.TrimSpace(ref)
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return RegistryRef{}, fmt.Errorf("template %q: want <registry-uri>/<template>[@version]", raw)
 	}
-	if head == "" || template == "" {
-		return RegistryRef{}, fmt.Errorf("template %q: want registry/template[@version]", raw)
+	if !strings.Contains(ref, "/") {
+		if strings.Contains(ref, ":") {
+			return RegistryRef{}, fmt.Errorf("template %q: want <registry-uri>/<template>[@version]", raw)
+		}
+		out := RegistryRef{Registry: registry.DefaultRegistryURI, Template: strings.TrimSpace(ref), Version: version}
+		if err := registry.ValidateTemplateName(out.Template); err != nil {
+			return RegistryRef{}, fmt.Errorf("template %q: %w", raw, err)
+		}
+		return out, nil
 	}
-	out := RegistryRef{Registry: head, Template: template, Version: strings.TrimSpace(version)}
+	if !strings.Contains(ref, "://") && !strings.HasPrefix(ref, "fs:") {
+		return RegistryRef{}, fmt.Errorf("template %q: want <registry-uri>/<template>[@version]", raw)
+	}
+	idx := strings.LastIndex(ref, "/")
+	registryPart := strings.TrimSpace(ref[:idx])
+	templatePart := strings.TrimSpace(ref[idx+1:])
+	if registryPart == "" || templatePart == "" {
+		return RegistryRef{}, fmt.Errorf("template %q: want <registry-uri>/<template>[@version]", raw)
+	}
+	if _, err := registry.ParseURI(registryPart); err != nil {
+		return RegistryRef{}, fmt.Errorf("template %q: bad registry uri: %w", raw, err)
+	}
+	out := RegistryRef{Registry: registryPart, Template: templatePart, Version: version}
 	if err := registry.ValidateTemplateName(out.Template); err != nil {
 		return RegistryRef{}, fmt.Errorf("template %q: %w", raw, err)
 	}
 	return out, nil
 }
 
-// DefaultRegistryRef is turutan/default at latest: zero user config needed
-// because the turutan name falls back to its OCI address.
+// DefaultRegistryRef is the default registry URI at latest: zero user config
+// needed because the built-in default URI is used directly.
 // ~keep
 func DefaultRegistryRef() RegistryRef {
-	return RegistryRef{Registry: registry.DefaultRegistryName, Template: registry.DefaultTemplateName}
+	return RegistryRef{Registry: registry.DefaultRegistryURI, Template: registry.DefaultTemplateName}
 }
 
 // ResolveTemplateFlag applies the --template layering: flag wins, then the
 // TURUTAN_TEMPLATE environment, then the user config template, then the
-// turutan/default default.
+// default registry URI.
 // ~keep
 func ResolveTemplateFlag(flag string, envVal, userTemplate string) RegistryRef {
 	for _, candidate := range []string{flag, envVal, userTemplate} {
@@ -98,8 +120,9 @@ func ResolveTemplateFlag(flag string, envVal, userTemplate string) RegistryRef {
 	return DefaultRegistryRef()
 }
 
-// ResolvedRegistry bundles a named registry with its auth and index.
-// Root is the absolute local dir for fs registries and empty otherwise.
+// ResolvedRegistry bundles a registry URI with its auth and index.
+// Name holds the canonical registry URI string. Root is the absolute local
+// dir for fs registries and empty otherwise.
 // ~keep
 type ResolvedRegistry struct {
 	Name string
@@ -109,19 +132,24 @@ type ResolvedRegistry struct {
 	Idx  *registry.RegistryIndex
 }
 
-// ResolveRegistry loads the index for a named registry reference.
+// ResolveRegistry loads the index for a registry URI directly, without any
+// name lookup. The URI must parse via ParseURI.
 // ~keep
-func ResolveRegistry(ctx context.Context, registries map[string]string, name string) (*ResolvedRegistry, error) {
-	uri, err := registry.ResolveRegistryURI(registries, name)
+func ResolveRegistry(ctx context.Context, registryURI string) (*ResolvedRegistry, error) {
+	trimmed := strings.TrimSpace(registryURI)
+	if trimmed == "" {
+		trimmed = registry.DefaultRegistryURI
+	}
+	uri, err := registry.ParseURI(trimmed)
 	if err != nil {
 		return nil, err
 	}
-	auth := registry.ResolveAuth(name, uri)
+	auth := registry.ResolveAuth(trimmed, uri)
 	index, root, err := loadRegistryIndex(ctx, uri, auth)
 	if err != nil {
 		return nil, err
 	}
-	return &ResolvedRegistry{Name: name, URI: uri, Auth: auth, Root: root, Idx: index}, nil
+	return &ResolvedRegistry{Name: uri.String(), URI: uri, Auth: auth, Root: root, Idx: index}, nil
 }
 
 func loadRegistryIndex(ctx context.Context, uri registry.URI, auth registry.AuthConfig) (*registry.RegistryIndex, string, error) {
@@ -479,34 +507,53 @@ func FetchTemplateBundle(ctx context.Context, rr *ResolvedRegistry, manifest *re
 	return tmp, manifest.URI.String(), cleanup, nil
 }
 
-// RegistryStateRef returns the canonical registry/template@version ref.
+// RegistryStateRef returns the canonical <registry-uri>/<template>@<version>
+// ref. RegistryURI must be the canonical registry URI string.
 // ~keep
-func RegistryStateRef(registryName, template, version string) string {
-	return registryName + "/" + template + "@" + version
+func RegistryStateRef(registryURI, template, version string) string {
+	base := strings.TrimSuffix(strings.TrimSpace(registryURI), "/")
+	return base + "/" + template + "@" + version
 }
 
-// LoadProjectRegistries reads the named registry references for project
-// operations from path, defaulting to an empty map when path is empty.
+// SplitStoredRef parses a stored URI-based template ref of the form
+// <registry-uri>/<template>@<version> into its registry URI, template and
+// version parts. It rejects legacy name-based refs without a URI scheme.
 // ~keep
-func LoadProjectRegistries(path string) map[string]string {
-	regs, err := config.LoadRegistries(path)
-	if err != nil || regs == nil {
-		return map[string]string{}
-	}
-	return regs
-}
-
-// ResolveRegistryName extracts the registry name from a stored template ref
-// of the form registry/template@version.
-// ~keep
-func ResolveRegistryName(stored string) (registryName, template, version string) {
+func SplitStoredRef(stored string) (registryURI, template, version string, err error) {
 	ref := strings.TrimSpace(stored)
-	if at := strings.LastIndex(ref, "@"); at >= 0 {
-		version = strings.TrimSpace(ref[at+1:])
-		ref = ref[:at]
+	if ref == "" {
+		return "", "", "", fmt.Errorf("stored template is empty: want <registry-uri>/<template>@<version>")
 	}
-	if slash := strings.Index(ref, "/"); slash >= 0 {
-		return strings.TrimSpace(ref[:slash]), strings.TrimSpace(ref[slash+1:]), version
+	if strings.Count(ref, "@") != 1 {
+		return "", "", "", fmt.Errorf("stored template %q: want exactly one @", stored)
 	}
-	return registry.DefaultRegistryName, strings.TrimSpace(ref), version
+	head, ver, _ := strings.Cut(ref, "@")
+	ver = strings.TrimSpace(ver)
+	if ver == "" {
+		return "", "", "", fmt.Errorf("stored template %q: missing version after @", stored)
+	}
+	if _, perr := registry.ParseStrict(ver); perr != nil {
+		return "", "", "", fmt.Errorf("stored template %q: %w", stored, perr)
+	}
+	head = strings.TrimSpace(head)
+	idx := strings.LastIndex(head, "/")
+	if idx < 0 {
+		return "", "", "", fmt.Errorf("stored template %q: want <registry-uri>/<template>@<version>", stored)
+	}
+	regPart := strings.TrimSpace(head[:idx])
+	tmplPart := strings.TrimSpace(head[idx+1:])
+	if regPart == "" || tmplPart == "" {
+		return "", "", "", fmt.Errorf("stored template %q: want <registry-uri>/<template>@<version>", stored)
+	}
+	if !strings.Contains(regPart, "://") && !strings.HasPrefix(regPart, "fs:") {
+		return "", "", "", fmt.Errorf("stored template %q: registry %q is not a URI", stored, regPart)
+	}
+	parsed, perr := registry.ParseURI(regPart)
+	if perr != nil {
+		return "", "", "", fmt.Errorf("stored template %q: bad registry uri: %w", stored, perr)
+	}
+	if verr := registry.ValidateTemplateName(tmplPart); verr != nil {
+		return "", "", "", fmt.Errorf("stored template %q: %w", stored, verr)
+	}
+	return parsed.String(), tmplPart, ver, nil
 }

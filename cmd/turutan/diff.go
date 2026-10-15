@@ -34,13 +34,12 @@ func newDiffCmd() *cobra.Command {
 func runDiff(cmd *cobra.Command, ref string, noPager bool, what string) error {
 	stdout := cmd.OutOrStdout()
 	diffs, err := scaffold.ComputeDiff(cmd.Context(), ".", scaffold.DiffOptions{
-		Ref:        ref,
-		Registries: loadInitRegistries(),
-		Engine:     version,
-		NoColor:    appCfg.noColor,
-		Verbose:    appCfg.verbose,
-		What:       what,
-		Stderr:     cmd.ErrOrStderr(),
+		Ref:     ref,
+		Engine:  version,
+		NoColor: appCfg.noColor,
+		Verbose: appCfg.verbose,
+		What:    what,
+		Stderr:  cmd.ErrOrStderr(),
 	})
 	if err != nil {
 		return err

@@ -215,8 +215,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 
 	t.Run("ephemeral fs index drives latest-version resolution", func(t *testing.T) {
 		regDir, _ := releaseDefaultEphemeral(t)
-		rr, err := scaffold.ResolveRegistry(t.Context(),
-			map[string]string{"local": "fs:" + filepath.ToSlash(regDir)}, "local")
+		rr, err := scaffold.ResolveRegistry(t.Context(), "fs:"+filepath.ToSlash(regDir))
 		require.NoError(t, err)
 		entry, err := rr.Idx.FindTemplate("default")
 		require.NoError(t, err)
@@ -253,9 +252,9 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 
 	t.Run("zero-config default resolves to oci fallback", func(t *testing.T) {
 		ref := scaffold.ResolveTemplateFlag("", "", "")
-		require.Equal(t, "turutan", ref.Registry)
+		require.Equal(t, registry.DefaultRegistryURI, ref.Registry)
 		require.Equal(t, "default", ref.Template)
-		uri, err := registry.ResolveRegistryURI(map[string]string{}, "turutan")
+		uri, err := registry.ParseURI(registry.DefaultRegistryURI)
 		require.NoError(t, err)
 		require.Equal(t, registry.DefaultRegistryURI, uri.String())
 	})

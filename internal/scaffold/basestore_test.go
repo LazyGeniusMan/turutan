@@ -119,7 +119,7 @@ func TestInitStoresBase(t *testing.T) {
 	})
 }
 
-func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) (string, map[string]string) {
+func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) (string, string) {
 	t.Helper()
 	projectDir, regs := initRegistryProject(t, "", map[string]string{"both.txt": base})
 	if err := os.WriteFile(filepath.Join(projectDir, "both.txt"), []byte(localEdit), 0o600); err != nil {
@@ -132,9 +132,9 @@ func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) (string
 func TestUpdateThreeWay(t *testing.T) {
 	const base = "line1\nline2\nline3\nline4\n"
 	t.Run("disjoint edits merge cleanly", func(t *testing.T) {
-		projectDir, regs := threeWayFixture(t, base, "LOCAL1\nline2\nline3\nline4\n", "line1\nline2\nline3\nTEMPLATE4\n")
+		projectDir, _ := threeWayFixture(t, base, "LOCAL1\nline2\nline3\nline4\n", "line1\nline2\nline3\nTEMPLATE4\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -152,9 +152,9 @@ func TestUpdateThreeWay(t *testing.T) {
 		}
 	})
 	t.Run("overlapping edits conflict inline", func(t *testing.T) {
-		projectDir, regs := threeWayFixture(t, base, "line1\nLOCAL2\nline3\nline4\n", "line1\nTEMPLATE2\nline3\nline4\n")
+		projectDir, _ := threeWayFixture(t, base, "line1\nLOCAL2\nline3\nline4\n", "line1\nTEMPLATE2\nline3\nline4\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -174,9 +174,9 @@ func TestUpdateThreeWay(t *testing.T) {
 		}
 	})
 	t.Run("template-only change takes new", func(t *testing.T) {
-		projectDir, regs := threeWayFixture(t, base, base, "line1\nline2\nline3\nTEMPLATE4\n")
+		projectDir, _ := threeWayFixture(t, base, base, "line1\nline2\nline3\nTEMPLATE4\n")
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		if _, err := Update(context.Background(), projectDir, opts); err != nil {
 			t.Fatalf("Update error: %v", err)
@@ -193,7 +193,7 @@ func TestUpdateThreeWay(t *testing.T) {
 
 func TestUpdateOverlayFallback(t *testing.T) {
 	t.Run("missing store falls back to overlay", func(t *testing.T) {
-		projectDir, regs := threeWayFixture(t,
+		projectDir, _ := threeWayFixture(t,
 			"line1\nline2\n",
 			"line1\nLOCAL2\n",
 			"line1\nTEMPLATE2\n")
@@ -201,7 +201,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -226,7 +226,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 		}
 	})
 	t.Run("missing base entry for one file uses overlay", func(t *testing.T) {
-		projectDir, regs := threeWayFixture(t,
+		projectDir, _ := threeWayFixture(t,
 			"line1\nline2\n",
 			"line1\nLOCAL2\n",
 			"line1\nTEMPLATE2\n")
@@ -242,7 +242,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 			t.Fatal(err)
 		}
 		var stdout, stderr strings.Builder
-		opts := updateTestOptions(&stdout, &stderr, regs)
+		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
 		result, err := Update(context.Background(), projectDir, opts)
 		if err != nil {
@@ -259,8 +259,8 @@ func TestUpdateOverlayFallback(t *testing.T) {
 
 func TestInitSymlinkAndSpecial(t *testing.T) {
 	t.Run("escaping symlink dropped from bundle", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
-		regDir := testRegistryDir(t, regs)
+		registryURI, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
+		regDir := testRegistryDir(t, registryURI)
 		outside := filepath.Join(t.TempDir(), "secret.txt")
 		if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
 			t.Fatal(err)
@@ -271,7 +271,7 @@ func TestInitSymlinkAndSpecial(t *testing.T) {
 		releaseTestTemplate(t, regDir, testRegistryTemplate)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Init(context.Background(), target, ref, regs, testOptions(&stdout)); err != nil {
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Lstat(filepath.Join(target, "evil.txt")); err == nil {
@@ -291,7 +291,7 @@ func TestInitSymlinkAndSpecial(t *testing.T) {
 		releaseTestTemplate(t, regDir, testRegistryTemplate)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Init(context.Background(), target, ref, regs, testOptions(&stdout)); err != nil {
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Lstat(filepath.Join(target, "link.txt")); err == nil {
@@ -299,15 +299,15 @@ func TestInitSymlinkAndSpecial(t *testing.T) {
 		}
 	})
 	t.Run("fifo skipped", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
-		regDir := testRegistryDir(t, regs)
+		registryURI, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
+		regDir := testRegistryDir(t, registryURI)
 		if !makeTestFifo(t, filepath.Join(regDir, "templates", testRegistryTemplate, "pipe")) {
 			t.Skip("fifos unavailable on this platform")
 		}
 		releaseTestTemplate(t, regDir, testRegistryTemplate)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Init(context.Background(), target, ref, regs, testOptions(&stdout)); err != nil {
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Lstat(filepath.Join(target, "pipe")); err == nil {
@@ -318,12 +318,12 @@ func TestInitSymlinkAndSpecial(t *testing.T) {
 		}
 	})
 	t.Run("absolute skip entry rejected", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
+		_, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Skip = []string{"/abs/path"}
-		if err := Init(context.Background(), target, ref, regs, opts); err == nil {
+		if err := Init(context.Background(), target, ref, opts); err == nil {
 			t.Error("Init with absolute --skip succeeded, want error")
 		}
 	})

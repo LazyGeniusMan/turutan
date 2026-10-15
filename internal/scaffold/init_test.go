@@ -71,10 +71,10 @@ func profilesDataFile(t *testing.T, profiles ...string) string {
 
 func TestInitFilesystem(t *testing.T) {
 	t.Run("renders data writes state and lock", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		registryURI, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Init(context.Background(), target, ref, regs, testOptions(&stdout)); err != nil {
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, "go.mod")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
@@ -94,11 +94,12 @@ func TestInitFilesystem(t *testing.T) {
 		if state.SourceKind != "registry" {
 			t.Errorf("SourceKind = %q, want registry", state.SourceKind)
 		}
-		if state.Registry != testRegistryName {
-			t.Errorf("Registry = %q, want %q", state.Registry, testRegistryName)
+		if state.Registry != registryURI {
+			t.Errorf("Registry = %q, want %q", state.Registry, registryURI)
 		}
-		if state.Template != testRegistryName+"/"+testRegistryTemplate+"@"+testRegistryVersion {
-			t.Errorf("Template = %q, want registry ref", state.Template)
+		expectTemplate := registryURI + "/" + testRegistryTemplate + "@" + testRegistryVersion
+		if state.Template != expectTemplate {
+			t.Errorf("Template = %q, want %q", state.Template, expectTemplate)
 		}
 		if state.RequestedRef != testRegistryVersion {
 			t.Errorf("RequestedRef = %q, want %q", state.RequestedRef, testRegistryVersion)
@@ -133,7 +134,7 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("data file wins over defaults", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		_, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: fromfile\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -141,7 +142,7 @@ func TestInitFilesystem(t *testing.T) {
 		target := filepath.Join(t.TempDir(), "proj")
 		opts := testOptions(&strings.Builder{})
 		opts.DataFile = dataFile
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "go.mod")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
@@ -150,11 +151,11 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("nested dirs render under sub", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, map[string]string{"sub/go.mod.tmpl": "module {{.project_name}}\n"})
+		_, ref := makeTestRegistry(t, basicManifest, map[string]string{"sub/go.mod.tmpl": "module {{.project_name}}\n"})
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, "sub", "go.mod")); err != nil {
@@ -162,39 +163,39 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("non-interactive without data fails", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		_, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		opts := testOptions(&strings.Builder{})
 		opts.Defaults = false
-		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, regs, opts); err == nil {
+		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts); err == nil {
 			t.Error("non-interactive init without data succeeded, want error")
 		}
 	})
 	t.Run("missing key names the key", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, map[string]string{"f.txt.tmpl": "{{.other}}\n"})
+		_, ref := makeTestRegistry(t, basicManifest, map[string]string{"f.txt.tmpl": "{{.other}}\n"})
 		opts := testOptions(&strings.Builder{})
-		err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, regs, opts)
+		err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts)
 		if err == nil || !strings.Contains(err.Error(), `"other"`) {
 			t.Errorf("error = %v, want it to name the missing key", err)
 		}
 	})
 	t.Run("non-empty target needs force", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		_, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		target := t.TempDir()
 		if err := os.WriteFile(filepath.Join(target, "existing.txt"), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := Init(context.Background(), target, ref, regs, testOptions(&strings.Builder{})); err == nil {
+		if err := Init(context.Background(), target, ref, testOptions(&strings.Builder{})); err == nil {
 			t.Error("init into non-empty dir succeeded, want error")
 		}
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Force = true
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Errorf("init with --force error: %v", err)
 		}
 	})
 	t.Run("preserve keeps local file under force", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		_, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		target := t.TempDir()
 		if err := os.WriteFile(filepath.Join(target, "keep.txt"), []byte("local keep\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -202,7 +203,7 @@ func TestInitFilesystem(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Force = true
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "keep.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
@@ -211,21 +212,21 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("min-engine floor enforced", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "min-engine: \">=99.0.0\"\n", basicFiles)
+		_, ref := makeTestRegistry(t, "min-engine: \">=99.0.0\"\n", basicFiles)
 		opts := testOptions(&strings.Builder{})
-		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, regs, opts); err == nil {
+		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts); err == nil {
 			t.Error("init below min-engine succeeded, want error")
 		}
 	})
 	t.Run("hooks refused without consent", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "hooks:\n  post: [\"./hooks/post.sh\"]\n", basicFiles)
+		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"./hooks/post.sh\"]\n", basicFiles)
 		opts := testOptions(&strings.Builder{})
-		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, regs, opts); err == nil {
+		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts); err == nil {
 			t.Error("hook-bearing template in non-interactive mode succeeded, want refusal")
 		}
 	})
 	t.Run("hooks consented with allow-hooks", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "hooks:\n  post: [\"hooks/post.sh\"]\n", map[string]string{
+		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"hooks/post.sh\"]\n", map[string]string{
 			"go.mod.tmpl":   "module {{.project_name}}\n",
 			"hooks/post.sh": "touch hook-ran.txt\n",
 		})
@@ -233,7 +234,7 @@ func TestInitFilesystem(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.AllowHooks = true
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init with --allow-hooks error: %v", err)
 		}
 		if !strings.Contains(stdout.String(), "ran 1 template hook") {
@@ -244,13 +245,13 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("interactive decline skips hooks with notice", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
+		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
 		target := filepath.Join(t.TempDir(), "p")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.NonInteractive = false
 		opts.Stdin = strings.NewReader("n\n")
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init with declined hooks error: %v", err)
 		}
 		if !strings.Contains(stdout.String(), "skipped (consent declined)") {
@@ -261,13 +262,13 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("interactive accept runs hooks", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
+		_, ref := makeTestRegistry(t, "hooks:\n  post: [\"touch hook-ran.txt\"]\n", basicFiles)
 		target := filepath.Join(t.TempDir(), "p")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.NonInteractive = false
 		opts.Stdin = strings.NewReader("y\n")
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init with accepted hooks error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, "hook-ran.txt")); err != nil {
@@ -275,11 +276,11 @@ func TestInitFilesystem(t *testing.T) {
 		}
 	})
 	t.Run("interactive input supplies missing key", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, "", map[string]string{"f.txt.tmpl": "{{.project_name}}-ok\n"})
+		_, ref := makeTestRegistry(t, "", map[string]string{"f.txt.tmpl": "{{.project_name}}-ok\n"})
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("typed\n")}
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		got, _ := os.ReadFile(filepath.Join(target, "f.txt")) // #nosec G304 -- test-only path under t.TempDir() with a constant segment
@@ -299,12 +300,12 @@ func TestInitLayeredIncludesExcludes(t *testing.T) {
 		"foo/bar/baz/2.md": "two\n",
 		"keep.txt":         "keep\n",
 	}
-	regs, ref := makeTestRegistry(t, manifest, files)
+	_, ref := makeTestRegistry(t, manifest, files)
 	target := filepath.Join(t.TempDir(), "proj")
 	var stdout strings.Builder
 	opts := testOptions(&stdout)
 	opts.DataFile = profilesDataFile(t, "b")
-	if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+	if err := Init(context.Background(), target, ref, opts); err != nil {
 		t.Fatalf("Init error: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(target, "foo", "bar", "baz", "1.md")); err != nil {
@@ -320,12 +321,12 @@ func TestInitLayeredIncludesExcludes(t *testing.T) {
 
 func TestInitConflictPersisted(t *testing.T) {
 	t.Run("conflict flag stored in state", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		_, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Conflict = ConflictRej
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))
@@ -337,10 +338,10 @@ func TestInitConflictPersisted(t *testing.T) {
 		}
 	})
 	t.Run("omitted conflict stores empty", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, basicManifest, basicFiles)
+		_, ref := makeTestRegistry(t, basicManifest, basicFiles)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Init(context.Background(), target, ref, regs, testOptions(&stdout)); err != nil {
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		state, err := turutanconfig.LoadState(os.DirFS(target))
@@ -371,12 +372,12 @@ func TestInitConditionalProfiles(t *testing.T) {
 		".config/miserc.toml": "env\n",
 	}
 	t.Run("explicit profiles keep all", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, condManifest, files)
+		_, ref := makeTestRegistry(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.DataFile = profilesDataFile(t, "ai", "github", "go")
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		for _, path := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml", "keep.txt"} {
@@ -386,7 +387,7 @@ func TestInitConditionalProfiles(t *testing.T) {
 		}
 	})
 	t.Run("default profiles skip go and github", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, condManifest, files)
+		_, ref := makeTestRegistry(t, condManifest, files)
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -395,7 +396,7 @@ func TestInitConditionalProfiles(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.DataFile = dataFile
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		for _, path := range []string{"go.mod", "cmd/app/main.go", ".github/ci.yml"} {
@@ -408,7 +409,7 @@ func TestInitConditionalProfiles(t *testing.T) {
 		}
 	})
 	t.Run("comma-packed profiles normalized", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, condManifest, files)
+		_, ref := makeTestRegistry(t, condManifest, files)
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -417,7 +418,7 @@ func TestInitConditionalProfiles(t *testing.T) {
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.DataFile = dataFile
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, "go.mod")); !os.IsNotExist(err) {
@@ -428,7 +429,7 @@ func TestInitConditionalProfiles(t *testing.T) {
 		const noDefaultManifest = "inputs:\n" +
 			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
 			"  service_name:\n    label: \"Service name\"\n    type: string\n"
-		regs, ref := makeTestRegistry(t, noDefaultManifest, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
+		_, ref := makeTestRegistry(t, noDefaultManifest, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -436,7 +437,7 @@ func TestInitConditionalProfiles(t *testing.T) {
 		opts := testOptions(&strings.Builder{})
 		opts.Defaults = false
 		opts.DataFile = dataFile
-		err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, regs, opts)
+		err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts)
 		if err == nil {
 			t.Fatal("Init succeeded, want missing-key error")
 		}
@@ -445,11 +446,11 @@ func TestInitConditionalProfiles(t *testing.T) {
 		}
 	})
 	t.Run("interactive input supplies project fields", func(t *testing.T) {
-		regs, ref := makeTestRegistry(t, condManifest, files)
+		_, ref := makeTestRegistry(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := Options{Engine: "0.1.0", Stdout: &stdout, Stderr: &strings.Builder{}, Stdin: strings.NewReader("demo\ndesc\n"), DataFile: profilesDataFile(t, "go")}
-		if err := Init(context.Background(), target, ref, regs, opts); err != nil {
+		if err := Init(context.Background(), target, ref, opts); err != nil {
 			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, "go.mod")); err != nil {

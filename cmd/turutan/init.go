@@ -30,12 +30,11 @@ func newInitCmd() *cobra.Command {
 		Short: "Scaffold a new project from a registry template",
 		Long: `Scaffold a new project from a registry template.
 
-The template is registry/template[@version] (default turutan/default at
-latest). The version pins the release; omitting it follows the index
-latest. The deprecated free-form source chain (--ref, --subpath,
-positional sources) is gone: registry resolution replaces it. The stored
-state records the registry ref, bundle digest and fetch URI for later
-check/diff/update runs.`,
+The template is <registry-uri>/<template>[@version] (default the built-in
+registry URI at latest). The version pins the release; omitting it follows
+the index latest. The registry URI is used directly without any name
+lookup. The stored state records the registry URI ref, bundle digest and
+fetch URI for later check/diff/update runs.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -53,7 +52,7 @@ check/diff/update runs.`,
 	cmd.Flags().StringVar(&flags.skip, "skip", "", "comma-separated template paths kept as-is")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "init into a non-empty directory")
 	cmd.Flags().BoolVar(&flags.allowHooks, "allow-hooks", false, "consent to template-declared hooks")
-	cmd.Flags().StringVar(&flags.template, "template", "", "registry template (registry/template[@version]; default turutan/default@latest)")
+	cmd.Flags().StringVar(&flags.template, "template", "", "registry template (<registry-uri>/<template>[@version]; default built-in URI at latest)")
 	return cmd
 }
 
@@ -69,8 +68,7 @@ func runInit(cmd *cobra.Command, dir string, flags *initFlags) error {
 		return err
 	}
 	ref := resolveInitTemplate(cmd, flags.template)
-	registries := loadInitRegistries()
-	return scaffold.Init(cmd.Context(), dir, ref, registries, scaffold.Options{
+	return scaffold.Init(cmd.Context(), dir, ref, scaffold.Options{
 		NonInteractive: appCfg.nonInteractive,
 		Force:          flags.force,
 		Conflict:       conflict,
@@ -91,12 +89,4 @@ func resolveInitTemplate(cmd *cobra.Command, flag string) scaffold.RegistryRef {
 	v := viper.GetViper()
 	envVal, _ := os.LookupEnv(config.EnvTemplateOverride)
 	return scaffold.ResolveTemplateFlag(flag, envVal, v.GetString(config.TemplateConfigKey))
-}
-
-func loadInitRegistries() map[string]string {
-	path := config.ResolveConfigPath(appCfg.cfgFile)
-	if path == "" {
-		return map[string]string{}
-	}
-	return scaffold.LoadProjectRegistries(path)
 }

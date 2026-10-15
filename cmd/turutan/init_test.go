@@ -77,6 +77,11 @@ func TestInitCmd(t *testing.T) {
 }
 
 func TestResolveTemplateFlag(t *testing.T) {
+	const (
+		uriA = "oci://example.com/org/a"
+		uriB = "oci://example.com/org/b"
+		uriC = "oci://example.com/org/c"
+	)
 	tests := []struct {
 		name string
 		flag string
@@ -86,37 +91,43 @@ func TestResolveTemplateFlag(t *testing.T) {
 	}{
 		{
 			name: "explicit flag wins over all",
-			flag: "a/t@1.0.0", env: "b/u@1.0.0", user: "c/v@1.0.0",
-			want: scaffold.RegistryRef{Registry: "a", Template: "t", Version: "1.0.0"},
+			flag: uriA + "/t@1.0.0", env: uriB + "/u@1.0.0", user: uriC + "/v@1.0.0",
+			want: scaffold.RegistryRef{Registry: uriA, Template: "t", Version: "1.0.0"},
 		},
 		{
 			name: "flag without version tracks latest",
-			flag: "a/t",
-			want: scaffold.RegistryRef{Registry: "a", Template: "t"},
+			flag: uriA + "/t",
+			want: scaffold.RegistryRef{Registry: uriA, Template: "t"},
 		},
 		{
 			name: "env wins over user",
-			env:  "b/u@2.0.0", user: "c/v@1.0.0",
-			want: scaffold.RegistryRef{Registry: "b", Template: "u", Version: "2.0.0"},
+			env:  uriB + "/u@2.0.0",
+			user: uriC + "/v@1.0.0",
+			want: scaffold.RegistryRef{Registry: uriB, Template: "u", Version: "2.0.0"},
 		},
 		{
 			name: "user config used when above empty",
-			user: "c/v@1.0.0",
-			want: scaffold.RegistryRef{Registry: "c", Template: "v", Version: "1.0.0"},
+			user: uriC + "/v@1.0.0",
+			want: scaffold.RegistryRef{Registry: uriC, Template: "v", Version: "1.0.0"},
 		},
 		{
-			name: "empty means turutan default",
-			want: scaffold.RegistryRef{Registry: "turutan", Template: "default"},
+			name: "empty means default URI",
+			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "default"},
 		},
 		{
 			name: "whitespace layers ignored",
-			flag: "  ", env: " \t", user: "c/v",
-			want: scaffold.RegistryRef{Registry: "c", Template: "v"},
+			flag: "  ", env: " \t", user: uriC + "/v",
+			want: scaffold.RegistryRef{Registry: uriC, Template: "v"},
 		},
 		{
 			name: "bare name resolves to default registry",
 			flag: "mytemplate",
-			want: scaffold.RegistryRef{Registry: "turutan", Template: "mytemplate"},
+			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "mytemplate"},
+		},
+		{
+			name: "legacy name form rejected falls back to default",
+			flag: "a/t@1.0.0",
+			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "default"},
 		},
 	}
 	for _, tt := range tests {

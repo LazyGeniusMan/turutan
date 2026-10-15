@@ -54,7 +54,6 @@ func runUpdate(cmd *cobra.Command, flags *updateFlags) error {
 	}
 	_, err := scaffold.Update(cmd.Context(), ".", scaffold.UpdateOptions{
 		Ref:            flags.ref,
-		Registries:     loadInitRegistries(),
 		Conflict:       conflict,
 		Force:          flags.force,
 		DataFile:       flags.dataFile,

@@ -20,12 +20,11 @@ const shortSHALen = 12
 // version to compare against instead of the index latest.
 // ~keep
 type CheckOptions struct {
-	Ref        string
-	Registries map[string]string
-	Engine     string
-	Verbose    bool
-	Stdout     io.Writer
-	Stderr     io.Writer
+	Ref     string
+	Engine  string
+	Verbose bool
+	Stdout  io.Writer
+	Stderr  io.Writer
 }
 
 // CheckResult reports whether a newer template release is available. Old
@@ -59,7 +58,7 @@ func Check(
 	vlogf(opts.Stderr, opts.Verbose, "check: stored template %q version %q digest %s",
 		state.Template, state.RequestedRef, state.ResolvedCommit)
 	fresh, changed, newInputs, err := reresolveRegistry(
-		ctx, state, opts.Ref, opts.Registries, opts.Engine, opts.Stderr, opts.Verbose)
+		ctx, state, opts.Ref, opts.Engine, opts.Stderr, opts.Verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -82,24 +81,25 @@ func reresolveRegistry(
 	ctx context.Context,
 	state *config.State,
 	ref string,
-	registries map[string]string,
 	engine string,
 	stderr io.Writer,
 	verbose bool,
 ) (string, bool, []string, error) {
-	registryName := strings.TrimSpace(state.Registry)
-	templateName := ""
-	if registryName == "" {
-		var version string
-		registryName, templateName, version = ResolveRegistryName(state.Template)
-		_ = version
-	} else {
-		_, templateName, _ = splitStoredRef(state.Template)
+	registryURI := strings.TrimSpace(state.Registry)
+	if registryURI == "" {
+		return "", false, nil, fmt.Errorf("check: stored registry is empty")
+	}
+	storedRegistry, templateName, _, err := SplitStoredRef(state.Template)
+	if err != nil {
+		return "", false, nil, fmt.Errorf("check: %w", err)
+	}
+	if storedRegistry != registryURI {
+		return "", false, nil, fmt.Errorf("check: stored template %q does not match registry %q", state.Template, registryURI)
 	}
 	if templateName == "" {
 		return "", false, nil, fmt.Errorf("check: stored template %q has no template name", state.Template)
 	}
-	rr, err := ResolveRegistry(ctx, registries, registryName)
+	rr, err := ResolveRegistry(ctx, registryURI)
 	if err != nil {
 		return "", false, nil, fmt.Errorf("check: %w", err)
 	}
@@ -162,10 +162,6 @@ func fetchRegistryInputs(
 		return nil
 	}
 	return config.DiffInputs(state.Data, templateManifest)
-}
-
-func splitStoredRef(stored string) (registryName, template, version string) {
-	return ResolveRegistryName(stored)
 }
 
 func userOwned(slash string, manifest *config.Manifest, state *config.State, activePreserves []string) (bool, error) {

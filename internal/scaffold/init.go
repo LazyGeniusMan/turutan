@@ -20,22 +20,21 @@ import (
 )
 
 // Init initializes a new project at target from a registry template.
-// The template ref selects registry/template@version; an empty version
-// resolves to the index latest. Registries map names to base URIs; the
-// reserved turutan name falls back to its OCI address without config.
+// The template ref selects <registry-uri>/<template>[@version]; an empty
+// version resolves to the index latest. The registry URI is used directly
+// without any name lookup; the built-in default URI needs no config.
 // ~keep
 func Init(
 	ctx context.Context,
 	target string,
 	ref RegistryRef,
-	registries map[string]string,
 	opts Options,
 ) error {
 	stdout, stderr, stdin := streams(opts)
 	if err := validateInitOpts(opts); err != nil {
 		return err
 	}
-	rr, err := ResolveRegistry(ctx, registries, ref.Registry)
+	rr, err := ResolveRegistry(ctx, ref.Registry)
 	if err != nil {
 		return err
 	}

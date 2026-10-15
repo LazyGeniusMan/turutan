@@ -16,12 +16,11 @@ func newCheckCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			result, err := scaffold.Check(cmd.Context(), ".", scaffold.CheckOptions{
-				Ref:        ref,
-				Registries: loadInitRegistries(),
-				Engine:     version,
-				Verbose:    appCfg.verbose,
-				Stdout:     cmd.OutOrStdout(),
-				Stderr:     cmd.ErrOrStderr(),
+				Ref:     ref,
+				Engine:  version,
+				Verbose: appCfg.verbose,
+				Stdout:  cmd.OutOrStdout(),
+				Stderr:  cmd.ErrOrStderr(),
 			})
 			if err != nil {
 				return err
