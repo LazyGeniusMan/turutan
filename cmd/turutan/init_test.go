@@ -22,10 +22,9 @@ func TestInitCmd(t *testing.T) {
 	defer func() { appCfg = oldCfg }()
 
 	t.Run("inits from registry with defaults", func(t *testing.T) {
-		_, regs, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
+		_, _, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
 			"go.mod.tmpl": "module {{.project_name}}\n",
 		})
-		useCmdRegistryConfig(t, regs)
 		dst := filepath.Join(t.TempDir(), "proj")
 		cmd := newInitCmd()
 		out := &bytes.Buffer{}
@@ -53,10 +52,9 @@ func TestInitCmd(t *testing.T) {
 		}
 	})
 	t.Run("missing data fail non-interactively", func(t *testing.T) {
-		_, regs, flag := makeCmdRegistry(t, "", map[string]string{
+		_, _, flag := makeCmdRegistry(t, "", map[string]string{
 			"go.mod.tmpl": "module {{.project_name}}\n",
 		})
-		useCmdRegistryConfig(t, regs)
 		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
@@ -83,11 +81,12 @@ func TestResolveTemplateFlag(t *testing.T) {
 		uriC = "oci://example.com/org/c"
 	)
 	tests := []struct {
-		name string
-		flag string
-		env  string
-		user string
-		want scaffold.RegistryRef
+		name    string
+		flag    string
+		env     string
+		user    string
+		want    scaffold.RegistryRef
+		wantErr string
 	}{
 		{
 			name: "explicit flag wins over all",
@@ -125,15 +124,24 @@ func TestResolveTemplateFlag(t *testing.T) {
 			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "mytemplate"},
 		},
 		{
-			name: "legacy name form rejected falls back to default",
-			flag: "a/t@1.0.0",
-			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "default"},
+			name:    "name pair without scheme errors",
+			flag:    "a/t@1.0.0",
+			wantErr: "want <registry-uri>/<template>",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := assert.New(t)
-			is.Equal(tt.want, scaffold.ResolveTemplateFlag(tt.flag, tt.env, tt.user))
+			got, err := scaffold.ResolveTemplateFlag(tt.flag, tt.env, tt.user)
+			if tt.wantErr != "" {
+				is.Error(err)
+				if err != nil {
+					is.Contains(err.Error(), tt.wantErr)
+				}
+				return
+			}
+			is.NoError(err)
+			is.Equal(tt.want, got)
 		})
 	}
 }
@@ -145,9 +153,8 @@ func TestInitTemplateLayers(t *testing.T) {
 
 	t.Run("explicit version pins the release", func(t *testing.T) {
 		is := assert.New(t)
-		regDir, regs, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
+		regDir, _, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
 		updateCmdRegistryFile(t, regDir, cmdTestTemplate, "hello.txt", "v2\n")
-		useCmdRegistryConfig(t, regs)
 		dst := filepath.Join(t.TempDir(), "proj")
 		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
@@ -160,9 +167,8 @@ func TestInitTemplateLayers(t *testing.T) {
 	})
 	t.Run("latest fallback renders newest", func(t *testing.T) {
 		is := assert.New(t)
-		regDir, regs, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
+		regDir, _, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
 		updateCmdRegistryFile(t, regDir, cmdTestTemplate, "hello.txt", "v2\n")
-		useCmdRegistryConfig(t, regs)
 		dst := filepath.Join(t.TempDir(), "proj")
 		cmd := newInitCmd()
 		cmd.SetOut(&bytes.Buffer{})
@@ -175,8 +181,7 @@ func TestInitTemplateLayers(t *testing.T) {
 	})
 	t.Run("user config template used when flag empty", func(t *testing.T) {
 		is := assert.New(t)
-		_, regs, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
-		useCmdRegistryConfig(t, regs)
+		_, _, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
 		t.Setenv(config.EnvTemplateOverride, "")
 		v := viper.GetViper()
 		v.Set(config.TemplateConfigKey, flag)
@@ -193,8 +198,7 @@ func TestInitTemplateLayers(t *testing.T) {
 	})
 	t.Run("turutan template env selects without flag", func(t *testing.T) {
 		is := assert.New(t)
-		_, regs, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
-		useCmdRegistryConfig(t, regs)
+		_, _, flag := makeCmdRegistry(t, "", map[string]string{"hello.txt": "v1\n"})
 		t.Setenv(config.EnvTemplateOverride, flag)
 		dst := filepath.Join(t.TempDir(), "proj")
 		cmd := newInitCmd()

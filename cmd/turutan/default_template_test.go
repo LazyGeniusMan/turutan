@@ -100,21 +100,21 @@ func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) 
 
 // TestDefaultTemplateRegistry pins the committed created-but-unreleased
 // default entry (indexed, zero releases) plus the unreleased
-// templates/default source tree: the authoring manifest stays off the
-// legacy git source, the first cut starts at 0.1.0 with a relative fs URI,
-// bundle bytes stay deterministic and immutable, and the OCI first-publish
-// path needs --uri-override. The first real release lands via CI manual
-// dispatch. It touches no network.
+// templates/default source tree: the authoring manifest declares no source
+// key and the registry is the source of truth, the first cut starts at
+// 0.1.0 with a relative fs URI, bundle bytes stay deterministic and
+// immutable, and the OCI first-publish path needs --uri-override. The first
+// real release lands via CI manual dispatch. It touches no network.
 // ~keep
 func TestDefaultTemplateRegistry(t *testing.T) {
 	root := repoRootDir(t)
 	treeDir := filepath.Join(root, "templates", "default")
 
-	t.Run("authoring manifest migrated off legacy source", func(t *testing.T) {
+	t.Run("authoring manifest declares registry as source of truth", func(t *testing.T) {
 		raw, err := os.ReadFile(filepath.Join(treeDir, "template.yml")) // #nosec G304 -- treeDir is derived from this test file location plus a fixed manifest name
 		require.NoError(t, err)
 		require.NotContains(t, string(raw), "git::",
-			"registry is the source of truth: no legacy source may remain")
+			"registry is the source of truth: authoring manifest must stay source-free")
 		manifest, err := config.LoadManifest(os.DirFS(treeDir))
 		require.NoError(t, err)
 		require.Equal(t, ">=0.1.0", manifest.MinEngine)
@@ -133,7 +133,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.False(t, entry.IsReleased(), "committed entry must carry zero released versions")
 		require.Empty(t, entry.Version, "unreleased entry must not carry a version")
 		require.Nil(t, entry.URI, "unreleased entry must not carry a uri")
-		require.Empty(t, entry.Releases, "unreleased entry must not carry releases history")
+		require.Empty(t, entry.Releases, "unreleased entry must not carry releases")
 		require.Empty(t, entry.Digest, "unreleased entry must not carry a digest")
 		require.Equal(t, defaultTestAuthor, entry.Author.String())
 		raw, err := os.ReadFile(filepath.Join(root, registry.IndexFileName)) // #nosec G304 -- root is derived from this test file location plus the fixed index file name
@@ -205,7 +205,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		for _, meta := range []string{"manifest", "releases"} {
 			_, err := os.Stat(filepath.Join(dest, meta))
 			require.True(t, os.IsNotExist(err),
-				"bundle must never contain its own release history: %s", meta)
+				"bundle must never contain its own release metadata: %s", meta)
 		}
 		roundTrip, err := registry.DigestDir(dest)
 		require.NoError(t, err)
@@ -251,7 +251,8 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 	})
 
 	t.Run("zero-config default resolves to oci fallback", func(t *testing.T) {
-		ref := scaffold.ResolveTemplateFlag("", "", "")
+		ref, err := scaffold.ResolveTemplateFlag("", "", "")
+		require.NoError(t, err)
 		require.Equal(t, registry.DefaultRegistryURI, ref.Registry)
 		require.Equal(t, "default", ref.Template)
 		uri, err := registry.ParseURI(registry.DefaultRegistryURI)

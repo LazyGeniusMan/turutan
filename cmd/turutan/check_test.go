@@ -39,7 +39,6 @@ func initTestProject(t *testing.T, files map[string]string) (string, string, str
 	if err := scaffold.Init(context.Background(), dst, scaffoldRef(t, flag), opts); err != nil {
 		t.Fatalf("Init error: %v", err)
 	}
-	useCmdRegistryConfig(t, regs)
 	return regDir, dst, regs
 }
 

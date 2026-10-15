@@ -290,7 +290,11 @@ func TestResolveInitTemplateLayers(t *testing.T) {
 			v.Set(config.TemplateConfigKey, tt.user)
 			t.Cleanup(func() { v.Set(config.TemplateConfigKey, "") })
 			cmd := newInitCmd()
-			if got := resolveInitTemplate(cmd, tt.flag); got.String() != tt.want {
+			got, err := resolveInitTemplate(cmd, tt.flag)
+			if err != nil {
+				t.Fatalf("resolveInitTemplate error: %v", err)
+			}
+			if got.String() != tt.want {
 				t.Errorf("template = %q, want %q", got.String(), tt.want)
 			}
 		})
@@ -299,10 +303,9 @@ func TestResolveInitTemplateLayers(t *testing.T) {
 
 func verboseTemplate(t *testing.T) string {
 	t.Helper()
-	_, regs, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
+	_, _, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
 		"go.mod.tmpl": "module {{.project_name}}\n",
 	})
-	useCmdRegistryConfig(t, regs)
 	return flag
 }
 

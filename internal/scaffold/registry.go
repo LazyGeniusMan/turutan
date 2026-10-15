@@ -47,8 +47,7 @@ func (r RegistryRef) String() string {
 // <registry-uri>/<template>[@version]. The registry part must parse via
 // ParseURI; the template part must be a valid template name. A bare
 // template name without slash or scheme resolves under the default
-// registry URI. Legacy name/template forms without a URI scheme are
-// rejected.
+// registry URI. Any other value without a URI scheme is rejected.
 // ~keep
 func ParseRegistryRef(raw string) (RegistryRef, error) {
 	trimmed := strings.TrimSpace(raw)
@@ -107,17 +106,16 @@ func DefaultRegistryRef() RegistryRef {
 
 // ResolveTemplateFlag applies the --template layering: flag wins, then the
 // TURUTAN_TEMPLATE environment, then the user config template, then the
-// default registry URI.
+// default registry URI. The first non-empty value is parsed strictly and
+// any parse failure is returned; only all-empty layers select the default.
 // ~keep
-func ResolveTemplateFlag(flag string, envVal, userTemplate string) RegistryRef {
+func ResolveTemplateFlag(flag string, envVal, userTemplate string) (RegistryRef, error) {
 	for _, candidate := range []string{flag, envVal, userTemplate} {
 		if trimmed := strings.TrimSpace(candidate); trimmed != "" {
-			if ref, err := ParseRegistryRef(trimmed); err == nil {
-				return ref
-			}
+			return ParseRegistryRef(trimmed)
 		}
 	}
-	return DefaultRegistryRef()
+	return DefaultRegistryRef(), nil
 }
 
 // ResolvedRegistry bundles a registry URI with its auth and index.
@@ -515,9 +513,9 @@ func RegistryStateRef(registryURI, template, version string) string {
 	return base + "/" + template + "@" + version
 }
 
-// SplitStoredRef parses a stored URI-based template ref of the form
+// SplitStoredRef parses a stored template ref of the form
 // <registry-uri>/<template>@<version> into its registry URI, template and
-// version parts. It rejects legacy name-based refs without a URI scheme.
+// version parts. Refs without a URI scheme are rejected.
 // ~keep
 func SplitStoredRef(stored string) (registryURI, template, version string, err error) {
 	ref := strings.TrimSpace(stored)

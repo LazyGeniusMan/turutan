@@ -65,7 +65,10 @@ func runInit(cmd *cobra.Command, dir string, flags *initFlags) error {
 	if err := conflict.Validate(); err != nil {
 		return err
 	}
-	ref := resolveInitTemplate(cmd, flags.template)
+	ref, err := resolveInitTemplate(cmd, flags.template)
+	if err != nil {
+		return err
+	}
 	return scaffold.Init(cmd.Context(), dir, ref, scaffold.Options{
 		NonInteractive: appCfg.nonInteractive,
 		Force:          flags.force,
@@ -81,7 +84,7 @@ func runInit(cmd *cobra.Command, dir string, flags *initFlags) error {
 	})
 }
 
-func resolveInitTemplate(cmd *cobra.Command, flag string) scaffold.RegistryRef {
+func resolveInitTemplate(cmd *cobra.Command, flag string) (scaffold.RegistryRef, error) {
 	_ = cmd
 	v := viper.GetViper()
 	envVal, _ := os.LookupEnv(config.EnvTemplateOverride)

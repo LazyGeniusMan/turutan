@@ -130,7 +130,7 @@ func TestInputLabelRendering(t *testing.T) {
 			t.Errorf("prompt = %q, want label-driven array prompt", out)
 		}
 		if strings.Contains(out, "value for") {
-			t.Errorf("prompt = %q, want no legacy key-name branch", out)
+			t.Errorf("prompt = %q, want label text only", out)
 		}
 		if n := strings.Count(out, "(comma-separated)"); n != 1 {
 			t.Errorf("prompt = %q, want exactly one suffix, got %d", out, n)

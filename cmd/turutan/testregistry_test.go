@@ -143,14 +143,6 @@ func updateCmdRegistryFile(t *testing.T, regDir, name, path, content string) str
 	return releaseCmdRegistry(t, regDir, name)
 }
 
-// useCmdRegistryConfig is a no-op retained for test call compatibility.
-// Project operations resolve the registry URI directly without any name
-// lookup, so no user config is needed.
-// ~keep
-func useCmdRegistryConfig(t *testing.T, _ string) {
-	t.Helper()
-}
-
 func scaffoldRef(t *testing.T, flag string) scaffold.RegistryRef {
 	t.Helper()
 	ref, err := scaffold.ParseRegistryRef(flag)

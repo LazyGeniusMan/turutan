@@ -90,8 +90,9 @@ func sliceContains(haystack any, needle string) bool {
 	}
 }
 
-// TemplateFuncMap is the shared template function policy: sprig minus env
-// access plus the slice-aware contains override.
+// TemplateFuncMap is the shared template function policy: the minimal sprig
+// subset for predicates plus the slice-aware contains override. Environment
+// access stays excluded so predicates evaluate without side effects.
 // ~keep
 func TemplateFuncMap() map[string]any {
 	funcs := sprig.TxtFuncMap()

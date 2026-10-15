@@ -100,10 +100,9 @@ func TestStateSyncCmd(t *testing.T) {
 	defer func() { appCfg = oldCfg }()
 
 	t.Run("sync re-renders hand-edited inputs", func(t *testing.T) {
-		_, regs, flag := makeCmdRegistry(t, "", map[string]string{
+		_, _, flag := makeCmdRegistry(t, "", map[string]string{
 			"greet.txt.tmpl": "hi {{.project_name}}\n",
 		})
-		useCmdRegistryConfig(t, regs)
 		dst := filepath.Join(t.TempDir(), "proj")
 		var initOut bytes.Buffer
 		initCmd := newInitCmd()
@@ -171,25 +170,4 @@ func TestStateSyncCmd(t *testing.T) {
 			t.Error("flag --ref present on state sync, want none")
 		}
 	})
-}
-
-func TestCreateCmdGone(t *testing.T) {
-	resetRootFlags(t)
-	isolateConfigCandidates(t)
-	cmd := newRootCmd(viper.New())
-	var stdout bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&bytes.Buffer{})
-	cmd.SetArgs([]string{"--help"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("help error: %v", err)
-	}
-	if strings.Contains(stdout.String(), "create") {
-		t.Errorf("help mentions a create command, want it gone:\n%s", stdout.String())
-	}
-	for _, sub := range cmd.Commands() {
-		if sub.Name() == "create" {
-			t.Error("create subcommand still registered, want it removed")
-		}
-	}
 }

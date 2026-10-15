@@ -135,9 +135,9 @@ func TestTemplateFuncMap(t *testing.T) {
 		t.Error("func map lacks contains override")
 	}
 	if _, ok := funcs["env"]; ok {
-		t.Error("func map exposes env, want it removed")
+		t.Error("func map includes env, want predicates without environment access")
 	}
 	if _, ok := funcs["expandenv"]; ok {
-		t.Error("func map exposes expandenv, want it removed")
+		t.Error("func map includes expandenv, want predicates without environment access")
 	}
 }
