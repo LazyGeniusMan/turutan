@@ -149,7 +149,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &decoded))
 		require.Len(t, decoded.Templates, 1)
 		for key := range decoded.Templates[0] {
-			require.Contains(t, []string{"name", "author"}, key,
+			require.Contains(t, []string{"name", "author", "engine_version"}, key,
 				"unreleased entry must serialize identity only, got %q", key)
 		}
 		entries, err := os.ReadDir(filepath.Join(treeDir, "manifest"))

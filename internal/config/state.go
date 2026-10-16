@@ -53,6 +53,8 @@ var ErrInvalidLock = errors.New("invalid lock")
 // ~keep
 var ErrInvalidManifest = errors.New("invalid manifest")
 
+// State is the persisted scaffold state written to turutan-state.yml.
+// ~keep
 type State struct {
 	Version         int            `yaml:"version"`
 	SchemaVersion   int            `yaml:"schema_version"`
@@ -72,12 +74,16 @@ type State struct {
 	TemplateLicense string         `yaml:"templateLicense"`
 }
 
+// LockFile describes one file captured in the lock manifest.
+// ~keep
 type LockFile struct {
 	Path   string `json:"path"`
 	SHA256 string `json:"sha256"`
 	Bytes  int64  `json:"bytes"`
 }
 
+// Lock is the persisted lock manifest written to turutan-lock.json.
+// ~keep
 type Lock struct {
 	SchemaVersion int        `json:"schema_version"`
 	Schema        string     `json:"$schema,omitempty"`
@@ -352,6 +358,8 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 	return &manifest, nil
 }
 
+// ValidateManifest reports whether the template manifest is well-formed.
+// ~keep
 func ValidateManifest(manifest *Manifest) error {
 	if manifest == nil {
 		return fmt.Errorf("%w: manifest is nil", ErrInvalidManifest)

@@ -67,6 +67,7 @@ func TemplateSchemaRefFor(templateYMLPath, schemaPath string) (string, error) {
 	return slash, nil
 }
 
+// StateDataJSONSchema returns the JSON Schema for template instance data fields.
 // pinned template manifest inputs: type maps to a JSON type, options to an
 // enum (element enum for arrays), default to a default, and inputs without
 // a default or condition to required keys.
