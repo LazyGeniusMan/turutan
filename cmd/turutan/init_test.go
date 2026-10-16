@@ -111,7 +111,7 @@ func TestResolveTemplateFlag(t *testing.T) {
 		},
 		{
 			name: "empty means default URI",
-			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "default"},
+			want: scaffold.RegistryRef{Registry: "git+https://github.com/LazyGeniusMan/turutan.git?ref=main", Template: "default"},
 		},
 		{
 			name: "whitespace layers ignored",
@@ -121,7 +121,7 @@ func TestResolveTemplateFlag(t *testing.T) {
 		{
 			name: "bare name resolves to default registry",
 			flag: "mytemplate",
-			want: scaffold.RegistryRef{Registry: "oci://ghcr.io/lazygeniusman/turutan/templates", Template: "mytemplate"},
+			want: scaffold.RegistryRef{Registry: "git+https://github.com/LazyGeniusMan/turutan.git?ref=main", Template: "mytemplate"},
 		},
 		{
 			name:    "name pair without scheme errors",

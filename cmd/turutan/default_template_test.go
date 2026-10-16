@@ -21,9 +21,8 @@ import (
 const defaultTestAuthor = "Andriyansyah Nurrachman <turutan@yansyah.my.id> (https://yansyah.my.id)"
 
 // repoRootDir resolves the repository root from this test file location,
-// independent of the test working directory. It pins the committed
-// created-but-unreleased default entry plus the unreleased source tree:
-// zero releases until CI dispatch.
+// independent of the test working directory. It pins the committed registry
+// index plus the default source tree.
 // ~keep
 func repoRootDir(t *testing.T) string {
 	t.Helper()
@@ -42,8 +41,8 @@ func repoRootDir(t *testing.T) string {
 // releaseDefaultEphemeral copies the worktree source tree into a temp
 // registry root, cuts one fs release there, and returns the root plus the
 // indexed entry. Every subtest gets its own root: the committed worktree
-// index (created, zero releases) is never mutated nor read — each root
-// seeds its own equivalent unreleased entry and cuts the first release.
+// index is never mutated nor read — each root seeds its own equivalent
+// unreleased entry and cuts the first release.
 // ~keep
 func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) {
 	t.Helper()
@@ -99,13 +98,12 @@ func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) 
 	return regDir, entry
 }
 
-// TestDefaultTemplateRegistry pins the committed created-but-unreleased
-// default entry (indexed, zero releases) plus the unreleased
-// templates/default source tree: the authoring manifest declares no source
-// key and the registry is the source of truth, the first cut starts at
-// 0.1.0 with a relative fs URI, bundle bytes stay deterministic and
-// immutable, and the OCI first-publish path needs --uri-override. The first
-// real release lands via CI manual dispatch. It touches no network.
+// TestDefaultTemplateRegistry pins the committed default entry (indexed,
+// released 0.1.0) plus the templates/default source tree: the authoring
+// manifest declares no source key and the registry is the source of truth,
+// bundle bytes stay deterministic and immutable, and the OCI first-publish
+// path needs --uri-override. Zero-config init defaults to the git registry
+// at the turutan source repository main branch. It touches no network.
 // ~keep
 func TestDefaultTemplateRegistry(t *testing.T) {
 	root := repoRootDir(t)
@@ -124,38 +122,36 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 		require.NotEmpty(t, manifest.Inputs["project_name"])
 	})
 
-	t.Run("worktree holds created-but-unreleased default entry, zero releases", func(t *testing.T) {
+	t.Run("worktree holds released default entry 0.1.0", func(t *testing.T) {
 		index, err := registry.LoadIndexFile(filepath.Join(root, registry.IndexFileName))
 		require.NoError(t, err)
 		require.Equal(t, "turutan", index.Name)
-		require.Len(t, index.Templates, 1, "committed index must record the created default template")
+		require.Len(t, index.Templates, 1, "committed index must record the default template")
 		entry, err := index.FindTemplate("default")
 		require.NoError(t, err)
-		require.False(t, entry.IsReleased(), "committed entry must carry zero released versions")
-		require.Empty(t, entry.Version, "unreleased entry must not carry a version")
-		require.Nil(t, entry.URI, "unreleased entry must not carry a uri")
-		require.Empty(t, entry.Releases, "unreleased entry must not carry releases")
-		require.Empty(t, entry.Digest, "unreleased entry must not carry a digest")
+		require.True(t, entry.IsReleased(), "committed entry must carry releases")
+		require.Equal(t, "0.1.0", entry.Version)
+		require.Equal(t, []string{"0.1.0"}, entry.Releases)
+		require.NotNil(t, entry.URI, "released entry must carry a uri")
+		require.Equal(t, "oci://ghcr.io/lazygeniusman/turutan/templates/default:0.1.0", entry.URI.String())
+		require.NotEmpty(t, entry.Digest, "released entry must carry a digest")
 		require.Equal(t, defaultTestAuthor, entry.Author.String())
 		raw, err := os.ReadFile(filepath.Join(root, registry.IndexFileName)) // #nosec G304 -- root is derived from this test file location plus the fixed index file name
 		require.NoError(t, err)
-		for _, banned := range []string{"digest", "releases", "oci://", "templates/default/releases"} {
-			require.NotContains(t, string(raw), banned,
-				"unreleased entry must not reference a release: %s", banned)
+		for _, want := range []string{"digest", "releases", "oci://"} {
+			require.Contains(t, string(raw), want,
+				"released entry must reference a release: %s", want)
 		}
 		var decoded struct {
 			Templates []map[string]any `json:"templates"`
 		}
 		require.NoError(t, json.Unmarshal(raw, &decoded))
 		require.Len(t, decoded.Templates, 1)
-		for key := range decoded.Templates[0] {
-			require.Contains(t, []string{"name", "author", "engine_version"}, key,
-				"unreleased entry must serialize identity only, got %q", key)
+		for _, key := range []string{"name", "author", "engine_version", "version", "uri", "releases", "digest"} {
+			require.Contains(t, decoded.Templates[0], key,
+				"released entry must serialize %q", key)
 		}
-		entries, err := os.ReadDir(filepath.Join(treeDir, "manifest"))
-		if err == nil {
-			require.Empty(t, entries, "zero releases means no committed manifests")
-		}
+		require.FileExists(t, filepath.Join(treeDir, "manifest", "0.1.0.json"), "0.1.0 release must have a committed manifest")
 	})
 
 	t.Run("ephemeral fs release starts at 0.1.0 with relative uri", func(t *testing.T) {
@@ -251,13 +247,18 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 			"publish uri must address the user-facing repo, got %q", uri.String())
 	})
 
-	t.Run("zero-config default resolves to oci fallback", func(t *testing.T) {
+	t.Run("zero-config default resolves to git fallback", func(t *testing.T) {
 		ref, err := scaffold.ResolveTemplateFlag("", "", "")
 		require.NoError(t, err)
 		require.Equal(t, registry.DefaultRegistryURI, ref.Registry)
+		require.Equal(t, "git+https://github.com/LazyGeniusMan/turutan.git?ref=main", ref.Registry)
 		require.Equal(t, "default", ref.Template)
 		uri, err := registry.ParseURI(registry.DefaultRegistryURI)
 		require.NoError(t, err)
+		require.Equal(t, registry.SchemeGit, uri.Scheme)
+		require.Equal(t, "github.com", uri.Host)
+		require.Equal(t, "main", uri.Ref)
 		require.Equal(t, registry.DefaultRegistryURI, uri.String())
+		require.Equal(t, "git+https://github.com/LazyGeniusMan/turutan.git?ref=main/default", ref.String())
 	})
 }

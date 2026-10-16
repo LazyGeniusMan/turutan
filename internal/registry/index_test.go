@@ -166,14 +166,24 @@ func TestDefaultConstants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultRegistryURI invalid: %v", err)
 	}
-	if uri.Host != "ghcr.io" || uri.Path != "lazygeniusman/turutan/templates" {
+	if uri.Scheme != SchemeGit || uri.Host != "github.com" || uri.Path != "LazyGeniusMan/turutan.git" || uri.Ref != "main" {
 		t.Errorf("DefaultRegistryURI = %q", DefaultRegistryURI)
+	}
+	if DefaultRegistryURI != "git+https://github.com/LazyGeniusMan/turutan.git?ref=main" {
+		t.Errorf("DefaultRegistryURI = %q", DefaultRegistryURI)
+	}
+	repo, err := ParseURI(DefaultTemplateRepo)
+	if err != nil {
+		t.Fatalf("DefaultTemplateRepo invalid: %v", err)
+	}
+	if repo.Ref != "main" || repo.Subpath != "templates/default" {
+		t.Errorf("DefaultTemplateRepo = %q", DefaultTemplateRepo)
 	}
 	ref, err := ParseURI(DefaultTemplateRef("1.2.0"))
 	if err != nil {
 		t.Fatalf("DefaultTemplateRef invalid: %v", err)
 	}
-	if ref.String() != "oci://ghcr.io/lazygeniusman/turutan/templates/default:1.2.0" {
+	if ref.String() != "git+https://github.com/LazyGeniusMan/turutan.git?ref=templates/default/1.2.0&subpath=templates/default" {
 		t.Errorf("DefaultTemplateRef = %q", ref.String())
 	}
 }
