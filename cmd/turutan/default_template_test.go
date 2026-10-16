@@ -52,8 +52,8 @@ func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) 
 	author, err := registry.ParseAuthor(defaultTestAuthor)
 	require.NoError(t, err)
 	index := &registry.RegistryIndex{
-		Name: "turutan", Version: "0.1.0", Author: author,
-		Templates: []registry.RegistryTemplate{{Name: "default", Author: author}},
+		Name: "turutan", Author: author,
+		Templates: []registry.RegistryTemplate{{Name: "default", Author: author, EngineVersion: "dev"}},
 	}
 	require.NoError(t, registry.SaveIndexFile(filepath.Join(regDir, registry.IndexFileName), index))
 	srcDir := filepath.Join(root, "templates", "default")
@@ -86,7 +86,7 @@ func releaseDefaultEphemeral(t *testing.T) (string, *registry.RegistryTemplate) 
 	manifest := registry.TemplateManifest{
 		SchemaVersion: registry.SchemaVersion,
 		Name:          "default", Version: next, Author: author,
-		URI: uri, Digest: digest, MinEngine: templateCfg.MinEngine,
+		URI: uri, Digest: digest, EngineVersion: mustBumpEngine(t, templateCfg.EngineVersion),
 		ManifestHash: manifestHash, License: templateCfg.License,
 	}
 	require.NoError(t, manifest.Validate())
@@ -118,7 +118,7 @@ func TestDefaultTemplateRegistry(t *testing.T) {
 			"registry is the source of truth: authoring manifest must stay source-free")
 		manifest, err := config.LoadManifest(os.DirFS(treeDir))
 		require.NoError(t, err)
-		require.Equal(t, ">=0.1.0", manifest.MinEngine)
+		require.NotEmpty(t, manifest.EngineVersion)
 		require.Equal(t, "MIT-0", manifest.License)
 		require.NotEmpty(t, manifest.Includes)
 		require.NotEmpty(t, manifest.Inputs["project_name"])

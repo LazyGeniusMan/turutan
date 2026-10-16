@@ -423,7 +423,7 @@ func renderDiffTemplate(
 	if err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
-	if _, err := checkMinEngine(
+	if _, err := checkEngineVersion(
 		manifest, opts.Engine, opts.Stderr, opts.Verbose); err != nil {
 		return nil, nil, err
 	}

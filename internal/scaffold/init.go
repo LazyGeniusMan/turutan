@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 	"github.com/LazyGeniusMan/turutan/internal/template"
-	"github.com/Masterminds/semver/v3"
 )
 
 // Init initializes a new project at target from a registry template.
@@ -50,7 +50,7 @@ func Init(
 	if err != nil {
 		return err
 	}
-	engine, err := checkMinEngine(manifest, opts.Engine, stderr, opts.Verbose)
+	engine, err := checkEngineVersion(manifest, opts.Engine, stderr, opts.Verbose)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func writeRegistryStateAndLock(
 		Data:            data,
 		Skip:            opts.Skip,
 		Conflict:        string(opts.Conflict),
-		Engine:          "turutan/" + engine,
+		EngineVersion:   engine,
 		TemplateLicense: license,
 	}
 	if err := config.SaveState(target, state); err != nil {
@@ -218,27 +218,20 @@ func streams(opts Options) (io.Writer, io.Writer, io.Reader) {
 	return resolveStreams(opts.Stdout, opts.Stderr, opts.Stdin)
 }
 
-func checkMinEngine(manifest *config.Manifest, engine string, stderr io.Writer, verbose bool) (string, error) {
-	version := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(engine), "turutan/"), "v")
-	if version == "" {
-		version = "dev"
+func checkEngineVersion(manifest *config.Manifest, running string, stderr io.Writer, verbose bool) (string, error) {
+	current := engine.CurrentFrom(running)
+	stored := ""
+	if manifest != nil {
+		stored = manifest.EngineVersion
 	}
-	if manifest.MinEngine == "" {
-		return version, nil
+	if stored == "" {
+		return current, nil
 	}
-	constraint, err := semver.NewConstraint(manifest.MinEngine)
-	if err != nil {
-		return "", fmt.Errorf("init: bad min-engine %q: %w", manifest.MinEngine, err)
+	if err := engine.Check(stored, current); err != nil {
+		return "", fmt.Errorf("template requires engine_version %s: have %s: %w", stored, current, err)
 	}
-	current, err := semver.NewVersion(version)
-	if err != nil {
-		vlogf(stderr, verbose, "dev engine %q skips min-engine check %q", version, manifest.MinEngine)
-		return version, nil
-	}
-	if !constraint.Check(current) {
-		return "", fmt.Errorf("init: template requires engine %s: have %s", manifest.MinEngine, version)
-	}
-	return version, nil
+	vlogf(stderr, verbose, "engine %q satisfies stored engine_version %q", current, stored)
+	return current, nil
 }
 
 func prepareTarget(target string, force bool) (string, error) {

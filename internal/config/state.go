@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/LazyGeniusMan/turutan/internal/condition"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
 )
 
@@ -39,6 +41,18 @@ var hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 var manifestHashRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
+// ErrInvalidState is matched with errors.Is when state fails validation.
+// ~keep
+var ErrInvalidState = errors.New("invalid state")
+
+// ErrInvalidLock is matched with errors.Is when lock fails validation.
+// ~keep
+var ErrInvalidLock = errors.New("invalid lock")
+
+// ErrInvalidManifest is matched with errors.Is when a manifest fails validation.
+// ~keep
+var ErrInvalidManifest = errors.New("invalid manifest")
+
 type State struct {
 	Version         int            `yaml:"version"`
 	SchemaVersion   int            `yaml:"schema_version"`
@@ -54,7 +68,7 @@ type State struct {
 	Data            map[string]any `yaml:"data,omitempty"`
 	Skip            []string       `yaml:"skip,omitempty"`
 	Conflict        string         `yaml:"conflict,omitempty"`
-	Engine          string         `yaml:"engine"`
+	EngineVersion   string         `yaml:"engine_version"`
 	TemplateLicense string         `yaml:"templateLicense"`
 }
 
@@ -67,6 +81,7 @@ type LockFile struct {
 type Lock struct {
 	SchemaVersion int        `json:"schema_version"`
 	Schema        string     `json:"$schema,omitempty"`
+	EngineVersion string     `json:"engine_version"`
 	Source        string     `json:"source"`
 	Ref           string     `json:"ref,omitempty"`
 	ResolvedSHA   string     `json:"resolved_sha"`
@@ -97,16 +112,18 @@ type ManifestConditional struct {
 }
 
 type Manifest struct {
-	MinEngine    string                   `yaml:"min-engine"`
-	License      string                   `yaml:"license"`
-	LicenseFiles []string                 `yaml:"license-files"`
-	DocFiles     []string                 `yaml:"doc-files"`
-	Includes     []string                 `yaml:"includes"`
-	Excludes     []string                 `yaml:"excludes"`
-	Preserves    []string                 `yaml:"preserves"`
-	Conflict     string                   `yaml:"conflict"`
-	Inputs       map[string]ManifestInput `yaml:"inputs"`
-	Conditionals []ManifestConditional    `yaml:"conditionals"`
+	SchemaVersion int                      `yaml:"schema_version"`
+	Schema        string                   `yaml:"$schema,omitempty"`
+	EngineVersion string                   `yaml:"engine_version"`
+	License       string                   `yaml:"license"`
+	LicenseFiles  []string                 `yaml:"license-files"`
+	DocFiles      []string                 `yaml:"doc-files"`
+	Includes      []string                 `yaml:"includes"`
+	Excludes      []string                 `yaml:"excludes"`
+	Preserves     []string                 `yaml:"preserves"`
+	Conflict      string                   `yaml:"conflict"`
+	Inputs        map[string]ManifestInput `yaml:"inputs"`
+	Conditionals  []ManifestConditional    `yaml:"conditionals"`
 }
 
 func LoadState(fsys fs.FS) (*State, error) {
@@ -128,6 +145,11 @@ func SaveState(dir string, state *State) error {
 	state.Version = StateVersion
 	state.SchemaVersion = StateVersion
 	state.Schema = StateSchemaRef
+	bumped, err := engine.Bump(state.EngineVersion, engine.Current())
+	if err != nil {
+		return err
+	}
+	state.EngineVersion = bumped
 	if err := ValidateState(state); err != nil {
 		return err
 	}
@@ -138,58 +160,61 @@ func SaveState(dir string, state *State) error {
 }
 
 func ValidateState(state *State) error {
+	if state == nil {
+		return fmt.Errorf("%w: state is nil", ErrInvalidState)
+	}
 	if state.Version != StateVersion {
-		return fmt.Errorf("unsupported state version %d: this engine reads v%d only", state.Version, StateVersion)
+		return fmt.Errorf("%w: unsupported version %d: this engine reads v%d only", ErrInvalidState, state.Version, StateVersion)
 	}
 	if state.SchemaVersion != StateVersion {
 		return fmt.Errorf(
-			"unsupported state schema_version %d: this engine reads v%d only",
-			state.SchemaVersion, StateVersion)
+			"%w: unsupported schema_version %d: this engine reads v%d only",
+			ErrInvalidState, state.SchemaVersion, StateVersion)
 	}
 	if state.Template == "" {
-		return fmt.Errorf("invalid state: template is empty")
+		return fmt.Errorf("%w: template is empty", ErrInvalidState)
 	}
 	switch state.SourceKind {
 	case "registry":
 		if strings.TrimSpace(state.Registry) == "" {
-			return fmt.Errorf("invalid state: registry is empty")
+			return fmt.Errorf("%w: registry is empty", ErrInvalidState)
 		}
 		if !isRegistryURI(state.Registry) {
-			return fmt.Errorf("invalid state: registry %q is not a URI", state.Registry)
+			return fmt.Errorf("%w: registry %q is not a URI", ErrInvalidState, state.Registry)
 		}
 		if !isURITemplateRef(state.Template, state.Registry) {
-			return fmt.Errorf("invalid state: template %q is not a <registry-uri>/<template>@<version> ref", state.Template)
+			return fmt.Errorf("%w: template %q is not a <registry-uri>/<template>@<version> ref", ErrInvalidState, state.Template)
 		}
 		if strings.TrimSpace(state.TemplateURI) == "" {
-			return fmt.Errorf("invalid state: templateURI is empty")
+			return fmt.Errorf("%w: templateURI is empty", ErrInvalidState)
 		}
 		if !manifestHashRe.MatchString(state.TemplateDigest) {
-			return fmt.Errorf("invalid state: templateDigest %q is not a sha256: digest", state.TemplateDigest)
+			return fmt.Errorf("%w: templateDigest %q is not a sha256: digest", ErrInvalidState, state.TemplateDigest)
 		}
 		digestHex := strings.TrimPrefix(state.TemplateDigest, "sha256:")
 		if state.ResolvedCommit != digestHex && state.ResolvedCommit != state.TemplateDigest {
-			return fmt.Errorf("invalid state: resolvedCommit %q does not match templateDigest %q",
-				state.ResolvedCommit, state.TemplateDigest)
+			return fmt.Errorf("%w: resolvedCommit %q does not match templateDigest %q",
+				ErrInvalidState, state.ResolvedCommit, state.TemplateDigest)
 		}
 		if state.RequestedRef == "" {
-			return fmt.Errorf("invalid state: requestedRef is empty")
+			return fmt.Errorf("%w: requestedRef is empty", ErrInvalidState)
 		}
 		if _, err := semver.NewVersion(strings.TrimSpace(state.RequestedRef)); err != nil {
-			return fmt.Errorf("invalid state: requestedRef %q is not a semantic version: %w", state.RequestedRef, err)
+			return fmt.Errorf("%w: requestedRef %q is not a semantic version: %w", ErrInvalidState, state.RequestedRef, err)
 		}
 	default:
-		return fmt.Errorf("invalid state: unknown sourceKind %q", state.SourceKind)
+		return fmt.Errorf("%w: unknown sourceKind %q", ErrInvalidState, state.SourceKind)
 	}
-	if state.Engine == "" {
-		return fmt.Errorf("invalid state: engine is empty")
+	if err := engine.ValidateField(state.EngineVersion); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidState, err)
 	}
 	if state.TemplateLicense == "" {
-		return fmt.Errorf("invalid state: templateLicense is empty")
+		return fmt.Errorf("%w: templateLicense is empty", ErrInvalidState)
 	}
 	switch state.Conflict {
 	case "", "inline", "rej":
 	default:
-		return fmt.Errorf("invalid state: unknown conflict mode %q", state.Conflict)
+		return fmt.Errorf("%w: unknown conflict mode %q", ErrInvalidState, state.Conflict)
 	}
 	return nil
 }
@@ -212,6 +237,11 @@ func LoadLock(fsys fs.FS) (*Lock, error) {
 func SaveLock(dir string, lock *Lock) error {
 	lock.SchemaVersion = StateVersion
 	lock.Schema = LockSchemaRef
+	bumped, err := engine.Bump(lock.EngineVersion, engine.Current())
+	if err != nil {
+		return err
+	}
+	lock.EngineVersion = bumped
 	slices.SortFunc(lock.Files, func(a, b LockFile) int { return cmp.Compare(a.Path, b.Path) })
 	lock.ManifestHash = ComputeManifestHash(lock.Files)
 	if err := ValidateLock(lock); err != nil {
@@ -225,57 +255,60 @@ func SaveLock(dir string, lock *Lock) error {
 
 func ValidateLock(lock *Lock) error {
 	if lock == nil {
-		return fmt.Errorf("invalid lock: lock is nil")
+		return fmt.Errorf("%w: lock is nil", ErrInvalidLock)
 	}
 	if lock.SchemaVersion != StateVersion {
 		return fmt.Errorf(
-			"invalid lock: unsupported schema_version %d: this engine reads v%d only",
-			lock.SchemaVersion, StateVersion)
+			"%w: unsupported schema_version %d: this engine reads v%d only",
+			ErrInvalidLock, lock.SchemaVersion, StateVersion)
+	}
+	if err := engine.ValidateField(lock.EngineVersion); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidLock, err)
 	}
 	if lock.Source == "" {
-		return fmt.Errorf("invalid lock: source is empty")
+		return fmt.Errorf("%w: source is empty", ErrInvalidLock)
 	}
 	if lock.Registry != "" {
 		if !isRegistryURI(lock.Registry) {
-			return fmt.Errorf("invalid lock: registry %q is not a URI", lock.Registry)
+			return fmt.Errorf("%w: registry %q is not a URI", ErrInvalidLock, lock.Registry)
 		}
 		if !isURITemplateRef(lock.Source, lock.Registry) {
-			return fmt.Errorf("invalid lock: source %q is not a <registry-uri>/<template>@<version> ref", lock.Source)
+			return fmt.Errorf("%w: source %q is not a <registry-uri>/<template>@<version> ref", ErrInvalidLock, lock.Source)
 		}
 		if !hex64.MatchString(lock.ResolvedSHA) && !manifestHashRe.MatchString(lock.ResolvedSHA) {
 			return fmt.Errorf(
-				"invalid lock: resolved_sha %q is not a 64-hex digest or sha256: digest",
-				lock.ResolvedSHA)
+				"%w: resolved_sha %q is not a 64-hex digest or sha256: digest",
+				ErrInvalidLock, lock.ResolvedSHA)
 		}
 		if !manifestHashRe.MatchString(lock.Digest) {
-			return fmt.Errorf("invalid lock: digest %q is not a sha256: digest", lock.Digest)
+			return fmt.Errorf("%w: digest %q is not a sha256: digest", ErrInvalidLock, lock.Digest)
 		}
 		if strings.TrimSpace(lock.URI) == "" {
-			return fmt.Errorf("invalid lock: uri is empty")
+			return fmt.Errorf("%w: uri is empty", ErrInvalidLock)
 		}
 		if strings.TrimSpace(lock.Ref) == "" {
-			return fmt.Errorf("invalid lock: ref is empty")
+			return fmt.Errorf("%w: ref is empty", ErrInvalidLock)
 		}
 	} else if !hex40.MatchString(lock.ResolvedSHA) && !hex64.MatchString(lock.ResolvedSHA) {
 		return fmt.Errorf(
-			"invalid lock: resolved_sha %q is not a 40-hex commit "+"SHA or 64-hex content identity",
-			lock.ResolvedSHA)
+			"%w: resolved_sha %q is not a 40-hex commit "+"SHA or 64-hex content identity",
+			ErrInvalidLock, lock.ResolvedSHA)
 	}
 	if !manifestHashRe.MatchString(lock.ManifestHash) {
-		return fmt.Errorf("invalid lock: manifest_hash %q is not a sha256: digest", lock.ManifestHash)
+		return fmt.Errorf("%w: manifest_hash %q is not a sha256: digest", ErrInvalidLock, lock.ManifestHash)
 	}
 	if !slices.IsSortedFunc(lock.Files, func(a, b LockFile) int { return cmp.Compare(a.Path, b.Path) }) {
-		return fmt.Errorf("invalid lock: files are not sorted by path")
+		return fmt.Errorf("%w: files are not sorted by path", ErrInvalidLock)
 	}
 	for i, file := range lock.Files {
 		if file.Path == "" {
-			return fmt.Errorf("invalid lock: files[%d] is missing path", i)
+			return fmt.Errorf("%w: files[%d] is missing path", ErrInvalidLock, i)
 		}
 		if !hex64.MatchString(file.SHA256) {
-			return fmt.Errorf("invalid lock: files[%d] sha256 %q is not a 64-hex digest", i, file.SHA256)
+			return fmt.Errorf("%w: files[%d] sha256 %q is not a 64-hex digest", ErrInvalidLock, i, file.SHA256)
 		}
 		if file.Bytes < 0 {
-			return fmt.Errorf("invalid lock: files[%d] has negative bytes %d", i, file.Bytes)
+			return fmt.Errorf("%w: files[%d] has negative bytes %d", ErrInvalidLock, i, file.Bytes)
 		}
 	}
 	return nil
@@ -320,30 +353,36 @@ func LoadManifest(fsys fs.FS) (*Manifest, error) {
 }
 
 func ValidateManifest(manifest *Manifest) error {
+	if manifest == nil {
+		return fmt.Errorf("%w: manifest is nil", ErrInvalidManifest)
+	}
+	if manifest.SchemaVersion != StateVersion {
+		return fmt.Errorf(
+			"%w: unsupported schema_version %d: this engine reads v%d only",
+			ErrInvalidManifest, manifest.SchemaVersion, StateVersion)
+	}
+	if err := engine.ValidateField(manifest.EngineVersion); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidManifest, err)
+	}
 	switch manifest.Conflict {
 	case "", "inline", "rej":
 	default:
-		return fmt.Errorf("invalid manifest: unknown conflict mode %q", manifest.Conflict)
+		return fmt.Errorf("%w: unknown conflict mode %q", ErrInvalidManifest, manifest.Conflict)
 	}
 	if err := filter.ValidateGlobs(manifest.Includes); err != nil {
-		return fmt.Errorf("invalid manifest: bad includes pattern: %w", err)
+		return fmt.Errorf("%w: bad includes pattern: %w", ErrInvalidManifest, err)
 	}
 	if err := filter.ValidateGlobs(manifest.Excludes); err != nil {
-		return fmt.Errorf("invalid manifest: bad excludes pattern: %w", err)
+		return fmt.Errorf("%w: bad excludes pattern: %w", ErrInvalidManifest, err)
 	}
 	if err := filter.ValidateGlobs(manifest.Preserves); err != nil {
-		return fmt.Errorf("invalid manifest: bad preserves pattern: %w", err)
+		return fmt.Errorf("%w: bad preserves pattern: %w", ErrInvalidManifest, err)
 	}
 	if err := validateManifestInputs(manifest.Inputs); err != nil {
 		return err
 	}
 	if err := validateManifestConditionals(manifest.Conditionals); err != nil {
 		return err
-	}
-	if manifest.MinEngine != "" {
-		if _, err := semver.NewConstraint(manifest.MinEngine); err != nil {
-			return fmt.Errorf("invalid manifest: bad min-engine %q: %w", manifest.MinEngine, err)
-		}
 	}
 	if err := validateManifestLicense(manifest.License); err != nil {
 		return err
@@ -360,6 +399,32 @@ func ValidateManifest(manifest *Manifest) error {
 	return nil
 }
 
+// SaveManifestFile stamps schema_version, the relative $schema reference and
+// the running engine_version, validates, regenerates the template schema
+// beside the registry root and writes template.yml. Manifest changes flow
+// through reflection so the schema tracks the struct with no manual edit.
+// ~keep
+func SaveManifestFile(templateYMLPath, schemaPath string, manifest *Manifest) error {
+	manifest.SchemaVersion = StateVersion
+	bumped, err := engine.Bump(manifest.EngineVersion, engine.Current())
+	if err != nil {
+		return err
+	}
+	manifest.EngineVersion = bumped
+	ref, err := TemplateSchemaRefFor(templateYMLPath, schemaPath)
+	if err != nil {
+		return fmt.Errorf("resolving template schema ref: %w", err)
+	}
+	manifest.Schema = ref
+	if err := ValidateManifest(manifest); err != nil {
+		return err
+	}
+	if err := writeSchemaFile(schemaPath, ManifestJSONSchema()); err != nil {
+		return err
+	}
+	return writeYAMLFile(templateYMLPath, manifest)
+}
+
 var manifestLicenseRe = regexp.MustCompile(`^[A-Za-z0-9.+:\-]+$`)
 
 func validateManifestLicense(license string) error {
@@ -369,8 +434,8 @@ func validateManifestLicense(license string) error {
 	trimmed := strings.TrimSpace(license)
 	if trimmed == "" || !manifestLicenseRe.MatchString(trimmed) {
 		return fmt.Errorf(
-			"invalid manifest: bad license %q: must be a non-empty SPDX identifier "+
-				"(letters, digits, and .+:-)", license)
+			"%w: bad license %q: must be a non-empty SPDX identifier "+
+				"(letters, digits, and .+:-)", ErrInvalidManifest, license)
 	}
 	return nil
 }
@@ -387,19 +452,19 @@ func validateManifestPlantedFiles(files []string, key string) error {
 	seen := map[string]bool{}
 	for i, entry := range files {
 		if strings.TrimSpace(entry) == "" {
-			return fmt.Errorf("invalid manifest: %s[%d] is empty", key, i)
+			return fmt.Errorf("%w: %s[%d] is empty", ErrInvalidManifest, key, i)
 		}
 		slash := filter.ToSlash(entry)
 		if strings.HasPrefix(slash, "/") || filepath.IsAbs(entry) {
-			return fmt.Errorf("invalid manifest: %s[%d] %q is not relative", key, i, entry)
+			return fmt.Errorf("%w: %s[%d] %q is not relative", ErrInvalidManifest, key, i, entry)
 		}
 		for segment := range strings.SplitSeq(slash, "/") {
 			if segment == ".." {
-				return fmt.Errorf("invalid manifest: %s[%d] %q escapes its root", key, i, entry)
+				return fmt.Errorf("%w: %s[%d] %q escapes its root", ErrInvalidManifest, key, i, entry)
 			}
 		}
 		if strings.HasSuffix(slash, ".tmpl") {
-			return fmt.Errorf("invalid manifest: %s[%d] %q must not be a template", key, i, entry)
+			return fmt.Errorf("%w: %s[%d] %q must not be a template", ErrInvalidManifest, key, i, entry)
 		}
 		dest := ".config/turutan/" + slash
 		if dest == ".config/turutan/state.yml" ||
@@ -407,10 +472,10 @@ func validateManifestPlantedFiles(files []string, key string) error {
 			dest == ".config/turutan/templates" ||
 			strings.HasPrefix(dest, ".config/turutan/templates/") {
 			return fmt.Errorf(
-				"invalid manifest: %s[%d] %q collides with state artifacts", key, i, entry)
+				"%w: %s[%d] %q collides with state artifacts", ErrInvalidManifest, key, i, entry)
 		}
 		if seen[slash] {
-			return fmt.Errorf("invalid manifest: %s[%d] %q is a duplicate", key, i, entry)
+			return fmt.Errorf("%w: %s[%d] %q is a duplicate", ErrInvalidManifest, key, i, entry)
 		}
 		seen[slash] = true
 	}
@@ -425,7 +490,7 @@ func validateManifestPlantedOverlap(licenseFiles, docFiles []string) error {
 	for i, entry := range docFiles {
 		if licensed[filter.ToSlash(entry)] {
 			return fmt.Errorf(
-				"invalid manifest: doc-files[%d] %q is also listed in license-files", i, entry)
+				"%w: doc-files[%d] %q is also listed in license-files", ErrInvalidManifest, i, entry)
 		}
 	}
 	return nil
@@ -434,23 +499,23 @@ func validateManifestPlantedOverlap(licenseFiles, docFiles []string) error {
 func validateManifestInputs(inputs map[string]ManifestInput) error {
 	for key, input := range inputs {
 		if key == "" {
-			return fmt.Errorf("invalid manifest: input with empty key")
+			return fmt.Errorf("%w: input with empty key", ErrInvalidManifest)
 		}
 		if strings.TrimSpace(input.Label) == "" {
-			return fmt.Errorf("invalid manifest: input %q is missing label", key)
+			return fmt.Errorf("%w: input %q is missing label", ErrInvalidManifest, key)
 		}
 		switch input.Type {
 		case "", "string", "array", "bool":
 		default:
-			return fmt.Errorf("invalid manifest: input %q has unknown type %q", key, input.Type)
+			return fmt.Errorf("%w: input %q has unknown type %q", ErrInvalidManifest, key, input.Type)
 		}
 		for _, opt := range input.Options {
 			if opt == "" {
-				return fmt.Errorf("invalid manifest: input %q has an empty option", key)
+				return fmt.Errorf("%w: input %q has an empty option", ErrInvalidManifest, key)
 			}
 		}
 		if len(input.Options) > 0 && input.Type == "bool" {
-			return fmt.Errorf("invalid manifest: input %q options not meaningful for bool type", key)
+			return fmt.Errorf("%w: input %q options not meaningful for bool type", ErrInvalidManifest, key)
 		}
 	}
 	return nil
@@ -459,20 +524,20 @@ func validateManifestInputs(inputs map[string]ManifestInput) error {
 func validateManifestConditionals(conds []ManifestConditional) error {
 	for i, cond := range conds {
 		if strings.TrimSpace(cond.If) == "" {
-			return fmt.Errorf("invalid manifest: conditionals[%d] is missing if", i)
+			return fmt.Errorf("%w: conditionals[%d] is missing if", ErrInvalidManifest, i)
 		}
 		if len(cond.Includes) == 0 && len(cond.Excludes) == 0 && len(cond.Preserves) == 0 {
 			return fmt.Errorf(
-				"invalid manifest: conditionals[%d] has neither includes nor excludes nor preserves: "+"must list at least one pattern", i)
+				"%w: conditionals[%d] has neither includes nor excludes nor preserves: "+"must list at least one pattern", ErrInvalidManifest, i)
 		}
 		if err := filter.ValidateGlobs(cond.Includes); err != nil {
-			return fmt.Errorf("invalid manifest: bad conditional includes pattern: %w", err)
+			return fmt.Errorf("%w: bad conditional includes pattern: %w", ErrInvalidManifest, err)
 		}
 		if err := filter.ValidateGlobs(cond.Excludes); err != nil {
-			return fmt.Errorf("invalid manifest: bad conditional excludes pattern: %w", err)
+			return fmt.Errorf("%w: bad conditional excludes pattern: %w", ErrInvalidManifest, err)
 		}
 		if err := filter.ValidateGlobs(cond.Preserves); err != nil {
-			return fmt.Errorf("invalid manifest: bad conditional preserves pattern: %w", err)
+			return fmt.Errorf("%w: bad conditional preserves pattern: %w", ErrInvalidManifest, err)
 		}
 	}
 	return nil
@@ -567,4 +632,27 @@ func writeYAML(dir, name string, value any) error {
 		return fmt.Errorf("writing %q: %w", name, err)
 	}
 	return nil
+}
+
+func writeYAMLFile(path string, value any) error {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encoding %q: %w", path, err)
+	}
+	if len(data) == 0 || data[len(data)-1] != '\n' {
+		data = append(data, '\n')
+	}
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("writing %q: %w", path, err)
+	}
+	return nil
+}
+
+func writeSchemaFile(path string, schema map[string]any) error {
+	return writeGeneratedSchema(filepath.Dir(path), filepath.Base(path), schema)
 }

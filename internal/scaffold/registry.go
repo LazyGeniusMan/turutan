@@ -356,7 +356,7 @@ func ResolveTemplateManifest(rr *ResolvedRegistry, template, version string) (*r
 	if _, err := registry.ParseStrict(want); err != nil {
 		return nil, err
 	}
-	if want == entry.Version {
+	if want == entry.ResolvedVersion() {
 		out := entry.Manifest()
 		return &out, nil
 	}
@@ -391,7 +391,7 @@ func ResolveTemplateManifest(rr *ResolvedRegistry, template, version string) (*r
 		return versioned, nil
 	}
 	return nil, fmt.Errorf("template %q release %q needs its versioned manifest %s (only latest %q is cached)",
-		template, want, registry.VersionedManifestPath(rr.Root, template, want), entry.Version)
+		template, want, registry.VersionedManifestPath(rr.Root, template, want), entry.ResolvedVersion())
 }
 
 func fetchHTTPVersionedManifest(rr *ResolvedRegistry, template, version string) (*registry.TemplateManifest, error) {

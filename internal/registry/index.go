@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/schemagen"
 )
 
@@ -33,16 +34,27 @@ var ErrTemplateNotFound = errors.New("template not found")
 //
 //nolint:revive // ~keep: RegistryTemplate names the index-entry shape
 type RegistryTemplate struct {
-	Name         string   `json:"name"`
-	Version      string   `json:"version,omitempty"`
-	Author       Author   `json:"author"`
-	Contributors []Author `json:"contributors,omitempty"`
-	URI          *URI     `json:"uri,omitempty"`
-	Releases     []string `json:"releases,omitempty"`
-	Digest       string   `json:"digest,omitempty"`
-	MinEngine    string   `json:"min-engine,omitempty"`
-	ManifestHash string   `json:"manifestHash,omitempty"`
-	License      string   `json:"license,omitempty"`
+	Name          string   `json:"name"`
+	Version       string   `json:"version,omitempty"`
+	Author        Author   `json:"author"`
+	Contributors  []Author `json:"contributors,omitempty"`
+	URI           *URI     `json:"uri,omitempty"`
+	Releases      []string `json:"releases,omitempty"`
+	Digest        string   `json:"digest,omitempty"`
+	EngineVersion string   `json:"engine_version"`
+	ManifestHash  string   `json:"manifestHash,omitempty"`
+	License       string   `json:"license,omitempty"`
+}
+
+// ResolvedVersion returns the entry latest version, or 0.0.0 when the
+// template has no releases yet (created-but-unreleased entries carry no
+// version until the first release cuts one).
+// ~keep
+func (t *RegistryTemplate) ResolvedVersion() string {
+	if t == nil || t.Version == "" {
+		return "0.0.0"
+	}
+	return t.Version
 }
 
 // IsReleased reports whether the entry owns at least one release. A
@@ -73,7 +85,7 @@ func (t *RegistryTemplate) Validate() error {
 		Contributors:  t.Contributors,
 		URI:           *t.URI,
 		Digest:        t.Digest,
-		MinEngine:     t.MinEngine,
+		EngineVersion: t.EngineVersion,
 		ManifestHash:  t.ManifestHash,
 		License:       t.License,
 	}
@@ -115,22 +127,25 @@ func (t *RegistryTemplate) validateUnreleased() error {
 	if t.ManifestHash != "" {
 		return fmt.Errorf("%w: unreleased template %q must not carry a manifest hash", ErrInvalidIndex, t.Name)
 	}
+	if err := engine.ValidateField(t.EngineVersion); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidIndex, err)
+	}
 	return nil
 }
 
 // Manifest returns the single-version view of this entry. Unreleased
-// entries yield a manifest with no version or URI; callers resolving it
-// fail at fetch time, never at index load time.
+// entries yield a manifest with the 0.0.0 placeholder version and no URI;
+// callers resolving it fail at fetch time, never at index load time.
 // ~keep
 func (t *RegistryTemplate) Manifest() TemplateManifest {
 	out := TemplateManifest{
 		SchemaVersion: SchemaVersion,
 		Name:          t.Name,
-		Version:       t.Version,
+		Version:       t.ResolvedVersion(),
 		Author:        t.Author,
 		Contributors:  t.Contributors,
 		Digest:        t.Digest,
-		MinEngine:     t.MinEngine,
+		EngineVersion: t.EngineVersion,
 		ManifestHash:  t.ManifestHash,
 		License:       t.License,
 	}
@@ -148,8 +163,8 @@ func (t *RegistryTemplate) Manifest() TemplateManifest {
 type RegistryIndex struct {
 	SchemaVersion int                `json:"schema_version"`
 	Schema        string             `json:"$schema,omitempty"`
+	EngineVersion string             `json:"engine_version"`
 	Name          string             `json:"name"`
-	Version       string             `json:"version"`
 	Author        Author             `json:"author"`
 	Templates     []RegistryTemplate `json:"templates"`
 }
@@ -184,11 +199,29 @@ func LoadIndexFile(path string) (*RegistryIndex, error) {
 }
 
 // SaveIndexFile validates the index and writes it to path as indented JSON,
-// stamping the current schema_version with its relative $schema reference
-// and regenerating the registry index schema beside it.
+// stamping the current schema_version with its relative $schema reference,
+// bumping every entry engine_version to the running binary and regenerating
+// the registry index schema beside it. A nil template list is emitted as []
+// so fresh indexes validate as an array.
 // ~keep
 func SaveIndexFile(path string, index *RegistryIndex) error {
 	index.SchemaVersion = SchemaVersion
+	if index.Templates == nil {
+		index.Templates = []RegistryTemplate{}
+	}
+	current := engine.Current()
+	bumpedRoot, err := engine.Bump(index.EngineVersion, current)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidIndex, err)
+	}
+	index.EngineVersion = bumpedRoot
+	for i := range index.Templates {
+		bumped, err := engine.Bump(index.Templates[i].EngineVersion, current)
+		if err != nil {
+			return fmt.Errorf("%w: templates[%d]: %w", ErrInvalidIndex, i, err)
+		}
+		index.Templates[i].EngineVersion = bumped
+	}
 	dir := filepath.Dir(path)
 	schemaPath := filepath.Join(dir, filepath.FromSlash(IndexSchemaFileName))
 	ref, err := relativeSchemaRef(path, schemaPath)
@@ -234,8 +267,11 @@ func (r *RegistryIndex) Validate() error {
 	if !validResourceName(r.Name) {
 		return fmt.Errorf("%w: name %q must match [a-z0-9._/-]", ErrInvalidIndex, r.Name)
 	}
-	if _, err := ParseStrict(r.Version); err != nil {
-		return fmt.Errorf("%w: version: %w", ErrInvalidIndex, err)
+	if err := engine.ValidateField(r.EngineVersion); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidIndex, err)
+	}
+	if r.Templates == nil {
+		return fmt.Errorf("%w: templates is null: want []", ErrInvalidIndex)
 	}
 	if err := r.Author.Validate(); err != nil {
 		return fmt.Errorf("%w: author: %w", ErrInvalidIndex, err)

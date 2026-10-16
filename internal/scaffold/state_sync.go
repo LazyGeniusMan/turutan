@@ -425,7 +425,7 @@ func fetchPinnedTemplate(
 		cleanup()
 		return nil, nil, fmt.Errorf("%s: %w", op, err)
 	}
-	if _, err := checkMinEngine(manifest, engine, stderr, verbose); err != nil {
+	if _, err := checkEngineVersion(manifest, engine, stderr, verbose); err != nil {
 		cleanup()
 		return nil, nil, err
 	}

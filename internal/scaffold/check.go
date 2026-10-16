@@ -109,14 +109,14 @@ func reresolveRegistry(
 	}
 	want := strings.TrimSpace(ref)
 	if want == "" {
-		want = entry.Version
+		want = entry.ResolvedVersion()
 	} else if _, err := ResolveTemplateManifest(rr, templateName, want); err != nil {
 		return "", false, nil, fmt.Errorf("check: %w", err)
 	}
 	if _, err := registry.ParseStrict(want); err != nil {
 		return "", false, nil, fmt.Errorf("check: %w", err)
 	}
-	if want != state.RequestedRef && !isNewerVersion(want, state.RequestedRef) && want != entry.Version {
+	if want != state.RequestedRef && !isNewerVersion(want, state.RequestedRef) && want != entry.ResolvedVersion() {
 		vlogf(stderr, verbose, "check: requested version %s is not newer than pinned %s", want, state.RequestedRef)
 	}
 	changed := want != state.RequestedRef
@@ -157,7 +157,7 @@ func fetchRegistryInputs(
 		vlogf(stderr, verbose, "check: skipping inputs report: %v", err)
 		return nil
 	}
-	if _, err := checkMinEngine(templateManifest, engine, stderr, verbose); err != nil {
+	if _, err := checkEngineVersion(templateManifest, engine, stderr, verbose); err != nil {
 		vlogf(stderr, verbose, "check: skipping inputs report: %v", err)
 		return nil
 	}

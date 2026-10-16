@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Masterminds/semver/v3"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 )
 
 // ErrInvalidManifest is matched with errors.Is when a manifest fails validation.
@@ -34,13 +34,13 @@ type TemplateManifest struct {
 	Contributors  []Author `json:"contributors,omitempty"`
 	URI           URI      `json:"uri"`
 	Digest        string   `json:"digest,omitempty"`
-	MinEngine     string   `json:"min-engine,omitempty"`
+	EngineVersion string   `json:"engine_version"`
 	ManifestHash  string   `json:"manifestHash,omitempty"`
 	License       string   `json:"license,omitempty"`
 }
 
 // Validate reports whether the manifest is internally consistent: names,
-// strict semver version, author formats, URI, digest, engine constraint
+// strict semver version, author formats, URI, digest, engine version
 // and manifest hash.
 // ~keep
 func (m *TemplateManifest) Validate() error {
@@ -75,10 +75,8 @@ func (m *TemplateManifest) Validate() error {
 	if m.Digest != "" && !digestRe.MatchString(m.Digest) {
 		return fmt.Errorf("%w: digest %q is not a sha256: digest", ErrInvalidManifest, m.Digest)
 	}
-	if m.MinEngine != "" {
-		if _, err := semver.NewConstraint(m.MinEngine); err != nil {
-			return fmt.Errorf("%w: bad min-engine %q: %w", ErrInvalidManifest, m.MinEngine, err)
-		}
+	if err := engine.ValidateField(m.EngineVersion); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidManifest, err)
 	}
 	if m.ManifestHash != "" && !manifestHashRe.MatchString(m.ManifestHash) {
 		return fmt.Errorf("%w: manifestHash %q is not a sha256: digest", ErrInvalidManifest, m.ManifestHash)

@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 )
-
-const registryStarterVersion = "0.1.0"
 
 func newRegistryCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -33,10 +33,9 @@ The registry index file is turutan.json.`,
 }
 
 type registryInitFlags struct {
-	name    string
-	author  string
-	version string
-	force   bool
+	name   string
+	author string
+	force  bool
 }
 
 func newRegistryInitCmd() *cobra.Command {
@@ -45,7 +44,7 @@ func newRegistryInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize a template registry in the current directory",
 		Long: `Initialize a template registry in the current directory by
-writing turutan.json: the registry identity (name, version, author) with
+writing turutan.json: the registry identity (name, author) with
 an empty template list.
 
 The author uses the canonical "Name <email> (website)" form. Refuses to
@@ -58,8 +57,6 @@ overwrite an existing index file unless --force is given.`,
 	cmd.Flags().StringVar(&flags.name, "name", "", "registry name (default: current directory basename)")
 	cmd.Flags().StringVar(&flags.author, "author", "",
 		`registry author as "Name <email> (website)" (required)`)
-	cmd.Flags().StringVar(&flags.version, "version", registryStarterVersion,
-		"initial registry version (strict semver)")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "overwrite an existing registry index file")
 	return cmd
 }
@@ -81,13 +78,6 @@ func runRegistryInit(cmd *cobra.Command, flags *registryInitFlags) error {
 	if err != nil {
 		return fmt.Errorf("registry init: %w", err)
 	}
-	versionText := strings.TrimSpace(flags.version)
-	if versionText == "" {
-		versionText = registryStarterVersion
-	}
-	if _, err := registry.ParseStrict(versionText); err != nil {
-		return fmt.Errorf("registry init: %w", err)
-	}
 	path := filepath.Join(cwd, registry.IndexFileName)
 	if existing, ok := existingIndexFile(cwd); ok {
 		if !flags.force {
@@ -97,7 +87,9 @@ func runRegistryInit(cmd *cobra.Command, flags *registryInitFlags) error {
 	}
 	index := &registry.RegistryIndex{
 		SchemaVersion: registry.SchemaVersion,
-		Name:          name, Version: versionText, Author: author,
+		EngineVersion: engine.Current(),
+		Name:          name, Author: author,
+		Templates: []registry.RegistryTemplate{},
 	}
 	if err := index.Validate(); err != nil {
 		return fmt.Errorf("registry init: %w", err)
@@ -174,10 +166,10 @@ func runRegistryCreate(cmd *cobra.Command, name string, flags *registryCreateFla
 	if _, err := index.FindTemplate(name); err == nil && !flags.force {
 		return fmt.Errorf("registry create: template %q is already indexed (use --force to overwrite)", name)
 	}
-	if err := writeRegistryStarter(dir, name); err != nil {
+	if err := writeRegistryStarter(root, dir, name); err != nil {
 		return err
 	}
-	entry := registry.RegistryTemplate{Name: name, Author: index.Author}
+	entry := registry.RegistryTemplate{Name: name, Author: index.Author, EngineVersion: engine.Current()}
 	if err := entry.Validate(); err != nil {
 		return fmt.Errorf("registry create: %w", err)
 	}
@@ -217,13 +209,11 @@ func isEmptyDir(dir string) (bool, error) {
 	return len(entries) == 0, nil
 }
 
-func writeRegistryStarter(dir, name string) error {
-	files := map[string]string{
-		"template.yml":   "min-engine: \">=0.1.0\"\nlicense: MIT-0\nconflict: inline\n",
+func writeRegistryStarter(root, dir, name string) error {
+	for rel, content := range map[string]string{
 		"README.md":      "# " + name + "\n\nA turutan template. Render it with `turutan init --defaults . <out-dir>`.\n",
 		"hello.txt.tmpl": "Hello, {{ .project_name }}!\n",
-	}
-	for rel, content := range files {
+	} {
 		path := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return fmt.Errorf("registry create: %w", err)
@@ -231,6 +221,12 @@ func writeRegistryStarter(dir, name string) error {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			return fmt.Errorf("registry create: %w", err)
 		}
+	}
+	manifest := &config.Manifest{License: "MIT-0", Conflict: "inline"}
+	templateYML := filepath.Join(dir, config.ManifestFileName)
+	schemaPath := filepath.Join(root, filepath.FromSlash(config.TemplateSchemaFileName))
+	if err := config.SaveManifestFile(templateYML, schemaPath, manifest); err != nil {
+		return fmt.Errorf("registry create: %w", err)
 	}
 	return nil
 }

@@ -32,7 +32,7 @@ func makeTemplate(t *testing.T, manifest string, files map[string]string) string
 	return dir
 }
 
-const basicManifest = "min-engine: \">=0.1.0\"\nconflict: inline\nexcludes:\n  - \"ignored/**\"\npreserves:\n  - \"keep.txt\"\n"
+const basicManifest = "schema_version: 1\nengine_version: \"0.1.0\"\nconflict: inline\nexcludes:\n  - \"ignored/**\"\npreserves:\n  - \"keep.txt\"\n"
 
 var basicFiles = map[string]string{
 	"go.mod.tmpl":      "module {{.project_name}}\n\ngo 1.26\n",
@@ -116,8 +116,8 @@ func TestInitFilesystem(t *testing.T) {
 		if state.TemplateLicense != turutanconfig.TemplateLicenseMIT0 {
 			t.Errorf("TemplateLicense = %q, want MIT-0", state.TemplateLicense)
 		}
-		if state.Engine != "turutan/0.1.0" {
-			t.Errorf("Engine = %q, want turutan/0.1.0", state.Engine)
+		if state.EngineVersion != "dev" {
+			t.Errorf("EngineVersion = %q, want dev", state.EngineVersion)
 		}
 		lock, err := turutanconfig.LoadLock(os.DirFS(target))
 		if err != nil {
@@ -211,11 +211,11 @@ func TestInitFilesystem(t *testing.T) {
 			t.Errorf("keep.txt = %q, want local content preserved", got)
 		}
 	})
-	t.Run("min-engine floor enforced", func(t *testing.T) {
-		_, ref := makeTestRegistry(t, "min-engine: \">=99.0.0\"\n", basicFiles)
+	t.Run("engine_version floor enforced", func(t *testing.T) {
+		_, ref := makeTestRegistry(t, "schema_version: 1\nengine_version: \"99.0.0\"\n", basicFiles)
 		opts := testOptions(&strings.Builder{})
 		if err := Init(context.Background(), filepath.Join(t.TempDir(), "p"), ref, opts); err == nil {
-			t.Error("init below min-engine succeeded, want error")
+			t.Error("init below engine_version succeeded, want error")
 		}
 	})
 	t.Run("interactive input supplies missing key", func(t *testing.T) {

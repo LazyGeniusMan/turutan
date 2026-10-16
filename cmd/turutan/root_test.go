@@ -47,8 +47,8 @@ func writeIsolatedConfig(t *testing.T, body string) string {
 
 func writeProjectState(t *testing.T, dir, template string) {
 	t.Helper()
-	state := fmt.Sprintf("version: 1\ntemplate: %q\nsourceKind: filesystem\nresolvedCommit: %q\nengine: \"0.1.0\"\ntemplateLicense: MIT-0\n",
-		template, strings.Repeat("ab", 32))
+	state := fmt.Sprintf("version: 1\nschema_version: 1\ntemplate: %q\nsourceKind: registry\nregistry: \"fs:///tmp/reg\"\ntemplateURI: \"fs:///tmp/bundle\"\ntemplateDigest: \"sha256:%s\"\nrequestedRef: \"0.1.0\"\nresolvedCommit: %q\nengine_version: \"dev\"\ntemplateLicense: MIT-0\n",
+		template, strings.Repeat("ab", 32), strings.Repeat("ab", 32))
 	path := filepath.Join(dir, config.StateFileName)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatal(err)
@@ -303,7 +303,7 @@ func TestResolveInitTemplateLayers(t *testing.T) {
 
 func verboseTemplate(t *testing.T) string {
 	t.Helper()
-	_, _, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
+	_, _, flag := makeCmdRegistry(t, "", map[string]string{
 		"go.mod.tmpl": "module {{.project_name}}\n",
 	})
 	return flag

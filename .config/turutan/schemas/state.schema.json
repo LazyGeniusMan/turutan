@@ -10,7 +10,7 @@
     "data": {
       "$ref": "state-data.schema.json"
     },
-    "engine": {
+    "engine_version": {
       "type": "string"
     },
     "registry": {
@@ -59,7 +59,7 @@
     "template",
     "sourceKind",
     "resolvedCommit",
-    "engine",
+    "engine_version",
     "templateLicense"
   ],
   "title": "turutan state",

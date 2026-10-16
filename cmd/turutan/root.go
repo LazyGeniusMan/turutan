@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 )
 
 var (
@@ -19,6 +20,10 @@ var (
 	commit  = "none"
 	date    = "unknown"
 )
+
+func init() {
+	engine.Version = version
+}
 
 type appConfig struct {
 	cfgFile        string

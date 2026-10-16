@@ -14,8 +14,9 @@ func unreleasedTestIndex(t *testing.T) *RegistryIndex {
 	}
 	return &RegistryIndex{
 		SchemaVersion: SchemaVersion,
-		Name:          "r", Version: "0.1.0", Author: author,
-		Templates: []RegistryTemplate{{Name: "app", Author: author}},
+		EngineVersion: "dev",
+		Name:          "r", Author: author,
+		Templates: []RegistryTemplate{{Name: "app", Author: author, EngineVersion: "dev"}},
 	}
 }
 
@@ -87,7 +88,7 @@ func TestUpsertIndexReleasePromotesUnreleased(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	UpsertIndexRelease(index, TemplateManifest{Name: "app", Version: "0.1.0", Author: author, URI: uri})
+	UpsertIndexRelease(index, TemplateManifest{Name: "app", Version: "0.1.0", Author: author, URI: uri, EngineVersion: "dev"})
 	found, err := index.FindTemplate("app")
 	if err != nil {
 		t.Fatal(err)

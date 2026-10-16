@@ -5,9 +5,11 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
@@ -30,7 +32,7 @@ func makeCmdRegistry(t *testing.T, manifest string, files map[string]string) (st
 	if err != nil {
 		t.Fatal(err)
 	}
-	index := &registry.RegistryIndex{Name: cmdTestRegistry, Version: "1.0.0", Author: author}
+	index := &registry.RegistryIndex{Name: cmdTestRegistry, Author: author, Templates: []registry.RegistryTemplate{}}
 	if err := registry.SaveIndexFile(filepath.Join(regDir, registry.IndexFileName), index); err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +41,9 @@ func makeCmdRegistry(t *testing.T, manifest string, files map[string]string) (st
 		merged[k] = v
 	}
 	if manifest != "" {
+		if len(manifest) == 0 || !containsSchemaVersion(manifest) {
+			manifest = "schema_version: 1\nengine_version: \"dev\"\n" + manifest
+		}
 		merged["template.yml"] = manifest
 	}
 	for name, content := range merged {
@@ -68,7 +73,7 @@ func releaseCmdRegistry(t *testing.T, regDir, name string) string {
 	existing, findErr := index.FindTemplate(name)
 	version := cmdTestVersion
 	if findErr == nil {
-		version, err = registry.BumpVersion(existing.Version, registry.ReleasePatch)
+		version, err = registry.BumpVersion(existing.ResolvedVersion(), registry.ReleasePatch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,7 +118,7 @@ func releaseCmdRegistry(t *testing.T, regDir, name string) string {
 		SchemaVersion: registry.SchemaVersion,
 		Name:          name, Version: version, Author: author, Contributors: contributors,
 		URI:    uri,
-		Digest: digest, MinEngine: templateCfg.MinEngine,
+		Digest: digest, EngineVersion: mustBumpEngine(t, templateCfg.EngineVersion),
 		ManifestHash: manifestHash, License: templateCfg.License,
 	}
 	if err := entry.Validate(); err != nil {
@@ -151,4 +156,17 @@ func scaffoldRef(t *testing.T, flag string) scaffold.RegistryRef {
 		t.Fatal(err)
 	}
 	return ref
+}
+
+func containsSchemaVersion(manifest string) bool {
+	return strings.Contains(manifest, "schema_version")
+}
+
+func mustBumpEngine(t *testing.T, stored string) string {
+	t.Helper()
+	bumped, err := engine.Bump(stored, engine.Current())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bumped
 }

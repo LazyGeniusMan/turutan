@@ -208,11 +208,11 @@ func TestComputeDiff(t *testing.T) {
 	})
 }
 
-func TestComputeDiffMinEngine(t *testing.T) {
+func TestComputeDiffEngineVersion(t *testing.T) {
 	setup := func(t *testing.T) (string, string, string) {
 		t.Helper()
-		projectDir, registryURI := initRegistryProject(t, "min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "min-engine: \">=99.0.0\"\n")
+		projectDir, registryURI := initRegistryProject(t, "schema_version: 1\nengine_version: \"0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
+		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "schema_version: 1\nengine_version: \"99.0.0\"\n")
 		return registryURI, projectDir, fresh
 	}
 	tests := []struct {
@@ -221,7 +221,7 @@ func TestComputeDiffMinEngine(t *testing.T) {
 		wantErr bool
 		errPart string
 	}{
-		{name: "unsatisfiable floor fails fast", engine: "0.1.0", wantErr: true, errPart: "requires engine"},
+		{name: "unsatisfiable floor fails fast", engine: "0.1.0", wantErr: true, errPart: "requires engine_version"},
 		{name: "dev version skips gate", engine: "dev", wantErr: false},
 		{name: "empty engine skips gate", engine: "", wantErr: false},
 	}

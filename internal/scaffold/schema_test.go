@@ -10,12 +10,12 @@ import (
 	"testing"
 )
 
-const schemaFlowManifestV1 = "conflict: inline\n" +
+const schemaFlowManifestV1 = "schema_version: 1\nengine_version: \"dev\"\nconflict: inline\n" +
 	"inputs:\n" +
 	"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: demo\n" +
 	"  color:\n    label: \"Color\"\n    type: string\n    default: red\n    options: [red, blue]\n"
 
-const schemaFlowManifestV2 = "conflict: inline\n" +
+const schemaFlowManifestV2 = "schema_version: 1\nengine_version: \"dev\"\nconflict: inline\n" +
 	"inputs:\n" +
 	"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: demo\n" +
 	"  color:\n    label: \"Color\"\n    type: string\n    default: red\n    options: [red, blue, green]\n" +

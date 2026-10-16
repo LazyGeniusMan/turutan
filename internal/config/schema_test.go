@@ -139,7 +139,7 @@ func TestSchemaRefIgnoredOnLoad(t *testing.T) {
 				"template: oci://ghcr.io/acme/templates/web@1.2.0\nsourceKind: registry\n" +
 				"registry: oci://ghcr.io/acme/templates\ntemplateURI: oci://ghcr.io/acme/web:1.2.0\n" +
 				"templateDigest: " + digest + "\nrequestedRef: 1.2.0\n" +
-				"resolvedCommit: " + commit + "\nengine: turutan/0.1.0\ntemplateLicense: MIT-0\n")}}
+				"resolvedCommit: " + commit + "\nengine_version: dev\ntemplateLicense: MIT-0\n")}}
 		state, err := LoadState(fsys)
 		if err != nil {
 			t.Fatalf("LoadState error: %v", err)
@@ -151,7 +151,7 @@ func TestSchemaRefIgnoredOnLoad(t *testing.T) {
 	t.Run("lock loads with any $schema value", func(t *testing.T) {
 		t.Parallel()
 		fsys := fstest.MapFS{LockFileName: {Data: []byte(
-			`{"schema_version":1,"$schema":"./elsewhere/custom.json",` +
+			`{"schema_version":1,"$schema":"./elsewhere/custom.json","engine_version":"dev",` +
 				`"source":"s","resolved_sha":"` + commit + `",` +
 				`"manifest_hash":"` + digest + `","files":[]}`)}}
 		lock, err := LoadLock(fsys)

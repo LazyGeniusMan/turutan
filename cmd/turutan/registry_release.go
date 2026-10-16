@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 )
 
@@ -160,6 +161,10 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 	if err != nil {
 		return fmt.Errorf("registry release: %w", err)
 	}
+	starterEngine, err := engine.Bump(templateCfg.EngineVersion, engine.Current())
+	if err != nil {
+		return fmt.Errorf("registry release: %v", err)
+	}
 	manifest := registry.TemplateManifest{
 		SchemaVersion: registry.SchemaVersion,
 		Name:          name,
@@ -168,7 +173,7 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 		Contributors:  contributors,
 		URI:           uri,
 		Digest:        digest,
-		MinEngine:     templateCfg.MinEngine,
+		EngineVersion: starterEngine,
 		ManifestHash:  manifestHash,
 		License:       templateCfg.License,
 	}

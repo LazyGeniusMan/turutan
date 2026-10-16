@@ -23,7 +23,7 @@ func validState() *State {
 		RequestedRef:    "1.2.0",
 		ResolvedCommit:  strings.Repeat("a", 64),
 		Data:            map[string]any{"project_name": "demo"},
-		Engine:          "turutan/0.1.0",
+		EngineVersion:   "dev",
 		TemplateLicense: TemplateLicenseMIT0,
 	}
 }
@@ -117,7 +117,7 @@ func TestValidateStateFailures(t *testing.T) {
 		{name: "empty requestedRef rejected", mutate: func(s *State) { s.RequestedRef = "" }},
 		{name: "bad requestedRef rejected", mutate: func(s *State) { s.RequestedRef = "not-a-version" }},
 		{name: "short SHA rejected", mutate: func(s *State) { s.ResolvedCommit = "abc123" }},
-		{name: "empty engine rejected", mutate: func(s *State) { s.Engine = "" }},
+		{name: "empty engine rejected", mutate: func(s *State) { s.EngineVersion = "" }},
 		{name: "empty license rejected", mutate: func(s *State) { s.TemplateLicense = "" }},
 		{name: "unknown conflict rejected", mutate: func(s *State) { s.Conflict = "merge" }},
 	}
@@ -203,6 +203,7 @@ func TestLockRoundTrip(t *testing.T) {
 func validLock() *Lock {
 	return &Lock{
 		SchemaVersion: StateVersion,
+		EngineVersion: "dev",
 		Source:        "oci://ghcr.io/acme/templates/web@1.2.0",
 		Ref:           "1.2.0",
 		ResolvedSHA:   strings.Repeat("a", 64),
@@ -296,34 +297,34 @@ func TestLoadManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
-		if len(got.Excludes) != 0 || got.MinEngine != "" {
+		if len(got.Excludes) != 0 || got.EngineVersion != "" {
 			t.Errorf("default manifest = %+v, want empty", got)
 		}
 	})
 	t.Run("registry template manifest parses", func(t *testing.T) {
-		data := []byte("min-engine: \">=0.1.0\"\nlicense: MIT-0\n" +
+		data := []byte("schema_version: 1\nengine_version: \"0.1.0\"\nlicense: MIT-0\n" +
 			"excludes:\n  - \"gen/**\"\nconflict: inline\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
 		}
-		if got.MinEngine == "" {
-			t.Error("MinEngine empty, want a floor constraint")
+		if got.EngineVersion == "" {
+			t.Error("EngineVersion empty, want an engine version")
 		}
 		if len(got.Excludes) == 0 {
 			t.Error("Excludes empty, want excludes globs")
 		}
 	})
 	t.Run("bad conflict rejected", func(t *testing.T) {
-		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("conflict: merge\n")}}
+		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("schema_version: 1\nengine_version: \"dev\"\nconflict: merge\n")}}
 		if _, err := LoadManifest(fsys); err == nil {
 			t.Error("LoadManifest with bad conflict succeeded, want error")
 		}
 	})
-	t.Run("bad min-engine rejected", func(t *testing.T) {
-		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("min-engine: \"not a constraint!!!\"\n")}}
+	t.Run("bad engine_version rejected", func(t *testing.T) {
+		fsys := fstest.MapFS{ManifestFileName: {Data: []byte("schema_version: 1\nengine_version: \"not-a-version!!!\"\n")}}
 		if _, err := LoadManifest(fsys); err == nil {
-			t.Error("LoadManifest with bad min-engine succeeded, want error")
+			t.Error("LoadManifest with bad engine_version succeeded, want error")
 		}
 	})
 }
@@ -332,7 +333,7 @@ func TestLoadManifestConditionals(t *testing.T) {
 	t.Parallel()
 	t.Run("if includes excludes preserves parsed", func(t *testing.T) {
 		t.Parallel()
-		data := []byte("conditionals:\n  - if: '{{ contains .profiles \"go\" }}'\n    includes: [\"go.mod\", \"cmd/**\"]\n    excludes: [\"foo/bar/**\"]\n    preserves: [\"keep.local\"]\n")
+		data := []byte("schema_version: 1\nengine_version: \"dev\"\nconditionals:\n  - if: '{{ contains .profiles \"go\" }}'\n    includes: [\"go.mod\", \"cmd/**\"]\n    excludes: [\"foo/bar/**\"]\n    preserves: [\"keep.local\"]\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
@@ -360,7 +361,7 @@ func TestLoadManifestConditionals(t *testing.T) {
 	})
 	t.Run("excludes and preserves parsed", func(t *testing.T) {
 		t.Parallel()
-		data := []byte("excludes: [\"a.txt\"]\npreserves: [\"keep.txt\"]\n")
+		data := []byte("schema_version: 1\nengine_version: \"dev\"\nexcludes: [\"a.txt\"]\npreserves: [\"keep.txt\"]\n")
 		got, err := LoadManifest(fstest.MapFS{ManifestFileName: {Data: data}})
 		if err != nil {
 			t.Fatalf("LoadManifest error: %v", err)
@@ -395,7 +396,7 @@ func TestValidateManifestInputs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateManifest(&Manifest{Inputs: tt.inputs})
+			err := ValidateManifest(&Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Inputs: tt.inputs})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -403,7 +404,7 @@ func TestValidateManifestInputs(t *testing.T) {
 	}
 	t.Run("empty input key rejected", func(t *testing.T) {
 		t.Parallel()
-		if err := ValidateManifest(&Manifest{Inputs: map[string]ManifestInput{"": {Type: "string"}}}); err == nil {
+		if err := ValidateManifest(&Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Inputs: map[string]ManifestInput{"": {Type: "string"}}}); err == nil {
 			t.Error("ValidateManifest with empty input key succeeded, want error")
 		}
 	})
@@ -433,7 +434,7 @@ func TestValidateManifestConditionals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateManifest(&Manifest{Conditionals: tt.conds})
+			err := ValidateManifest(&Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Conditionals: tt.conds})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -483,13 +484,15 @@ func TestValidateManifestRootGlobs(t *testing.T) {
 		manifest Manifest
 		wantErr  bool
 	}{
-		{name: "empty accepted", manifest: Manifest{}, wantErr: false},
-		{name: "valid includes accepted", manifest: Manifest{Includes: []string{"a.txt", "gen/**"}}, wantErr: false},
-		{name: "valid excludes accepted", manifest: Manifest{Excludes: []string{"a.txt", "gen/**"}}, wantErr: false},
-		{name: "valid preserves accepted", manifest: Manifest{Preserves: []string{"keep.txt"}}, wantErr: false},
-		{name: "bad includes rejected", manifest: Manifest{Includes: []string{"/abs"}}, wantErr: true},
-		{name: "bad excludes rejected", manifest: Manifest{Excludes: []string{"/abs"}}, wantErr: true},
-		{name: "bad preserves rejected", manifest: Manifest{Preserves: []string{"../escape"}}, wantErr: true},
+		{name: "empty accepted", manifest: Manifest{SchemaVersion: StateVersion, EngineVersion: "dev"}, wantErr: false},
+		{name: "missing schema_version rejected", manifest: Manifest{EngineVersion: "dev"}, wantErr: true},
+		{name: "missing engine rejected", manifest: Manifest{SchemaVersion: StateVersion}, wantErr: true},
+		{name: "valid includes accepted", manifest: Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Includes: []string{"a.txt", "gen/**"}}, wantErr: false},
+		{name: "valid excludes accepted", manifest: Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Excludes: []string{"a.txt", "gen/**"}}, wantErr: false},
+		{name: "valid preserves accepted", manifest: Manifest{Preserves: []string{"keep.txt"}, SchemaVersion: StateVersion, EngineVersion: "dev"}, wantErr: false},
+		{name: "bad includes rejected", manifest: Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Includes: []string{"/abs"}}, wantErr: true},
+		{name: "bad excludes rejected", manifest: Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Excludes: []string{"/abs"}}, wantErr: true},
+		{name: "bad preserves rejected", manifest: Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", Preserves: []string{"../escape"}}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -529,7 +532,7 @@ func TestValidateManifestLicense(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateManifest(&Manifest{License: tt.license, LicenseFiles: tt.files})
+			err := ValidateManifest(&Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", License: tt.license, LicenseFiles: tt.files})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -572,7 +575,7 @@ func TestValidateManifestDocFiles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateManifest(&Manifest{LicenseFiles: tt.license, DocFiles: tt.files})
+			err := ValidateManifest(&Manifest{SchemaVersion: StateVersion, EngineVersion: "dev", LicenseFiles: tt.license, DocFiles: tt.files})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateManifest error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -637,25 +640,25 @@ func TestStateLockLocations(t *testing.T) {
 			"version: 1\nschema_version: 1\ntemplate: oci://ghcr.io/acme/templates/web@1.2.0\nsourceKind: registry\n" +
 				"registry: oci://ghcr.io/acme/templates\ntemplateURI: oci://ghcr.io/acme/web:1.2.0\n" +
 				"templateDigest: " + digest + "\nrequestedRef: 1.2.0\n" +
-				"resolvedCommit: " + commit + "\nengine: " + engine + "\n" +
+				"resolvedCommit: " + commit + "\nengine_version: " + engine + "\n" +
 				"templateLicense: MIT-0\n")}
 	}
 	lockFile := &fstest.MapFile{Data: []byte(
-		`{"schema_version":1,"source":"oci://ghcr.io/acme/templates/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
+		`{"schema_version":1,"engine_version":"dev","source":"oci://ghcr.io/acme/templates/web@1.2.0","ref":"1.2.0","resolved_sha":"` + commit + `",` +
 			`"registry":"oci://ghcr.io/acme/templates","uri":"oci://ghcr.io/acme/web:1.2.0",` +
 			`"digest":"` + digest + `","manifest_hash":"` + digest + `","files":[]}`)}
 	t.Run("yaml state loads", func(t *testing.T) {
 		t.Parallel()
 		fsys := fstest.MapFS{
-			StateFileName: stateFile("turutan/yaml"),
+			StateFileName: stateFile("dev"),
 			LockFileName:  lockFile,
 		}
 		state, err := LoadState(fsys)
 		if err != nil {
 			t.Fatalf("LoadState yaml error: %v", err)
 		}
-		if state.Engine != "turutan/yaml" {
-			t.Errorf("Engine = %q, want yaml state", state.Engine)
+		if state.EngineVersion != "dev" {
+			t.Errorf("EngineVersion = %q, want dev state", state.EngineVersion)
 		}
 		if _, err := LoadLock(fsys); err != nil {
 			t.Fatalf("LoadLock error: %v", err)
@@ -686,7 +689,7 @@ func TestStateLockLocations(t *testing.T) {
 			Template: "oci://ghcr.io/acme/templates/web@1.2.0", SourceKind: "registry",
 			Registry: "oci://ghcr.io/acme/templates", TemplateURI: "oci://ghcr.io/acme/web:1.2.0",
 			TemplateDigest: digest, RequestedRef: "1.2.0",
-			ResolvedCommit: commit, Engine: "turutan/0.1.0",
+			ResolvedCommit: commit, EngineVersion: "dev",
 			TemplateLicense: TemplateLicenseMIT0,
 		}
 		if err := SaveState(dir, state); err != nil {

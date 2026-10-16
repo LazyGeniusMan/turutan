@@ -379,7 +379,7 @@ func fetchUpdateTemplate(
 		if err != nil {
 			return nil, nil, fmt.Errorf("update: %w", err)
 		}
-		want = entry.Version
+		want = entry.ResolvedVersion()
 	}
 	templateManifest, err := ResolveTemplateManifest(rr, templateName, want)
 	if err != nil {
@@ -394,7 +394,7 @@ func fetchUpdateTemplate(
 		cleanup()
 		return nil, nil, fmt.Errorf("update: %w", err)
 	}
-	if _, err := checkMinEngine(
+	if _, err := checkEngineVersion(
 		manifest, opts.Engine, stderr, opts.Verbose); err != nil {
 		cleanup()
 		return nil, nil, err

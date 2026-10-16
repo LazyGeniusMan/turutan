@@ -14,8 +14,9 @@ import (
 const exampleIndexJSON = `{
   "schema_version": 1,
   "$schema": ".config/turutan/schemas/registry-index.schema.json",
+  "engine_version": "dev",
   "name": "turutan",
-  "version": "1.0.0",
+  "engine_version": "0.1.0",
   "author": "Turutan Maintainers <maintainers@example.com> (https://github.com/LazyGeniusMan/turutan)",
   "templates": [
     {
@@ -26,7 +27,7 @@ const exampleIndexJSON = `{
       "uri": "oci://ghcr.io/lazygeniusman/turutan/templates/default:1.2.0",
       "releases": ["1.2.0", "1.1.0", "1.0.0"],
       "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "min-engine": ">= 0.2.0",
+      "engine_version": "0.2.0",
       "manifestHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "license": "MIT-0"
     },
@@ -35,7 +36,8 @@ const exampleIndexJSON = `{
       "version": "0.1.0",
       "author": "Jane Doe <jane@example.com>",
       "uri": "fs:/srv/registry/minimal",
-      "releases": ["0.1.0"]
+      "releases": ["0.1.0"],
+      "engine_version": "0.1.0"
     }
   ]
 }`
@@ -76,15 +78,15 @@ func TestParseIndexRejects(t *testing.T) {
 		name  string
 		input string
 	}{
-		{name: "unknown field", input: `{"name":"x","version":"1.0.0","author":"A <a@b.co>","bogus":1}`},
-		{name: "yaml input", input: "name: x\nversion: 1.0.0\nauthor: A <a@b.co>\n"},
+		{name: "unknown field", input: `{"schema_version":1,"engine_version":"dev","name":"x","author":"A <a@b.co>","templates":[],"bogus":1}`},
+		{name: "yaml input", input: "name: x\nauthor: A <a@b.co>\n"},
 		{name: "bad version", input: `{"name":"x","version":"nope","author":"A <a@b.co>"}`},
-		{name: "bad author", input: `{"name":"x","version":"1.0.0","author":""}`},
+		{name: "bad author", input: `{"schema_version":1,"engine_version":"dev","name":"x","author":"","templates":[]}`},
 		{
 			name: "duplicate template",
-			input: `{"name":"x","version":"1.0.0","author":"A <a@b.co>","templates":[` +
-				`{"name":"dup","version":"1.0.0","author":"A <a@b.co>","uri":"fs:/a"},` +
-				`{"name":"dup","version":"1.0.0","author":"A <a@b.co>","uri":"fs:/b"}]}`,
+			input: `{"schema_version":1,"name":"x","engine_version":"dev","author":"A <a@b.co>","templates":[` +
+				`{"name":"dup","version":"1.0.0","author":"A <a@b.co>","uri":"fs:/a","engine_version":"dev","releases":["1.0.0"]},` +
+				`{"name":"dup","version":"1.0.0","author":"A <a@b.co>","uri":"fs:/b","engine_version":"dev","releases":["1.0.0"]}]}`,
 		},
 	}
 	for _, tt := range tests {
@@ -144,8 +146,8 @@ func TestIndexRoundTrip(t *testing.T) {
 func TestIndexRelativeFSResolution(t *testing.T) {
 	t.Parallel()
 	index, err := ParseIndex([]byte(
-		`{"schema_version":1,"name":"local","version":"1.0.0","author":"A <a@b.co>","templates":[` +
-			`{"name":"app","version":"0.1.0","author":"A <a@b.co>","uri":"templates/app/releases/0.1.0.tar.gz","releases":["0.1.0"]}]}`))
+		`{"schema_version":1,"name":"local","engine_version":"dev","author":"A <a@b.co>","templates":[` +
+			`{"name":"app","version":"0.1.0","author":"A <a@b.co>","uri":"templates/app/releases/0.1.0.tar.gz","releases":["0.1.0"],"engine_version":"dev"}]}`))
 	if err != nil {
 		t.Fatalf("ParseIndex error: %v", err)
 	}
@@ -180,10 +182,10 @@ func TestUpsertIndexReleaseHistory(t *testing.T) {
 	t.Parallel()
 	author, _ := ParseAuthor("A <a@b.co>")
 	uri, _ := ParseURI("templates/app/releases/1.0.0.tar.gz")
-	index := &RegistryIndex{Name: "r", Version: "1.0.0", Author: author}
-	UpsertIndexRelease(index, TemplateManifest{Name: "app", Version: "1.0.0", Author: author, URI: uri})
+	index := &RegistryIndex{Name: "r", Author: author, EngineVersion: "dev", Templates: []RegistryTemplate{}}
+	UpsertIndexRelease(index, TemplateManifest{Name: "app", Version: "1.0.0", Author: author, URI: uri, EngineVersion: "dev"})
 	uri2, _ := ParseURI("templates/app/releases/1.1.0.tar.gz")
-	UpsertIndexRelease(index, TemplateManifest{Name: "app", Version: "1.1.0", Author: author, URI: uri2})
+	UpsertIndexRelease(index, TemplateManifest{Name: "app", Version: "1.1.0", Author: author, URI: uri2, EngineVersion: "dev"})
 	found, err := index.FindTemplate("app")
 	if err != nil {
 		t.Fatal(err)
@@ -220,12 +222,17 @@ func TestRegistryTemplateUnreleased(t *testing.T) {
 	}{
 		{
 			name:    "created entry with name and author only",
-			entry:   RegistryTemplate{Name: "app", Author: author},
+			entry:   RegistryTemplate{Name: "app", Author: author, EngineVersion: "dev"},
 			wantErr: false,
 		},
 		{
+			name:    "missing engine rejected",
+			entry:   RegistryTemplate{Name: "app", Author: author},
+			wantErr: true,
+		},
+		{
 			name:    "bad name",
-			entry:   RegistryTemplate{Name: "Bad Name!", Author: author},
+			entry:   RegistryTemplate{Name: "Bad Name!", Author: author, EngineVersion: "dev"},
 			wantErr: true,
 		},
 		{
@@ -235,27 +242,27 @@ func TestRegistryTemplateUnreleased(t *testing.T) {
 		},
 		{
 			name:    "version without releases is a fake draft",
-			entry:   RegistryTemplate{Name: "app", Author: author, Version: "0.1.0"},
+			entry:   RegistryTemplate{Name: "app", Author: author, Version: "0.1.0", EngineVersion: "dev"},
 			wantErr: true,
 		},
 		{
 			name:    "uri without releases is a fake draft",
-			entry:   RegistryTemplate{Name: "app", Author: author, URI: &snapshot},
+			entry:   RegistryTemplate{Name: "app", Author: author, URI: &snapshot, EngineVersion: "dev"},
 			wantErr: true,
 		},
 		{
 			name:    "digest without releases is a fake draft",
-			entry:   RegistryTemplate{Name: "app", Author: author, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+			entry:   RegistryTemplate{Name: "app", Author: author, Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", EngineVersion: "dev"},
 			wantErr: true,
 		},
 		{
 			name:    "manifest hash without releases is a fake draft",
-			entry:   RegistryTemplate{Name: "app", Author: author, ManifestHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			entry:   RegistryTemplate{Name: "app", Author: author, ManifestHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", EngineVersion: "dev"},
 			wantErr: true,
 		},
 		{
 			name:    "released entry without uri",
-			entry:   RegistryTemplate{Name: "app", Author: author, Version: "0.1.0", Releases: []string{"0.1.0"}},
+			entry:   RegistryTemplate{Name: "app", Author: author, Version: "0.1.0", Releases: []string{"0.1.0"}, EngineVersion: "dev"},
 			wantErr: true,
 		},
 	}
@@ -284,8 +291,8 @@ func TestUnreleasedEntryRoundTripOmitsReleaseFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	index := &RegistryIndex{
-		Name: "r", Version: "0.1.0", Author: author,
-		Templates: []RegistryTemplate{{Name: "app", Author: author}},
+		Name: "r", Author: author, EngineVersion: "dev",
+		Templates: []RegistryTemplate{{Name: "app", Author: author, EngineVersion: "dev"}},
 	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, IndexFileName)
@@ -307,7 +314,7 @@ func TestUnreleasedEntryRoundTripOmitsReleaseFields(t *testing.T) {
 	}
 	for key := range raw.Templates[0] {
 		switch key {
-		case "name", "author":
+		case "name", "author", "engine_version":
 		default:
 			t.Errorf("saved unreleased entry carries %q: %s", key, data)
 		}

@@ -1,13 +1,14 @@
 {
   "schema_version": 1,
   "$schema": ".config/turutan/schemas/registry-index.schema.json",
+  "engine_version": "dev",
   "name": "turutan",
-  "version": "0.1.0",
   "author": "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)",
   "templates": [
     {
       "name": "default",
-      "author": "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)"
+      "author": "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)",
+      "engine_version": "dev"
     }
   ]
 }

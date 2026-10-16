@@ -113,11 +113,11 @@ func TestCheckRegistry(t *testing.T) {
 	})
 }
 
-func TestCheckRegistryMinEngine(t *testing.T) {
+func TestCheckRegistryEngineVersion(t *testing.T) {
 	t.Run("unsatisfiable floor stays best-effort", func(t *testing.T) {
 		projectDir, registryURI := initRegistryProject(t,
-			"min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "min-engine: \">=99.0.0\"\n")
+			"schema_version: 1\nengine_version: \"0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "schema_version: 1\nengine_version: \"99.0.0\"\n")
 		var stdout strings.Builder
 		opts := checkOptions(&stdout)
 		opts.Engine = "0.1.0"

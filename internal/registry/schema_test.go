@@ -31,7 +31,7 @@ func TestSaveIndexFileStampsVersionAndSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	index := &RegistryIndex{Name: "r", Version: "1.0.0", Author: author}
+	index := &RegistryIndex{Name: "r", Author: author, EngineVersion: "dev", Templates: []RegistryTemplate{}}
 	dir := t.TempDir()
 	path := filepath.Join(dir, IndexFileName)
 	if err := SaveIndexFile(path, index); err != nil {
@@ -70,14 +70,14 @@ func TestIndexLoadValidatesSchemaVersion(t *testing.T) {
 	t.Parallel()
 	t.Run("missing schema_version rejected", func(t *testing.T) {
 		t.Parallel()
-		_, err := ParseIndex([]byte(`{"name":"x","version":"1.0.0","author":"A <a@b.co>"}`))
+		_, err := ParseIndex([]byte(`{"name":"x","author":"A <a@b.co>","templates":[]}`))
 		if err == nil {
 			t.Error("ParseIndex without schema_version succeeded, want error")
 		}
 	})
 	t.Run("future schema_version rejected", func(t *testing.T) {
 		t.Parallel()
-		_, err := ParseIndex([]byte(`{"schema_version":2,"name":"x","version":"1.0.0","author":"A <a@b.co>"}`))
+		_, err := ParseIndex([]byte(`{"schema_version":2,"engine_version":"dev","name":"x","author":"A <a@b.co>","templates":[]}`))
 		if err == nil {
 			t.Error("ParseIndex with schema_version 2 succeeded, want error")
 		}
@@ -85,8 +85,8 @@ func TestIndexLoadValidatesSchemaVersion(t *testing.T) {
 	t.Run("foreign $schema value loads", func(t *testing.T) {
 		t.Parallel()
 		index, err := ParseIndex([]byte(
-			`{"schema_version":1,"$schema":"./elsewhere/custom.json",` +
-				`"name":"x","version":"1.0.0","author":"A <a@b.co>"}`))
+			`{"schema_version":1,"$schema":"./elsewhere/custom.json","engine_version":"dev",` +
+				`"name":"x","author":"A <a@b.co>","templates":[]}`))
 		if err != nil {
 			t.Fatalf("ParseIndex error: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestSaveVersionedManifestSchemaRef(t *testing.T) {
 	}
 	newManifest := func(name string) *TemplateManifest {
 		return &TemplateManifest{
-			Name: name, Version: "0.1.0", Author: author, URI: uri,
+			Name: name, Version: "0.1.0", Author: author, URI: uri, EngineVersion: "dev",
 		}
 	}
 	t.Run("flat name references schemas relatively", func(t *testing.T) {
@@ -240,7 +240,7 @@ func TestSchemaRefsResolveToExistingFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	index := &RegistryIndex{Name: "r", Version: "1.0.0", Author: author}
+	index := &RegistryIndex{Name: "r", Author: author, EngineVersion: "dev", Templates: []RegistryTemplate{}}
 	indexPath := filepath.Join(root, IndexFileName)
 	if err := SaveIndexFile(indexPath, index); err != nil {
 		t.Fatalf("SaveIndexFile error: %v", err)
@@ -251,7 +251,7 @@ func TestSchemaRefsResolveToExistingFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(filepath.Dir(indexPath), filepath.FromSlash(index.Schema))); err != nil {
 		t.Errorf("index $schema %q does not resolve to an existing file: %v", index.Schema, err)
 	}
-	manifest := &TemplateManifest{Name: "app", Version: "0.1.0", Author: author, URI: uri}
+	manifest := &TemplateManifest{Name: "app", Version: "0.1.0", Author: author, URI: uri, EngineVersion: "dev"}
 	manifestPath, err := SaveVersionedManifest(root, manifest)
 	if err != nil {
 		t.Fatalf("SaveVersionedManifest error: %v", err)

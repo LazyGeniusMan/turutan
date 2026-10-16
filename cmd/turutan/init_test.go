@@ -22,7 +22,7 @@ func TestInitCmd(t *testing.T) {
 	defer func() { appCfg = oldCfg }()
 
 	t.Run("inits from registry with defaults", func(t *testing.T) {
-		_, _, flag := makeCmdRegistry(t, "min-engine: \">=0.1.0\"\n", map[string]string{
+		_, _, flag := makeCmdRegistry(t, "", map[string]string{
 			"go.mod.tmpl": "module {{.project_name}}\n",
 		})
 		dst := filepath.Join(t.TempDir(), "proj")

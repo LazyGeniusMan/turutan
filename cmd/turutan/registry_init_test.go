@@ -30,16 +30,19 @@ func TestRegistryInitCmd(t *testing.T) {
 		t.Chdir(dir)
 		out, _, err := execRegistryInit(t,
 			"--name", "acme",
-			"--author", "Jane Doe <jane@example.com> (https://example.com)",
-			"--version", "1.0.0")
+			"--author", "Jane Doe <jane@example.com> (https://example.com)")
 		require.NoError(t, err)
 		require.Contains(t, out, `"acme"`)
 		loaded, err := registry.LoadIndexFile(filepath.Join(dir, registry.IndexFileName))
 		require.NoError(t, err)
 		require.Equal(t, "acme", loaded.Name)
-		require.Equal(t, "1.0.0", loaded.Version)
+		require.NotNil(t, loaded.Templates, "fresh index must carry templates array")
+		require.Empty(t, loaded.Templates, "fresh index must start empty")
+		raw, err := os.ReadFile(filepath.Join(dir, registry.IndexFileName)) // #nosec G304 -- dir is t.TempDir() plus the fixed index file name
+		require.NoError(t, err)
+		require.Contains(t, string(raw), `"templates": []`)
+		require.NotContains(t, string(raw), `"version"`)
 		require.Equal(t, "Jane Doe <jane@example.com> (https://example.com)", loaded.Author.String())
-		require.Empty(t, loaded.Templates)
 	})
 
 	t.Run("defaults name to directory basename", func(t *testing.T) {
@@ -93,11 +96,9 @@ func TestRegistryInitCmd(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("rejects bad author and version", func(t *testing.T) {
+	t.Run("rejects bad author and name", func(t *testing.T) {
 		t.Chdir(t.TempDir())
 		_, _, err := execRegistryInit(t, "--author", "Jane <not-an-email>")
-		require.Error(t, err)
-		_, _, err = execRegistryInit(t, "--author", "Jane Doe", "--version", "not-semver")
 		require.Error(t, err)
 		_, _, err = execRegistryInit(t, "--name", "Bad Name!", "--author", "Jane Doe")
 		require.Error(t, err)

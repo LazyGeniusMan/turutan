@@ -16,13 +16,13 @@
     "digest": {
       "type": "string"
     },
+    "engine_version": {
+      "type": "string"
+    },
     "license": {
       "type": "string"
     },
     "manifestHash": {
-      "type": "string"
-    },
-    "min-engine": {
       "type": "string"
     },
     "name": {
@@ -43,7 +43,8 @@
     "name",
     "version",
     "author",
-    "uri"
+    "uri",
+    "engine_version"
   ],
   "title": "turutan template manifest",
   "type": "object"

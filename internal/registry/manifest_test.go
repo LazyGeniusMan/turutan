@@ -18,7 +18,7 @@ func validManifest() *TemplateManifest {
 		Author:        author,
 		URI:           uri,
 		Digest:        "sha256:" + strings.Repeat("a", 64),
-		MinEngine:     ">= 0.2.0",
+		EngineVersion: "0.2.0",
 		ManifestHash:  "sha256:" + strings.Repeat("b", 64),
 		License:       "MIT-0",
 	}
@@ -64,7 +64,11 @@ func TestTemplateManifestValidate(t *testing.T) {
 		},
 		{
 			name:   "bad min engine",
-			mutate: func(m *TemplateManifest) { m.MinEngine = "sometime" },
+			mutate: func(m *TemplateManifest) { m.EngineVersion = "sometime" },
+		},
+		{
+			name:   "empty engine rejected",
+			mutate: func(m *TemplateManifest) { m.EngineVersion = "" },
 		},
 		{
 			name:   "bad manifest hash",

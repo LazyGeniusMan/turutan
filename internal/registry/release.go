@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/schemagen"
 )
 
@@ -78,9 +79,9 @@ func NextReleaseVersion(index *RegistryIndex, name string, bump ReleaseBump) (st
 		return registryStarterVersion(), false, nil
 	}
 	if bump == ReleaseSame {
-		return existing.Version, true, nil
+		return existing.ResolvedVersion(), true, nil
 	}
-	next, err := BumpVersion(existing.Version, bump)
+	next, err := BumpVersion(existing.ResolvedVersion(), bump)
 	if err != nil {
 		return "", true, err
 	}
@@ -149,10 +150,16 @@ func ParseVersionedManifest(data []byte) (*TemplateManifest, error) {
 
 // SaveVersionedManifest writes the canonical versioned manifest JSON file,
 // stamping the current schema_version with its $schema reference relative
-// to the manifest location and regenerating the manifest schema.
+// to the manifest location, bumping engine_version to the running binary
+// and regenerating the manifest schema.
 // ~keep
 func SaveVersionedManifest(root string, manifest *TemplateManifest) (string, error) {
 	manifest.SchemaVersion = SchemaVersion
+	bumped, err := engine.Bump(manifest.EngineVersion, engine.Current())
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrInvalidManifest, err)
+	}
+	manifest.EngineVersion = bumped
 	path := VersionedManifestPath(root, manifest.Name, manifest.Version)
 	ref, err := relativeSchemaRef(path, filepath.Join(root, filepath.FromSlash(ManifestSchemaFileName)))
 	if err != nil {
@@ -201,7 +208,7 @@ func UpsertIndexRelease(index *RegistryIndex, manifest TemplateManifest) {
 			entry.Contributors = manifest.Contributors
 			entry.URI = &uri
 			entry.Digest = manifest.Digest
-			entry.MinEngine = manifest.MinEngine
+			entry.EngineVersion = manifest.EngineVersion
 			entry.ManifestHash = manifest.ManifestHash
 			entry.License = manifest.License
 			releases := []string{manifest.Version}
@@ -215,16 +222,16 @@ func UpsertIndexRelease(index *RegistryIndex, manifest TemplateManifest) {
 		}
 	}
 	index.Templates = append(index.Templates, RegistryTemplate{
-		Name:         manifest.Name,
-		Version:      manifest.Version,
-		Author:       manifest.Author,
-		Contributors: manifest.Contributors,
-		URI:          &uri,
-		Releases:     []string{manifest.Version},
-		Digest:       manifest.Digest,
-		MinEngine:    manifest.MinEngine,
-		ManifestHash: manifest.ManifestHash,
-		License:      manifest.License,
+		Name:          manifest.Name,
+		Version:       manifest.Version,
+		Author:        manifest.Author,
+		Contributors:  manifest.Contributors,
+		URI:           &uri,
+		Releases:      []string{manifest.Version},
+		Digest:        manifest.Digest,
+		EngineVersion: manifest.EngineVersion,
+		ManifestHash:  manifest.ManifestHash,
+		License:       manifest.License,
 	})
 }
 

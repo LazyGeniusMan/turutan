@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 )
 
@@ -29,7 +30,7 @@ func makeTestRegistry(t *testing.T, manifest string, files map[string]string) (s
 	if err != nil {
 		t.Fatal(err)
 	}
-	index := &registry.RegistryIndex{Name: testRegistryName, Version: "1.0.0", Author: author}
+	index := &registry.RegistryIndex{Name: testRegistryName, Author: author, Templates: []registry.RegistryTemplate{}}
 	if err := registry.SaveIndexFile(filepath.Join(regDir, registry.IndexFileName), index); err != nil {
 		t.Fatal(err)
 	}
@@ -48,8 +49,18 @@ func withManifest(files map[string]string, manifest string) map[string]string {
 	for k, v := range files {
 		out[k] = v
 	}
-	out["template.yml"] = manifest
+	out["template.yml"] = ensureTestManifest(manifest)
 	return out
+}
+
+func ensureTestManifest(manifest string) string {
+	if manifest == "" {
+		return manifest
+	}
+	if strings.Contains(manifest, "schema_version") {
+		return manifest
+	}
+	return "schema_version: 1\nengine_version: \"dev\"\n" + manifest
 }
 
 func writeTestFiles(t *testing.T, dir string, files map[string]string) {
@@ -78,7 +89,7 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 	existing, findErr := index.FindTemplate(name)
 	version := testRegistryVersion
 	if findErr == nil {
-		version, err = registry.BumpVersion(existing.Version, registry.ReleasePatch)
+		version, err = registry.BumpVersion(existing.ResolvedVersion(), registry.ReleasePatch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -119,6 +130,10 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	starterEngine, err := engine.Bump(templateCfg.EngineVersion, engine.Current())
+	if err != nil {
+		t.Fatal(err)
+	}
 	entry := registry.TemplateManifest{
 		SchemaVersion: registry.SchemaVersion,
 		Name:          name,
@@ -127,7 +142,7 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 		Contributors:  contributors,
 		URI:           uri,
 		Digest:        digest,
-		MinEngine:     templateCfg.MinEngine,
+		EngineVersion: starterEngine,
 		ManifestHash:  manifestHash,
 		License:       templateCfg.License,
 	}
@@ -149,8 +164,15 @@ func releaseTestTemplate(t *testing.T, regDir, name string) string {
 // ~keep
 func writeTestRegistryFiles(t *testing.T, registryURI string, name string, files map[string]string) {
 	t.Helper()
+	patched := make(map[string]string, len(files))
+	for path, content := range files {
+		if path == "template.yml" || path == "template.yaml" {
+			content = ensureTestManifest(content)
+		}
+		patched[path] = content
+	}
 	regDir := testRegistryDir(t, registryURI)
-	writeTestFiles(t, filepath.Join(regDir, "templates", name), files)
+	writeTestFiles(t, filepath.Join(regDir, "templates", name), patched)
 }
 
 // removeTestTemplateFile removes a file from the registry template and cuts
@@ -171,6 +193,9 @@ func removeTestTemplateFile(t *testing.T, registryURI string, name, path string)
 // ~keep
 func updateTestTemplateFile(t *testing.T, registryURI string, name, path, content string) string {
 	t.Helper()
+	if path == "template.yml" || path == "template.yaml" {
+		content = ensureTestManifest(content)
+	}
 	regDir := testRegistryDir(t, registryURI)
 	full := filepath.Join(regDir, "templates", name, filepath.FromSlash(path))
 	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {

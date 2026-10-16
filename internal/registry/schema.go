@@ -26,9 +26,16 @@ const (
 
 // IndexJSONSchema returns the reflection-generated JSON Schema for
 // RegistryIndex, derived from the same struct the read/write logic uses.
+// The templates array requires minItems 0 so fresh `[]` indexes validate.
 // ~keep
 func IndexJSONSchema() map[string]any {
-	return schemagen.StructSchema("turutan registry index", RegistryIndex{}, "json")
+	schema := schemagen.StructSchema("turutan registry index", RegistryIndex{}, "json")
+	if properties, ok := schema["properties"].(map[string]any); ok {
+		if templates, ok := properties["templates"].(map[string]any); ok {
+			templates["minItems"] = 0
+		}
+	}
+	return schema
 }
 
 // ManifestJSONSchema returns the reflection-generated JSON Schema for

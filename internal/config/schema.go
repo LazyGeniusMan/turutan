@@ -17,6 +17,7 @@ const (
 	StateSchemaFileName     = ".config/turutan/schemas/state.schema.json"
 	LockSchemaFileName      = ".config/turutan/schemas/lock.schema.json"
 	StateDataSchemaFileName = ".config/turutan/schemas/state-data.schema.json"
+	TemplateSchemaFileName  = ".config/turutan/schemas/template.schema.json"
 
 	StateSchemaRef = "./schemas/state.schema.json"
 	LockSchemaRef  = "./schemas/lock.schema.json"
@@ -42,7 +43,30 @@ func LockJSONSchema() map[string]any {
 	return schemagen.StructSchema("turutan lock", Lock{}, "json")
 }
 
-// StateDataJSONSchema derives the JSON Schema for State.data from the
+// ManifestJSONSchema returns the reflection-generated JSON Schema for the
+// template authoring manifest (template.yml), derived from the same struct
+// the read/write logic uses. Adding a Manifest field changes the schema
+// with no manual edit.
+// ~keep
+func ManifestJSONSchema() map[string]any {
+	return schemagen.StructSchema("turutan template", Manifest{}, "yaml")
+}
+
+// TemplateSchemaRefFor returns the slash-separated relative $schema path
+// from a template.yml file to the registry-root template schema file.
+// ~keep
+func TemplateSchemaRefFor(templateYMLPath, schemaPath string) (string, error) {
+	rel, err := filepath.Rel(filepath.Dir(templateYMLPath), schemaPath)
+	if err != nil {
+		return "", err
+	}
+	slash := filepath.ToSlash(rel)
+	if len(slash) > 0 && slash[0] != '.' {
+		slash = "./" + slash
+	}
+	return slash, nil
+}
+
 // pinned template manifest inputs: type maps to a JSON type, options to an
 // enum (element enum for arrays), default to a default, and inputs without
 // a default or condition to required keys.
