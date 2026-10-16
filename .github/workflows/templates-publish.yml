@@ -53,6 +53,8 @@ jobs:
           version="${line#released default@}"
           version="${version%% *}"
           printf 'version=%s\n' "$version" >> "$GITHUB_ENV"
+          git config user.name "Andriyansyah Nurrachman"
+          git config user.email "git@yansyah.my.id"
           git add turutan.json
           git add "templates/default/manifest/${version}.json"
           git status --short
