@@ -18,5 +18,5 @@ data:
         - github
     project_description: Project template lifecycle manager
     project_name: turutan
-engine: turutan/dev
+engine_version: dev
 templateLicense: MIT-0
