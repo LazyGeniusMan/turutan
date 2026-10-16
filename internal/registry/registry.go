@@ -7,18 +7,19 @@
 // ~keep
 package registry
 
-// Reserved default registry identity. DefaultRegistryURI is its OCI address and
-// DefaultTemplateRepo addresses the default template without a tag.
+// Reserved default registry identity. DefaultRegistryURI is the git address
+// of the turutan source repository at main and DefaultTemplateRepo addresses
+// the default template source tree at main.
 // ~keep
 const (
-	DefaultRegistryURI  = "oci://ghcr.io/lazygeniusman/turutan/templates"
+	DefaultRegistryURI  = "git+https://github.com/LazyGeniusMan/turutan.git?ref=main"
 	DefaultTemplateName = "default"
-	DefaultTemplateRepo = "oci://ghcr.io/lazygeniusman/turutan/templates/default"
+	DefaultTemplateRepo = "git+https://github.com/LazyGeniusMan/turutan.git?ref=main&subpath=templates/default"
 )
 
-// DefaultTemplateRef returns the full OCI reference for the default
+// DefaultTemplateRef returns the full git reference for the default
 // template at the given version, without fetching anything.
 // ~keep
 func DefaultTemplateRef(version string) string {
-	return DefaultTemplateRepo + ":" + version
+	return "git+https://github.com/LazyGeniusMan/turutan.git?ref=templates/default/" + version + "&subpath=templates/default"
 }
