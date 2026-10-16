@@ -112,19 +112,19 @@ checksum = "sha256:f9683a19877e12a9b167305c8db71040d812876359de21f0d2e97c3f321f8
 url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-win-x64.zip"
 
 [[tools."npm:@earendil-works/pi-coding-agent"]]
-version = "1.2.0"
-aube = { path = "locks/mise.custom/npm-earendil-works-pi-coding-agent/1.2.0", digest = "sha256:d694d154c1d25c8090f01f22ac1678a3d2fcb032ab62f4877edd327b41dac9cb" }
+version = "1.3.0"
+aube = { path = "locks/mise.custom/npm-earendil-works-pi-coding-agent/1.3.0", digest = "sha256:dc90f10d0bbe046249db98c8b60b292f0d96ff2752caa34413c7a81f3368a02b" }
 backend = "npm:@earendil-works/pi-coding-agent"
 specifiers = ["1"]
 
 [[tools."npm:@opencode/cli"]]
-version = "2.0.29"
-aube = { path = "locks/mise.custom/npm-opencode-cli/2.0.29", digest = "sha256:3253348e583172c4065f5ad49e5f8bd3f5409401d739595e62997511aed46f7f" }
+version = "2.0.30"
+aube = { path = "locks/mise.custom/npm-opencode-cli/2.0.30", digest = "sha256:236232c44634a4b9c255860800499a38bcd3e9d2e994313bcc65a4cb60b9d45c" }
 backend = "npm:@opencode/cli"
 specifiers = ["2"]
 
 [[tools."npm:t3"]]
-version = "0.0.46-nightly.20261014.3132"
-aube = { path = "locks/mise.custom/npm-t3/0.0.46-nightly.20261014.3132", digest = "sha256:709fc2f300c7689f1075057f810af0bbaf071f6c52729b1208bc5983bb181475" }
+version = "0.0.46-nightly.20261015.3176"
+aube = { path = "locks/mise.custom/npm-t3/0.0.46-nightly.20261015.3176", digest = "sha256:8d6a9447f7bcd4d35ade6dad470a9adb950169f49e06193aa788bd82c3d0525f" }
 backend = "npm:t3"
 specifiers = ["prefix:0.0.46-nightly"]
