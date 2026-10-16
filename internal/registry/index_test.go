@@ -349,3 +349,23 @@ func TestReleaseSnapshotArchivePath(t *testing.T) {
 		t.Errorf("snapshot URI.String() = %q, want %q", uri.String(), want)
 	}
 }
+
+func TestResolvedVersionDefaultsToZero(t *testing.T) {
+	t.Parallel()
+	author, err := ParseAuthor("A <a@b.co>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unreleased := RegistryTemplate{Name: "app", Author: author, EngineVersion: "dev"}
+	if got := unreleased.ResolvedVersion(); got != "0.0.0" {
+		t.Errorf("unreleased ResolvedVersion = %q, want 0.0.0", got)
+	}
+	released := RegistryTemplate{Name: "app", Version: "1.2.0", Author: author, EngineVersion: "dev"}
+	if got := released.ResolvedVersion(); got != "1.2.0" {
+		t.Errorf("released ResolvedVersion = %q, want 1.2.0", got)
+	}
+	var nilEntry *RegistryTemplate
+	if got := nilEntry.ResolvedVersion(); got != "0.0.0" {
+		t.Errorf("nil ResolvedVersion = %q, want 0.0.0", got)
+	}
+}

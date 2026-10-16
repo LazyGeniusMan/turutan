@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
 )
 
@@ -60,6 +61,17 @@ func TestRegistryCreateCmd(t *testing.T) {
 		require.Empty(t, found.Releases)
 		require.Empty(t, found.Digest)
 		require.Equal(t, "Jane Doe <jane@example.com>", found.Author.String())
+		require.NotEmpty(t, found.EngineVersion, "created entry must stamp engine_version")
+		manifest, err := config.LoadManifest(os.DirFS(filepath.Join(dir, "templates", "hello")))
+		require.NoError(t, err, "created template.yml must validate")
+		require.Equal(t, 1, manifest.SchemaVersion)
+		require.NotEmpty(t, manifest.EngineVersion)
+		require.NotEmpty(t, manifest.Schema)
+		rawManifest, err := os.ReadFile(filepath.Join(dir, "templates", "hello", "template.yml")) // #nosec G304 -- dir is a test temp dir plus fixed starter names
+		require.NoError(t, err)
+		require.Contains(t, string(rawManifest), "schema_version: 1")
+		require.Contains(t, string(rawManifest), "engine_version:")
+		require.FileExists(t, filepath.Join(dir, filepath.FromSlash(config.TemplateSchemaFileName)))
 		raw, err := os.ReadFile(filepath.Join(dir, registry.IndexFileName)) // #nosec G304 -- dir is a test temp dir plus the fixed index file name
 		require.NoError(t, err)
 		for _, banned := range []string{"releases", "digest", "templates/hello"} {

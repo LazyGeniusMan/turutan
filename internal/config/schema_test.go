@@ -354,3 +354,20 @@ func TestSaveStateDataSchema(t *testing.T) {
 		t.Errorf("state-data properties = %v, want project_name", properties)
 	}
 }
+
+func TestManifestSchemaTracksStruct(t *testing.T) {
+	t.Parallel()
+	schema := ManifestJSONSchema()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("template schema has no properties")
+	}
+	for _, key := range []string{"schema_version", "$schema", "engine_version"} {
+		if _, ok := properties[key]; !ok {
+			t.Errorf("template schema misses %q (reflection drift)", key)
+		}
+	}
+	if _, ok := properties["min-engine"]; ok {
+		t.Error("template schema still carries min-engine")
+	}
+}

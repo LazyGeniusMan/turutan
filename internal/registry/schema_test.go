@@ -269,3 +269,28 @@ func TestSchemaRefsResolveToExistingFiles(t *testing.T) {
 		t.Errorf("missing manifest schema %q: %v", ManifestSchemaFileName, err)
 	}
 }
+
+func TestIndexSchemaRequiresArray(t *testing.T) {
+	t.Parallel()
+	schema := IndexJSONSchema()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("index schema has no properties")
+	}
+	templates, ok := properties["templates"].(map[string]any)
+	if !ok {
+		t.Fatal("index schema misses templates")
+	}
+	if templates["type"] != "array" {
+		t.Errorf("templates type = %v, want array", templates["type"])
+	}
+	if templates["minItems"] != 0 {
+		t.Errorf("templates minItems = %v, want 0", templates["minItems"])
+	}
+	if _, ok := properties["version"]; ok {
+		t.Error("index schema still carries removed root version")
+	}
+	if _, ok := properties["min-engine"]; ok {
+		t.Error("index schema still carries min-engine")
+	}
+}
