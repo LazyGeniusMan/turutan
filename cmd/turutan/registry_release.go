@@ -14,6 +14,7 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/engine"
 	"github.com/LazyGeniusMan/turutan/internal/registry"
+	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
 type registryReleaseFlags struct {
@@ -135,6 +136,20 @@ func runRegistryRelease(cmd *cobra.Command, name, bumpText, schemeText string, f
 	templateCfg, err := config.LoadManifest(os.DirFS(srcDir))
 	if err != nil {
 		return fmt.Errorf("registry release: %w", err)
+	}
+	tmplKeys, err := template.CollectTmplDataKeys(srcDir)
+	if err != nil {
+		return fmt.Errorf("registry release: %w", err)
+	}
+	var missing []string
+	for key := range tmplKeys {
+		if _, ok := templateCfg.Inputs[key]; !ok {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("registry release: %w: template references undeclared input keys: %s",
+			registry.ErrInvalidManifest, strings.Join(missing, ", "))
 	}
 	staged, cleanup, err := registry.StageReleaseTree(srcDir)
 	if err != nil {

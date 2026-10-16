@@ -14,7 +14,7 @@ import (
 )
 
 const profileCLIManifest = "inputs:\n" +
-	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 	"  profiles:\n    label: \"Profiles\"\n    type: array\n    default: []\n" +
 	"conditionals:\n" +
 	"  - if: '{{not (contains .profiles \"go\")}}'\n    excludes: [\"go.mod\"]\n" +

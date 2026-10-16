@@ -134,10 +134,10 @@ func TestCheckRegistryEngineVersion(t *testing.T) {
 func TestCheckRegistryInputs(t *testing.T) {
 	t.Run("new input reports available with inputs line", func(t *testing.T) {
 		const manifest = "inputs:\n" +
-			"  project_name:\n    label: \"Project Name\"\n    type: string\n"
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n"
 		projectDir, registryURI := initRegistryProject(t, manifest, map[string]string{"hello.txt": "v1\n"})
 		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml",
-			manifest+"  service_name:\n    label: \"Service name\"\n    type: string\n")
+			manifest+"  service_name:\n    label: \"Service name\"\n    type: string\n    default: my-proj\n")
 		var stdout strings.Builder
 		result, err := Check(context.Background(), projectDir, checkOptions(&stdout))
 		if err != nil {

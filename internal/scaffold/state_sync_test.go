@@ -55,7 +55,7 @@ func editStoredData(t *testing.T, projectDir, key, value string) {
 }
 
 const stateSyncManifest = "inputs:\n" +
-	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 	"  greeting:\n    label: \"Greeting\"\n    type: string\n    default: \"hi\"\n"
 
 var stateSyncFiles = map[string]string{

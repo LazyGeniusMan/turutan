@@ -83,15 +83,18 @@
             "type": "array"
           },
           "type": {
+            "enum": [
+              "bool",
+              "array",
+              "string"
+            ],
             "type": "string"
           }
         },
         "required": [
           "label",
           "default",
-          "type",
-          "options",
-          "help"
+          "type"
         ],
         "type": "object"
       },

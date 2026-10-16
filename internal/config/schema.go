@@ -49,7 +49,19 @@ func LockJSONSchema() map[string]any {
 // with no manual edit.
 // ~keep
 func ManifestJSONSchema() map[string]any {
-	return schemagen.StructSchema("turutan template", Manifest{}, "yaml")
+	schema := schemagen.StructSchema("turutan template", Manifest{}, "yaml")
+	if props, ok := schema["properties"].(map[string]any); ok {
+		if inputs, ok := props["inputs"].(map[string]any); ok {
+			if ap, ok := inputs["additionalProperties"].(map[string]any); ok {
+				if iprops, ok := ap["properties"].(map[string]any); ok {
+					if typeProp, ok := iprops["type"].(map[string]any); ok {
+						typeProp["enum"] = append([]string(nil), SupportedInputTypes...)
+					}
+				}
+			}
+		}
+	}
+	return schema
 }
 
 // TemplateSchemaRefFor returns the slash-separated relative $schema path

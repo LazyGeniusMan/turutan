@@ -299,7 +299,7 @@ func TestInitConflictPersisted(t *testing.T) {
 
 func TestInitConditionalProfiles(t *testing.T) {
 	const condManifest = "inputs:\n" +
-		"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+		"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 		"  project_description:\n    label: \"Project Description\"\n    type: string\n    default: \"\"\n" +
 		"conditionals:\n" +
 		"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
@@ -370,8 +370,8 @@ func TestInitConditionalProfiles(t *testing.T) {
 	})
 	t.Run("non-interactive missing key names key", func(t *testing.T) {
 		const noDefaultManifest = "inputs:\n" +
-			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
-			"  service_name:\n    label: \"Service name\"\n    type: string\n"
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
+			"  service_name:\n    label: \"Service name\"\n    type: string\n    default: my-proj\n"
 		_, ref := makeTestRegistry(t, noDefaultManifest, map[string]string{"go.mod.tmpl": "module {{.project_name}}\n"})
 		dataFile := filepath.Join(t.TempDir(), "data.yml")
 		if err := os.WriteFile(dataFile, []byte("project_name: demo\n"), 0o600); err != nil {

@@ -656,7 +656,7 @@ func manifestWithConflict(mode string) *config.Manifest {
 }
 
 const profileTestManifest = "inputs:\n" +
-	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 	"  profiles:\n    label: \"Profiles\"\n    type: array\n    default: []\n" +
 	"conditionals:\n" +
 	"  - if: '{{not (contains .profiles \"go\")}}'\n    excludes: [\"go.mod\", \"cmd/**\"]\n" +
@@ -894,7 +894,7 @@ func TestUpdateBackfillsNewInputDefault(t *testing.T) {
 	projectDir, registryURI := initRegistryProject(t, "", map[string]string{"app.txt": "v1\n"})
 	writeTestRegistryFiles(t, registryURI, testRegistryTemplate, map[string]string{
 		"template.yml": "inputs:\n" +
-			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 			"  new_feature:\n    label: \"New feature\"\n    type: array\n" +
 			"    default: [\"alpha\", \"beta\"]\n",
 		"feat.txt.tmpl": "[{{ range $i, $p := .new_feature }}{{ if $i }}, {{ end }}\"{{ $p }}\"{{ end }}]\n",

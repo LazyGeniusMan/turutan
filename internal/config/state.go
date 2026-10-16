@@ -53,6 +53,11 @@ var ErrInvalidLock = errors.New("invalid lock")
 // ~keep
 var ErrInvalidManifest = errors.New("invalid manifest")
 
+// SupportedInputTypes lists the input types ValidateManifest accepts and
+// the enum the generated template schema reflects.
+// ~keep
+var SupportedInputTypes = []string{"bool", "array", "string"}
+
 // State is the persisted scaffold state written to turutan-state.yml.
 // ~keep
 type State struct {
@@ -105,8 +110,8 @@ type ManifestInput struct {
 	Label   string   `yaml:"label"`
 	Default any      `yaml:"default"`
 	Type    string   `yaml:"type"`
-	Options []string `yaml:"options"`
-	Help    string   `yaml:"help"`
+	Options []string `yaml:"options,omitempty"`
+	Help    string   `yaml:"help,omitempty"`
 	If      string   `yaml:"if,omitempty"`
 }
 
@@ -512,10 +517,16 @@ func validateManifestInputs(inputs map[string]ManifestInput) error {
 		if strings.TrimSpace(input.Label) == "" {
 			return fmt.Errorf("%w: input %q is missing label", ErrInvalidManifest, key)
 		}
+		if strings.TrimSpace(input.Type) == "" {
+			return fmt.Errorf("%w: input %q is missing type", ErrInvalidManifest, key)
+		}
 		switch input.Type {
-		case "", "string", "array", "bool":
+		case "string", "array", "bool":
 		default:
-			return fmt.Errorf("%w: input %q has unknown type %q", ErrInvalidManifest, key, input.Type)
+			return fmt.Errorf("%w: input %q has unknown type %q (supported: bool, array, string)", ErrInvalidManifest, key, input.Type)
+		}
+		if input.Default == nil {
+			return fmt.Errorf("%w: input %q is missing default", ErrInvalidManifest, key)
 		}
 		for _, opt := range input.Options {
 			if opt == "" {

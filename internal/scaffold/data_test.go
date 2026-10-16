@@ -140,7 +140,7 @@ func TestInputLabelRendering(t *testing.T) {
 		t.Parallel()
 		var stdout bytes.Buffer
 		_, err := inputForKey(&stdout, strings.NewReader("a\n"),
-			"tags", config.ManifestInput{Label: "Tags (comma-separated)", Type: "array"})
+			"tags", config.ManifestInput{Label: "Tags (comma-separated)", Type: "array", Default: []string{}})
 		if err != nil {
 			t.Fatalf("inputForKey error = %v", err)
 		}
@@ -165,14 +165,14 @@ func TestInputLabelRendering(t *testing.T) {
 		} {
 			var stdout bytes.Buffer
 			got, err := inputForKey(&stdout, strings.NewReader(tt.stdin),
-				"flag", config.ManifestInput{Label: "Feature", Type: "bool"})
+				"flag", config.ManifestInput{Label: "Feature", Type: "bool", Default: false})
 			if err != nil {
 				t.Fatalf("inputForKey(%q) error = %v", tt.stdin, err)
 			}
 			if got != tt.want {
 				t.Errorf("inputForKey(%q) = %v, want %v", tt.stdin, got, tt.want)
 			}
-			if out := stdout.String(); !strings.Contains(out, "Enter Feature (y/n):") {
+			if out := stdout.String(); !strings.Contains(out, "Enter Feature (y/n)") {
 				t.Errorf("prompt = %q, want (y/n) suffix", out)
 			}
 		}
@@ -208,7 +208,7 @@ func TestInputLabelRendering(t *testing.T) {
 		t.Parallel()
 		var stdout bytes.Buffer
 		_, err := inputForKey(&stdout, strings.NewReader("a\n"),
-			"choice", config.ManifestInput{Label: "Choice", Type: "string", Options: []string{"a", "b", "c"}})
+			"choice", config.ManifestInput{Label: "Choice", Type: "string", Options: []string{"a", "b", "c"}, Default: "a"})
 		if err != nil {
 			t.Fatalf("inputForKey error = %v", err)
 		}
@@ -221,7 +221,7 @@ func TestInputLabelRendering(t *testing.T) {
 		}
 		var stdoutArr bytes.Buffer
 		_, err = inputForKey(&stdoutArr, strings.NewReader("a,b\n"),
-			"tags", config.ManifestInput{Label: "Tags", Type: "array", Options: []string{"a", "b"}})
+			"tags", config.ManifestInput{Label: "Tags", Type: "array", Options: []string{"a", "b"}, Default: []string{}})
 		if err != nil {
 			t.Fatalf("inputForKey error = %v", err)
 		}
@@ -233,11 +233,11 @@ func TestInputLabelRendering(t *testing.T) {
 		t.Parallel()
 		var stdout bytes.Buffer
 		_, err := inputForKey(&stdout, strings.NewReader("v\n"),
-			"mykey", config.ManifestInput{Type: "string"})
+			"mykey", config.ManifestInput{Type: "string", Default: ""})
 		if err != nil {
 			t.Fatalf("inputForKey error = %v", err)
 		}
-		if !strings.Contains(stdout.String(), "Enter mykey:") {
+		if !strings.Contains(stdout.String(), "Enter mykey []") {
 			t.Errorf("prompt = %q, want key fallback", stdout.String())
 		}
 	})

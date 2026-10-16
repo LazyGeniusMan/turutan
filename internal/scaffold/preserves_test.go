@@ -14,7 +14,7 @@ import (
 )
 
 const preservesSeedManifest = "inputs:\n" +
-	"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+	"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 	"  profiles:\n    label: \"Profiles\"\n    type: array\n    default: []\n" +
 	"preserves:\n  - \"keep.local\"\n  - \"extra.local\"\n" +
 	"conditionals:\n" +

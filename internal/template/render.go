@@ -454,3 +454,52 @@ func renderFileBytes(content []byte, dst, slash string, data map[string]any, per
 func stripTmpl(dst string) string {
 	return strings.TrimSuffix(dst, tmplSuffix)
 }
+
+// CollectTmplDataKeys walks root for *.tmpl files, executes each template
+// against an empty data map using the same funcs as rendering, and returns
+// the set of data keys it requires. Missing keys are reported as
+// *MissingKeyError; execution repeats until no further keys are discovered.
+// ~keep
+func CollectTmplDataKeys(root string) (map[string]struct{}, error) {
+	keys := map[string]struct{}{}
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), tmplSuffix) {
+			return nil
+		}
+		data, err := os.ReadFile(path) // #nosec G304,G122
+		if err != nil {
+			return err
+		}
+		tmpl, err := template.New(d.Name()).Option("missingkey=error").Funcs(templateFuncMap()).Parse(string(data))
+		if err != nil {
+			return fmt.Errorf("parsing %s: %w", path, err)
+		}
+		for i := 0; i < 1000; i++ {
+			rendered := map[string]any{}
+			for k := range keys {
+				rendered[k] = nil
+			}
+			var buf strings.Builder
+			if err := tmpl.Execute(&buf, rendered); err != nil {
+				key := parseMissingKey(err)
+				if key == "" {
+					return fmt.Errorf("executing %s: %w", path, err)
+				}
+				keys[key] = struct{}{}
+				continue
+			}
+			break
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	return keys, nil
+}

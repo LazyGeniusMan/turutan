@@ -95,7 +95,7 @@ func TestInitDocFiles(t *testing.T) {
 	t.Run("profile-gated doc skipped when profile off", func(t *testing.T) {
 		t.Parallel()
 		const condManifest = "inputs:\n" +
-			"  project_name:\n    label: \"Project Name\"\n    type: string\n" +
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 			"conditionals:\n" +
 			"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
 			"    excludes: [\"GO.md\", \"GO.md.tmpl\"]\n" +
