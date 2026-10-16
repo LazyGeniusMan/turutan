@@ -1,0 +1,22 @@
+version: 1
+schema_version: 1
+$schema: ./schemas/state.schema.json
+template: fs://.tmp/dogfood/default@0.1.0
+sourceKind: registry
+registry: fs://.tmp/dogfood
+templateURI: fs://templates/default/releases/0.1.0.tar.gz
+templateDigest: sha256:cfb098cfb7e018d6508e63a8b5558548eb12ea770a4f7e2680c7ee2cccc29840
+requestedRef: 0.1.0
+resolvedCommit: cfb098cfb7e018d6508e63a8b5558548eb12ea770a4f7e2680c7ee2cccc29840
+data:
+    ai_agents:
+        - pi
+        - opencode
+    profiles:
+        - ai
+        - go
+        - github
+    project_description: Project template lifecycle manager
+    project_name: turutan
+engine_version: dev
+templateLicense: MIT-0

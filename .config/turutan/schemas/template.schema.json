@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "conditionals": {
+      "items": {
+        "properties": {
+          "excludes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "if": {
+            "type": "string"
+          },
+          "includes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preserves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "if",
+          "includes",
+          "excludes",
+          "preserves"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "conflict": {
+      "type": "string"
+    },
+    "doc-files": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "excludes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "includes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "inputs": {
+      "additionalProperties": {
+        "properties": {
+          "default": {},
+          "help": {
+            "type": "string"
+          },
+          "if": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "enum": [
+              "bool",
+              "array",
+              "string"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "default",
+          "type"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "license": {
+      "type": "string"
+    },
+    "license-files": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "preserves": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "engine_version",
+    "license",
+    "license-files",
+    "doc-files",
+    "includes",
+    "excludes",
+    "preserves",
+    "conflict",
+    "inputs",
+    "conditionals"
+  ],
+  "title": "turutan template",
+  "type": "object"
+}

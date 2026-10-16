@@ -1,0 +1,61 @@
+---
+# yamllint disable rule:line-length
+name: Templates publish
+"on":
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to bump
+        required: true
+        default: patch
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+concurrency:
+  group: templates-publish
+  cancel-in-progress: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  publish:
+    name: Publish default to GHCR
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: write  # commit the bumped index back ~keep
+      packages: write  # push the template artifact ~keep
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1 ~keep
+        with:
+          fetch-depth: 0
+          persist-credentials: true  # push the bump commit back ~keep
+      - name: Install tools
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8  # v5.1.2 ~keep
+      - name: Install
+        run: mise install
+      - name: Publish
+        env:
+          BUMP: ${{ inputs.bump }}
+          TURUTAN_OCI_USER: ${{ github.actor }}
+          TURUTAN_OCI_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go build -o "${RUNNER_TEMP}/turutan" ./cmd/turutan
+          line="$("${RUNNER_TEMP}/turutan" registry release \
+            default "${BUMP}" oci --uri-override \
+            oci://ghcr.io/lazygeniusman/turutan/templates/default)"
+          printf '%s\n' "$line"
+          version="${line#released default@}"
+          version="${version%% *}"
+          printf 'version=%s\n' "$version" >> "$GITHUB_ENV"
+          git add turutan.json
+          git add "templates/default/manifest/${version}.json"
+          git status --short
+          git diff --cached --quiet || git commit -m \
+            "chore: publish templates/default ${version}"
+          git push

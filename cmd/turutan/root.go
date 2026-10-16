@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
+	"github.com/LazyGeniusMan/turutan/internal/engine"
 )
 
 var (
@@ -19,6 +20,10 @@ var (
 	commit  = "none"
 	date    = "unknown"
 )
+
+func init() {
+	engine.Version = version
+}
 
 type appConfig struct {
 	cfgFile        string
@@ -46,11 +51,12 @@ func newRootCmd(v *viper.Viper) *cobra.Command {
 	cmd := newRootCommand(v)
 	addRootFlags(cmd)
 	cmd.AddCommand(
-		newBootstrapCmd(),
-		newCheckUpdateCmd(),
+		newInitCmd(),
+		newCheckCmd(),
 		newDiffCmd(),
-		newProfilesCmd(),
 		newUpdateCmd(),
+		newRegistryCmd(),
+		newStateCmd(),
 		newVersionCmd(),
 	)
 	bindViperFlags(cmd, v)
@@ -61,8 +67,8 @@ func newRootCommand(v *viper.Viper) *cobra.Command {
 	return &cobra.Command{
 		Use:   "turutan",
 		Short: "Manage project-template lifecycle",
-		Long: `turutan scaffolds new projects from versioned templates and merges
-template updates back into them (bootstrap, check-update, diff, update).`,
+		Long: `turutan scaffolds new projects from versioned registry templates and merges
+template updates back into them (init, check, diff, update, registry, state).`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -85,7 +91,7 @@ func addRootFlags(cmd *cobra.Command) {
 		&appCfg.cfgFile, "config", "", "config file path")
 	cmd.PersistentFlags().BoolVar(
 		&appCfg.nonInteractive, "non-interactive", false,
-		"disable interactive prompts")
+		"disable interactive inputs")
 	cmd.PersistentFlags().BoolVar(
 		&appCfg.verbose, "verbose", false,
 		"verbose diagnostics on stderr")

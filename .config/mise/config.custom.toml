@@ -1,14 +1,5 @@
-[settings]
-minimum_release_age_excludes = [
-  "github:Goldziher/ai-rulez",
-  "npm:@opencode/cli",
-  "npm:t3",
-  "npm:@earendil-works/pi-coding-agent",
-  "hk",
-]
-
 [env]
-TURUTAN_BIN = "go run ./cmd/turutan"
+TURUTAN_BIN = "go run {{config_root}}/cmd/turutan"
 PROTON_PASS_KEY_PROVIDER = "{{ exec(command='sh scripts/proton-pass-detect-key-provider.sh') | trim }}"
 
 [tools]
@@ -16,7 +7,7 @@ node = "24"
 "npm:@opencode/cli" = { version = "2" }
 "github:protonpass/pass-cli" = "2"
 "npm:@earendil-works/pi-coding-agent" = "1"
-"npm:t3" = { prefix = "0.0.46-nightly", prerelease = 1 }
+"npm:t3" = "0"
 
 [daemons.opencode]
 init = "mise run dev-setup:fnox"
@@ -60,3 +51,50 @@ if ! pass-cli info; then
     pass-cli login
 fi
 '''
+
+[tasks."turutan:diff"]
+description = "Show template drift for this project"
+run = "${TURUTAN_BIN} diff"
+
+[tasks."turutan:check"]
+description = "Check whether the template has updates"
+run = "${TURUTAN_BIN} check"
+
+[tasks."turutan:update"]
+description = "Merge template updates into this project"
+run = "${TURUTAN_BIN} update"
+
+[tasks."turutan:state-sync"]
+description = "Re-render hand-edited state inputs at the pinned commit"
+run = "${TURUTAN_BIN} state sync"
+
+[tasks."turutan:state-input"]
+description = "Re-answer stored inputs and re-render at the pinned commit"
+run = "${TURUTAN_BIN} state input"
+
+[tasks."turutan:profiles"]
+description = "List template profiles offered and enabled"
+run = "${TURUTAN_BIN} profiles"
+
+[tasks."turutan:dogfood:setup"]
+run = """
+dir=".tmp/dogfood"
+rm -rf "$dir"
+mkdir -p "$dir/templates"
+cp turutan.json "$dir/turutan.json"
+cp -r templates/. "$dir/templates/"
+(cd "$dir" && ${TURUTAN_BIN} registry release default same fs --force )
+"""
+
+[tasks."turutan:dogfood:init"]
+depends = "turutan:dogfood:setup"
+run = """
+dir=".tmp/dogfood"
+${TURUTAN_BIN} init ./ --template fs://$dir/default --force
+"""
+
+[tasks."turutan:dogfood:update"]
+depends = "turutan:dogfood:setup"
+run = """
+${TURUTAN_BIN} update --force
+"""

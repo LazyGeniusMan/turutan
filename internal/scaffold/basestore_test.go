@@ -65,7 +65,7 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(src, ".config", "turutan"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		for _, name := range []string{"state.json", "lock.json", "LICENSE"} {
+		for _, name := range []string{"state.yml", "lock.json", "LICENSE"} {
 			if err := os.WriteFile(filepath.Join(src, ".config", "turutan", name), []byte("m"), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -88,7 +88,7 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, absent := range []string{".config/turutan/state.json", ".config/turutan/lock.json", ".git", "evil.txt"} {
+		for _, absent := range []string{".config/turutan/state.yml", ".config/turutan/lock.json", ".git", "evil.txt"} {
 			if _, err := os.Lstat(filepath.Join(base, filepath.FromSlash(absent))); err == nil {
 				t.Errorf("base store contains %q, want it skipped", absent)
 			}
@@ -99,16 +99,15 @@ func TestStoreBaseRoundTrip(t *testing.T) {
 	})
 }
 
-func TestBootstrapStoresBase(t *testing.T) {
-	t.Run("base exists after bootstrap", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+func TestInitStoresBase(t *testing.T) {
+	t.Run("base exists after init", func(t *testing.T) {
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		state, err := config.LoadState(os.DirFS(projectDir))
 		if err != nil {
 			t.Fatalf("LoadState error: %v", err)
 		}
 		if !HasBase(projectDir, state.ResolvedCommit) {
-			t.Errorf("no base copy for resolved %q after bootstrap", state.ResolvedCommit)
+			t.Errorf("no base copy for resolved %q after init", state.ResolvedCommit)
 		}
 		got, err := ReadBaseFile(projectDir, state.ResolvedCommit, "hello.txt")
 		if err != nil {
@@ -120,23 +119,20 @@ func TestBootstrapStoresBase(t *testing.T) {
 	})
 }
 
-func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) string {
+func threeWayFixture(t *testing.T, base, localEdit, templateEdit string) (string, string) {
 	t.Helper()
-	src := makeTemplate(t, "", map[string]string{"both.txt": base})
-	projectDir := bootstrapProject(t, src)
+	projectDir, regs := initRegistryProject(t, "", map[string]string{"both.txt": base})
 	if err := os.WriteFile(filepath.Join(projectDir, "both.txt"), []byte(localEdit), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(src, "both.txt"), []byte(templateEdit), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return projectDir
+	updateTestTemplateFile(t, regs, testRegistryTemplate, "both.txt", templateEdit)
+	return projectDir, regs
 }
 
 func TestUpdateThreeWay(t *testing.T) {
 	const base = "line1\nline2\nline3\nline4\n"
 	t.Run("disjoint edits merge cleanly", func(t *testing.T) {
-		projectDir := threeWayFixture(t, base, "LOCAL1\nline2\nline3\nline4\n", "line1\nline2\nline3\nTEMPLATE4\n")
+		projectDir, _ := threeWayFixture(t, base, "LOCAL1\nline2\nline3\nline4\n", "line1\nline2\nline3\nTEMPLATE4\n")
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
@@ -156,7 +152,7 @@ func TestUpdateThreeWay(t *testing.T) {
 		}
 	})
 	t.Run("overlapping edits conflict inline", func(t *testing.T) {
-		projectDir := threeWayFixture(t, base, "line1\nLOCAL2\nline3\nline4\n", "line1\nTEMPLATE2\nline3\nline4\n")
+		projectDir, _ := threeWayFixture(t, base, "line1\nLOCAL2\nline3\nline4\n", "line1\nTEMPLATE2\nline3\nline4\n")
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
@@ -178,7 +174,7 @@ func TestUpdateThreeWay(t *testing.T) {
 		}
 	})
 	t.Run("template-only change takes new", func(t *testing.T) {
-		projectDir := threeWayFixture(t, base, base, "line1\nline2\nline3\nTEMPLATE4\n")
+		projectDir, _ := threeWayFixture(t, base, base, "line1\nline2\nline3\nTEMPLATE4\n")
 		var stdout, stderr strings.Builder
 		opts := updateTestOptions(&stdout, &stderr)
 		opts.Force = true
@@ -197,7 +193,7 @@ func TestUpdateThreeWay(t *testing.T) {
 
 func TestUpdateOverlayFallback(t *testing.T) {
 	t.Run("missing store falls back to overlay", func(t *testing.T) {
-		projectDir := threeWayFixture(t,
+		projectDir, _ := threeWayFixture(t,
 			"line1\nline2\n",
 			"line1\nLOCAL2\n",
 			"line1\nTEMPLATE2\n")
@@ -230,7 +226,7 @@ func TestUpdateOverlayFallback(t *testing.T) {
 		}
 	})
 	t.Run("missing base entry for one file uses overlay", func(t *testing.T) {
-		projectDir := threeWayFixture(t,
+		projectDir, _ := threeWayFixture(t,
 			"line1\nline2\n",
 			"line1\nLOCAL2\n",
 			"line1\nTEMPLATE2\n")
@@ -261,59 +257,74 @@ func TestUpdateOverlayFallback(t *testing.T) {
 	})
 }
 
-func TestBootstrapSymlinkAndSpecial(t *testing.T) {
-	t.Run("escaping symlink refused", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"ok.txt": "ok\n"})
+func TestInitSymlinkAndSpecial(t *testing.T) {
+	t.Run("escaping symlink dropped from bundle", func(t *testing.T) {
+		registryURI, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
+		regDir := testRegistryDir(t, registryURI)
 		outside := filepath.Join(t.TempDir(), "secret.txt")
 		if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Symlink(outside, filepath.Join(src, "evil.txt")); err != nil {
+		if err := os.Symlink(outside, filepath.Join(regDir, "templates", testRegistryTemplate, "evil.txt")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
+		releaseTestTemplate(t, regDir, testRegistryTemplate)
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
-		if err := Bootstrap(context.Background(), src, target, testOptions(&stdout)); err == nil {
-			t.Error("Bootstrap with escaping symlink succeeded, want error")
-		} else if !strings.Contains(err.Error(), "escapes") && !strings.Contains(err.Error(), "symlink") {
-			t.Errorf("error = %q, want a symlink-escape refusal", err)
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
+			t.Fatalf("Init error: %v", err)
+		}
+		if _, err := os.Lstat(filepath.Join(target, "evil.txt")); err == nil {
+			t.Error("evil.txt rendered, want symlinks dropped from bundles")
+		}
+		if _, err := os.Stat(filepath.Join(target, "ok.txt")); err != nil {
+			t.Errorf("regular file missing after symlink drop: %v", err)
 		}
 	})
-	t.Run("in-root symlink dereferenced", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"real.txt": "content\n"})
-		if err := os.Symlink(filepath.Join(src, "real.txt"), filepath.Join(src, "link.txt")); err != nil {
+	t.Run("in-root symlink dropped from bundle", func(t *testing.T) {
+		regs, ref := makeTestRegistry(t, "", map[string]string{"real.txt": "content\n"})
+		regDir := testRegistryDir(t, regs)
+		tmplDir := filepath.Join(regDir, "templates", testRegistryTemplate)
+		if err := os.Symlink(filepath.Join(tmplDir, "real.txt"), filepath.Join(tmplDir, "link.txt")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		projectDir := bootstrapProject(t, src)
-		got, err := os.ReadFile(filepath.Join(projectDir, "link.txt"))
-		if err != nil {
-			t.Fatalf("reading dereferenced link: %v", err)
+		releaseTestTemplate(t, regDir, testRegistryTemplate)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
-		if string(got) != "content\n" {
-			t.Errorf("link content = %q, want %q", got, "content\n")
+		if _, err := os.Lstat(filepath.Join(target, "link.txt")); err == nil {
+			t.Error("link.txt rendered, want symlinks dropped from bundles")
 		}
 	})
 	t.Run("fifo skipped", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"ok.txt": "ok\n"})
-		if !makeTestFifo(t, filepath.Join(src, "pipe")) {
+		registryURI, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
+		regDir := testRegistryDir(t, registryURI)
+		if !makeTestFifo(t, filepath.Join(regDir, "templates", testRegistryTemplate, "pipe")) {
 			t.Skip("fifos unavailable on this platform")
 		}
-		projectDir := bootstrapProject(t, src)
-		if _, err := os.Lstat(filepath.Join(projectDir, "pipe")); err == nil {
+		releaseTestTemplate(t, regDir, testRegistryTemplate)
+		target := filepath.Join(t.TempDir(), "proj")
+		var stdout strings.Builder
+		if err := Init(context.Background(), target, ref, testOptions(&stdout)); err != nil {
+			t.Fatalf("Init error: %v", err)
+		}
+		if _, err := os.Lstat(filepath.Join(target, "pipe")); err == nil {
 			t.Error("fifo copied into project, want it skipped")
 		}
-		if _, err := os.Stat(filepath.Join(projectDir, "ok.txt")); err != nil {
+		if _, err := os.Stat(filepath.Join(target, "ok.txt")); err != nil {
 			t.Errorf("regular file missing after fifo skip: %v", err)
 		}
 	})
 	t.Run("absolute skip entry rejected", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"ok.txt": "ok\n"})
+		_, ref := makeTestRegistry(t, "", map[string]string{"ok.txt": "ok\n"})
 		target := filepath.Join(t.TempDir(), "proj")
 		var stdout strings.Builder
 		opts := testOptions(&stdout)
 		opts.Skip = []string{"/abs/path"}
-		if err := Bootstrap(context.Background(), src, target, opts); err == nil {
-			t.Error("Bootstrap with absolute --skip succeeded, want error")
+		if err := Init(context.Background(), target, ref, opts); err == nil {
+			t.Error("Init with absolute --skip succeeded, want error")
 		}
 	})
 }

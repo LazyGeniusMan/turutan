@@ -1,3 +1,13 @@
+ignore = [
+  "registry.yml",
+  "registry.yaml",
+  ".config/turutan/state.yml",
+  "templates/**/manifest/**",
+  "templates/**/releases/**",
+  "manifest/**",
+  "releases/**",
+]
+
 [files]
 yaml = [
   "*.yaml",

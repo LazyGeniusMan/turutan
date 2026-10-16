@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "digest": {
+      "type": "string"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "properties": {
+          "bytes": {
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "manifest_hash": {
+      "type": "string"
+    },
+    "ref": {
+      "type": "string"
+    },
+    "registry": {
+      "type": "string"
+    },
+    "resolved_sha": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "source": {
+      "type": "string"
+    },
+    "subpath": {
+      "type": "string"
+    },
+    "uri": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "engine_version",
+    "source",
+    "resolved_sha",
+    "manifest_hash",
+    "files"
+  ],
+  "title": "turutan lock",
+  "type": "object"
+}

@@ -68,7 +68,7 @@ func TestPlantDocFiles(t *testing.T) {
 	})
 }
 
-func TestBootstrapDocFiles(t *testing.T) {
+func TestInitDocFiles(t *testing.T) {
 	t.Parallel()
 	t.Run("rendered template output plants into config dir", func(t *testing.T) {
 		t.Parallel()
@@ -76,10 +76,10 @@ func TestBootstrapDocFiles(t *testing.T) {
 			"go.mod.tmpl":    "module {{.project_name}}\n",
 			"README.md.tmpl": "# {{.project_name}}\n",
 		}
-		src := makeTemplate(t, "doc-files: [README.md]\n", files)
+		_, ref := makeTestRegistry(t, "doc-files: [README.md]\n", files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), target, ref, testOptions(&strings.Builder{})); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		got, err := os.ReadFile(filepath.Join(target, ".config", "turutan", "README.md"))
 		if err != nil {
@@ -94,23 +94,20 @@ func TestBootstrapDocFiles(t *testing.T) {
 	})
 	t.Run("profile-gated doc skipped when profile off", func(t *testing.T) {
 		t.Parallel()
-		const condManifest = "prompts:\n" +
-			"  project_name:\n    prompt: \"Project name\"\n    type: string\n" +
-			"  enabled_profiles:\n    prompt: \"Enabled profiles\"\n    type: array\n" +
-			"    default: [\"core\"]\n" +
-			"    options: [\"core\", \"go\"]\n" +
+		const condManifest = "inputs:\n" +
+			"  project_name:\n    label: \"Project Name\"\n    type: string\n    default: my-proj\n" +
 			"conditionals:\n" +
-			"  - if: '{{ not (contains .enabled_profiles \"go\") }}'\n" +
-			"    skip: [\"GO.md\", \"GO.md.tmpl\"]\n" +
+			"  - if: '{{ not (contains .profiles \"go\") }}'\n" +
+			"    excludes: [\"GO.md\", \"GO.md.tmpl\"]\n" +
 			"doc-files: [GO.md]\n"
 		files := map[string]string{
 			"go.mod.tmpl": "module {{.project_name}}\n",
 			"GO.md.tmpl":  "# {{.project_name}} go notes\n",
 		}
-		src := makeTemplate(t, condManifest, files)
+		_, ref := makeTestRegistry(t, condManifest, files)
 		target := filepath.Join(t.TempDir(), "proj")
-		if err := Bootstrap(context.Background(), src, target, testOptions(&strings.Builder{})); err != nil {
-			t.Fatalf("Bootstrap error: %v", err)
+		if err := Init(context.Background(), target, ref, testOptions(&strings.Builder{})); err != nil {
+			t.Fatalf("Init error: %v", err)
 		}
 		if _, err := os.Stat(filepath.Join(target, ".config", "turutan", "GO.md")); !os.IsNotExist(err) {
 			t.Error("GO.md planted without its profile, want it skipped")

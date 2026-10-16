@@ -1,8 +1,9 @@
-.env*
-**.local.*
-.tmp/
 .config/turutan/templates/
-ai-rulez.bak*
+.config/ai-rulez.bak*
+**.local.*
+.env*
+!.env.example
+.tmp/
 dist
 /turutan
 

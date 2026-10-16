@@ -3,7 +3,7 @@ name = "{{.project_name}}"
 gitignore = true
 compact = true
 
-presets = [{{ range $i, $p := .enabled_ai_agents }}{{ if $i }}, {{ end }}"{{ $p }}"{{ end }}]
+presets = [{{ range $i, $p := .ai_agents }}{{ if $i }}, {{ end }}"{{ $p }}"{{ end }}]
 
 agents_md = true
 

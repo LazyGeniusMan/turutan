@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "templates": {
+      "items": {
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "contributors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "engine_version": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "manifestHash": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "releases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "uri": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "author",
+          "engine_version"
+        ],
+        "type": "object"
+      },
+      "minItems": 0,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "engine_version",
+    "name",
+    "author",
+    "templates"
+  ],
+  "title": "turutan registry index",
+  "type": "object"
+}

@@ -1,4 +1,5 @@
 ---
+# yamllint disable rule:line-length
 name: CI
 "on":
   pull_request:
@@ -17,16 +18,16 @@ jobs:
   pr-check:
     name: PR check (diff scope)
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1 ~keep
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Install tools
-        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8  # v5.1.2 ~keep
       - name: Install
         run: mise install
       - name: Check (branch diff scope)
@@ -34,16 +35,16 @@ jobs:
   main-check:
     name: Main check (full scope)
     if: ${{ github.event_name == 'push' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1 ~keep
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Install tools
-        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8  # v5.1.2 ~keep
       - name: Install
         run: mise install
       - name: Check (full scope)

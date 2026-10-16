@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "$schema": ".config/turutan/schemas/registry-index.schema.json",
+  "engine_version": "dev",
+  "name": "turutan",
+  "author": "Andriyansyah Nurrachman <turutan@yansyah.my.id> (https://yansyah.my.id)",
+  "templates": [
+    {
+      "name": "default",
+      "author": "Andriyansyah Nurrachman <turutan@yansyah.my.id> (https://yansyah.my.id)",
+      "engine_version": "dev"
+    }
+  ]
+}

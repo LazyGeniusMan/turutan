@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	gitpkg "github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
@@ -21,20 +19,18 @@ func diffOptions() DiffOptions {
 }
 
 func TestComputeDiff(t *testing.T) {
-	t.Run("no drift on clean bootstrap", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+	t.Run("no drift on clean init", func(t *testing.T) {
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
 		if len(diffs) != 0 {
-			t.Errorf("diffs = %+v, want none on clean bootstrap", diffs)
+			t.Errorf("diffs = %+v, want none on clean init", diffs)
 		}
 	})
 	t.Run("local edit shows drift with counts", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "aaa\nbbb\nccc\nddd\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("aaa\nBBB\nccc\nddd\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -58,11 +54,23 @@ func TestComputeDiff(t *testing.T) {
 			}
 		}
 	})
-	t.Run("new template commit shows drift", func(t *testing.T) {
-		repoDir, _ := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, repoDir)
-		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
+	t.Run("new release stays quiet without ref", func(t *testing.T) {
+		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "hello.txt", "v2\n")
 		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
+		if err != nil {
+			t.Fatalf("ComputeDiff error: %v", err)
+		}
+		if len(diffs) != 0 {
+			t.Errorf("diffs = %+v, want none: the pinned version did not change", diffs)
+		}
+	})
+	t.Run("ref selects the new release", func(t *testing.T) {
+		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, "hello.txt", "v2\n")
+		opts := diffOptions()
+		opts.Ref = fresh
+		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -73,30 +81,21 @@ func TestComputeDiff(t *testing.T) {
 			t.Errorf("Unified missing new template line:\n%s", diffs[0].Unified)
 		}
 	})
-	t.Run("ref selects tagged template", func(t *testing.T) {
-		repoDir, old := initTemplateRepo(t, map[string]string{"hello.txt": "v1\n"})
-		repo, err := gitpkg.PlainOpen(repoDir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := repo.CreateTag("v1", plumbing.NewHash(old), nil); err != nil {
-			t.Fatal(err)
-		}
-		projectDir := bootstrapProject(t, repoDir)
-		updateTemplateFile(t, repoDir, "hello.txt", "v2\n")
+	t.Run("ref selects the pinned release", func(t *testing.T) {
+		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
+		updateTestTemplateFile(t, registryURI, testRegistryTemplate, "hello.txt", "v2\n")
 		opts := diffOptions()
-		opts.Ref = "v1"
+		opts.Ref = testRegistryVersion
 		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
 		if len(diffs) != 0 {
-			t.Errorf("diffs = %+v, want none when --ref selects the bootstrapped tag", diffs)
+			t.Errorf("diffs = %+v, want none when --ref selects the pinned release", diffs)
 		}
 	})
 	t.Run("deleted project file shows as new", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		if err := os.Remove(filepath.Join(projectDir, "hello.txt")); err != nil {
 			t.Fatal(err)
 		}
@@ -115,13 +114,11 @@ func TestComputeDiff(t *testing.T) {
 		}
 	})
 	t.Run("dropped template file shows as deleted", func(t *testing.T) {
-		repoDir, _ := initTemplateRepo(t, map[string]string{"gone.txt": "bye\n", "stay.txt": "hi\n"})
-		projectDir := bootstrapProject(t, repoDir)
-		if err := os.Remove(filepath.Join(repoDir, "gone.txt")); err != nil {
-			t.Fatal(err)
-		}
-		commitAll(t, repoDir, "drop gone.txt")
-		diffs, err := ComputeDiff(context.Background(), projectDir, diffOptions())
+		projectDir, registryURI := initRegistryProject(t, "", map[string]string{"gone.txt": "bye\n", "stay.txt": "hi\n"})
+		fresh := removeTestTemplateFile(t, registryURI, testRegistryTemplate, "gone.txt")
+		opts := diffOptions()
+		opts.Ref = fresh
+		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
 		if err != nil {
 			t.Fatalf("ComputeDiff error: %v", err)
 		}
@@ -137,8 +134,7 @@ func TestComputeDiff(t *testing.T) {
 		}
 	})
 	t.Run("ignored paths are skipped", func(t *testing.T) {
-		src := makeTemplate(t, "ignore:\n  - \"gen/**\"\n", map[string]string{"gen/out.txt": "v1\n", "hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "excludes:\n  - \"gen/**\"\n", map[string]string{"gen/out.txt": "v1\n", "hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -156,8 +152,7 @@ func TestComputeDiff(t *testing.T) {
 		}
 	})
 	t.Run("missing lock errors", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		if err := os.Remove(filepath.Join(projectDir, config.LockFileName)); err != nil {
 			t.Fatal(err)
 		}
@@ -166,8 +161,7 @@ func TestComputeDiff(t *testing.T) {
 		}
 	})
 	t.Run("no state mutation", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		if err := os.WriteFile(filepath.Join(projectDir, "hello.txt"), []byte("v2\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -191,15 +185,14 @@ func TestComputeDiff(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(afterState) != string(beforeState) {
-			t.Error("ComputeDiff mutated state.json")
+			t.Error("ComputeDiff mutated state.yml")
 		}
 		if string(afterLock) != string(beforeLock) {
 			t.Error("ComputeDiff mutated lock.json")
 		}
 	})
 	t.Run("drift sorted by path", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"b.txt": "1\n", "a.txt": "1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"b.txt": "1\n", "a.txt": "1\n"})
 		for _, name := range []string{"a.txt", "b.txt"} {
 			if err := os.WriteFile(filepath.Join(projectDir, name), []byte("2\n"), 0o600); err != nil {
 				t.Fatal(err)
@@ -215,15 +208,12 @@ func TestComputeDiff(t *testing.T) {
 	})
 }
 
-func TestComputeDiffMinEngine(t *testing.T) {
-	setup := func(t *testing.T) (string, string) {
+func TestComputeDiffEngineVersion(t *testing.T) {
+	setup := func(t *testing.T) (string, string, string) {
 		t.Helper()
-		src := makeTemplate(t, "min-engine: \">=0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("min-engine: \">=99.0.0\"\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return src, projectDir
+		projectDir, registryURI := initRegistryProject(t, "schema_version: 1\nengine_version: \"0.1.0\"\n", map[string]string{"hello.txt": "v1\n"})
+		fresh := updateTestTemplateFile(t, registryURI, testRegistryTemplate, "template.yml", "schema_version: 1\nengine_version: \"99.0.0\"\n")
+		return registryURI, projectDir, fresh
 	}
 	tests := []struct {
 		name    string
@@ -231,15 +221,16 @@ func TestComputeDiffMinEngine(t *testing.T) {
 		wantErr bool
 		errPart string
 	}{
-		{name: "unsatisfiable floor fails fast", engine: "0.1.0", wantErr: true, errPart: "requires engine"},
+		{name: "unsatisfiable floor fails fast", engine: "0.1.0", wantErr: true, errPart: "requires engine_version"},
 		{name: "dev version skips gate", engine: "dev", wantErr: false},
 		{name: "empty engine skips gate", engine: "", wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			is := assert.New(t)
-			_, projectDir := setup(t)
+			_, projectDir, fresh := setup(t)
 			opts := diffOptions()
+			opts.Ref = fresh
 			opts.Engine = tt.engine
 			_, err := ComputeDiff(context.Background(), projectDir, opts)
 			if tt.wantErr {
@@ -355,8 +346,7 @@ func TestComputeDiffNoBase(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-			projectDir := bootstrapProject(t, src)
+			projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 			if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 				t.Fatal(err)
 			}
@@ -372,57 +362,12 @@ func TestComputeDiffNoBase(t *testing.T) {
 		})
 	}
 	t.Run("full review survives missing base", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"hello.txt": "v1\n"})
-		projectDir := bootstrapProject(t, src)
+		projectDir, _ := initRegistryProject(t, "", map[string]string{"hello.txt": "v1\n"})
 		if err := os.RemoveAll(filepath.Join(projectDir, ".config", "turutan", "templates")); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := ComputeDiff(context.Background(), projectDir, diffOptions()); err != nil {
 			t.Fatalf("ComputeDiff all without base error: %v", err)
-		}
-	})
-}
-
-func TestComputeDiffRenames(t *testing.T) {
-	t.Run("upstream follows rename to new path", func(t *testing.T) {
-		src := makeTemplate(t, "", map[string]string{"old.txt": "hello\n"})
-		projectDir := bootstrapProject(t, src)
-		if err := os.WriteFile(filepath.Join(src, ".turutan.yml"), []byte("renames:\n  old.txt: new.txt\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
-			t.Fatal(err)
-		}
-		data, err := os.ReadFile(filepath.Join(src, "old.txt")) // #nosec G304 -- test-only fixture path under t.TempDir(), not external input
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Remove(filepath.Join(src, "old.txt")); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(src, "new.txt"), []byte(string(data)+"more\n"), 0o600); err != nil { // #nosec G703 -- test-only fixture path under t.TempDir() with a constant segment, not external input
-			t.Fatal(err)
-		}
-		opts := diffOptions()
-		opts.What = "upstream"
-		diffs, err := ComputeDiff(context.Background(), projectDir, opts)
-		if err != nil {
-			t.Fatalf("ComputeDiff error: %v", err)
-		}
-		paths := diffPaths(diffs)
-		found := false
-		for _, p := range paths {
-			if p == "new.txt" {
-				found = true
-			}
-			if p == "old.txt" {
-				t.Errorf("paths = %v, want no stale old.txt entry", paths)
-			}
-		}
-		if !found {
-			t.Fatalf("paths = %v, want new-path drift", paths)
-		}
-		for _, d := range diffs {
-			if d.Path == "new.txt" && !strings.Contains(d.Unified, "+more") {
-				t.Errorf("new.txt Unified missing drift line:\n%s", d.Unified)
-			}
 		}
 	})
 }

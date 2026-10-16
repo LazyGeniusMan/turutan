@@ -6,43 +6,48 @@ Manage project-template lifecycle: scaffold new projects from versioned template
 
 ## Installation
 
-Prerequisites: [mise](https://mise.jdx.dev/)
-
 ```sh
-git clone https://github.com/LazyGeniusMan/turutan.git
-cd turutan
-mise run pre-push:all
+go install github.com/LazyGeniusMan/turutan/cmd/turutan
 ```
 
 ## Quickstart
 
 ```sh
-mise run pre-push:all   # release-style static binary with version ldflags
+# Author a registry, scaffold a starter template, cut a release.
+turutan registry init --author "Jane Doe <jane@example.com>" --name acme
+turutan registry create foo  # recorded as created-but-unreleased: no version yet
+turutan registry release foo minor fs
+# first cut is 0.1.0 whatever the bump: manifest templates/foo/manifest/0.1.0.json,
+# index releases prepended.
 
-# Scaffold from the built-in default (a remote-git source in this repo).
-turutan bootstrap git::https://github.com/LazyGeniusMan/turutan.git//templates/default?ref=templates-default/v1 ./myapp --defaults
-# Bare source resolves the same remote default; a local path works offline.
-turutan bootstrap ./templates/default ./myapp --defaults
+# Scaffold from a registry template URI at latest (default built-in URI).
+# Use the full <registry-uri>/<template>[@version] form; bare names are rejected.
+turutan init ./myapp --template oci://ghcr.io/acme/templates/foo --defaults
+turutan init ./myapp --template oci://ghcr.io/acme/templates/foo@0.2.0 --defaults  # pinned release
 
 cd myapp
-turutan check-update   # exit 0 up-to-date, 2 update available
-turutan diff           # exit 0 no drift, 2 drift found
-turutan update         # merge template changes (--conflict rej for .rej files)
+turutan check          # exit 0 up-to-date, 2 update available
+turutan diff           # exit 0 no drift, 2 drift found (add --ref <version> to preview a release)
+turutan update         # merge the index-latest release (--ref <version> to pin, --conflict rej for .rej files)
+turutan state sync     # re-render hand-edited state.yml inputs at the pinned release (no upstream check)
+turutan state input    # re-answer every input, then re-render at the pinned release
 turutan version        # version/commit/date plus license notice
 ```
 
 ## Remote authentication
 
-Git transport credentials come from the environment only and are never
-logged. SSH remotes try `TURUTAN_SSH_KEY` (PEM content or key-file path),
-then `TURUTAN_SSH_PASSWORD`, then the ssh-agent; HTTPS remotes use
-`GITHUB_TOKEN` as `x-access-token` credentials when set. Host-key (`known_hosts`)
-and TLS verification is strict by default; `TURUTAN_INSECURE_SKIP_VERIFY=1`
-disables it with a loud warning (never in production).
+Registry credentials come from the environment only, resolved by URI
+scheme (one credential per scheme type), and are never logged.
+S3-compatible: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+`AWS_ENDPOINT_URL`, `AWS_REGION`. Git: `GITHUB_TOKEN`, `TURUTAN_SSH_KEY`,
+`TURUTAN_SSH_PASSWORD`. OCI: `TURUTAN_OCI_USER`, `TURUTAN_OCI_PASSWORD`,
+`TURUTAN_OCI_TOKEN`. HTTP(S): `TURUTAN_HTTP_USER`, `TURUTAN_HTTP_PASSWORD`,
+`TURUTAN_HTTP_TOKEN`. The `fs` scheme is never authenticated.
+Host-key (`known_hosts`) and TLS verification is strict by default;
+`TURUTAN_INSECURE_SKIP_VERIFY=1` disables it with a loud warning
+(never in production).
 
 ## License
 
-Dual-licensed: the CLI and all engine code is Apache-2.0 (root `LICENSE`);
-the default template and files generated from it are MIT-0
-(`templates/default/LICENSE`; generated `.config/turutan/state.json` records
-`templateLicense: "MIT-0"`).
+Dual-licensed. The CLI and all engine code is Apache-2.0 (root `LICENSE`), the
+default template is MIT-0 (`templates/default/LICENSE`).

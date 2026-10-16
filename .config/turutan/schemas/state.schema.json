@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "conflict": {
+      "type": "string"
+    },
+    "data": {
+      "$ref": "state-data.schema.json"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "registry": {
+      "type": "string"
+    },
+    "requestedRef": {
+      "type": "string"
+    },
+    "resolvedCommit": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "skip": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "sourceKind": {
+      "type": "string"
+    },
+    "subpath": {
+      "type": "string"
+    },
+    "template": {
+      "type": "string"
+    },
+    "templateDigest": {
+      "type": "string"
+    },
+    "templateLicense": {
+      "type": "string"
+    },
+    "templateURI": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version",
+    "schema_version",
+    "template",
+    "sourceKind",
+    "resolvedCommit",
+    "engine_version",
+    "templateLicense"
+  ],
+  "title": "turutan state",
+  "type": "object"
+}

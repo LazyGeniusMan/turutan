@@ -3,9 +3,13 @@
 package config
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -104,6 +108,88 @@ func candidates() []string {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+// UserConfig is the per-user turutan configuration file shape: a default template.
+// ~keep
+type UserConfig struct {
+	Template string `yaml:"template,omitempty" json:"template,omitempty" mapstructure:"template"`
+}
+
+// DefaultUserConfigPath returns the writable default user config path: the
+// first candidate directory joined with the YAML file name, even when no
+// config file exists yet.
+// ~keep
+func DefaultUserConfigPath() string {
+	home, _ := os.UserHomeDir()
+	if v, ok := os.LookupEnv(EnvXDGConfigHome); ok && filepath.IsAbs(v) {
+		return filepath.Join(v, ToolName, ConfigFileName)
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if home != "" {
+			return filepath.Join(home, "Library", "Application Support", ToolName, ConfigFileName)
+		}
+	case "windows":
+		if v, ok := os.LookupEnv("APPDATA"); ok && v != "" {
+			return filepath.Join(v, ToolName, ConfigFileName)
+		}
+		if home != "" {
+			return filepath.Join(home, "AppData", "Roaming", ToolName, ConfigFileName)
+		}
+	default:
+		if home != "" {
+			return filepath.Join(home, ".config", ToolName, ConfigFileName)
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		return filepath.Join(cwd, ".config", ConfigFileName)
+	}
+	return ConfigFileName
+}
+
+// LoadUserConfigFile reads path into a UserConfig. A missing or empty file
+// yields an empty config; other errors report the offending path.
+// ~keep
+func LoadUserConfigFile(path string) (*UserConfig, error) {
+	doc, err := readConfigMap(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg UserConfig
+	if len(doc) == 0 {
+		return &cfg, nil
+	}
+	data, err := yaml.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("encoding %q: %w", path, err)
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parsing %q: %w", path, err)
+	}
+	return &cfg, nil
+}
+
+func readConfigMap(path string) (map[string]any, error) {
+	doc := map[string]any{}
+	data, err := os.ReadFile(path) // #nosec G304 -- path is the explicit caller-supplied config file
+	if err != nil {
+		if os.IsNotExist(err) {
+			return doc, nil
+		}
+		return nil, fmt.Errorf("reading %q: %w", path, err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return doc, nil
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	if err := decoder.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("parsing %q: %w", path, err)
+	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	return doc, nil
 }
 
 func isDir(path string) bool {

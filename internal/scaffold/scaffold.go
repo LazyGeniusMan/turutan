@@ -28,11 +28,8 @@ type Options struct {
 	NonInteractive bool
 	Force          bool
 	Conflict       ConflictMode
-	Ref            string
-	Subpath        string
-	AnswersFile    string
+	DataFile       string
 	Defaults       bool
-	AllowHooks     bool
 	Skip           []string
 	Engine         string
 	Verbose        bool

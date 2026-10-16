@@ -18,6 +18,7 @@ import (
 
 	"github.com/LazyGeniusMan/turutan/internal/config"
 	"github.com/LazyGeniusMan/turutan/internal/filter"
+	"github.com/LazyGeniusMan/turutan/internal/registry"
 	"github.com/LazyGeniusMan/turutan/internal/template"
 )
 
@@ -69,17 +70,17 @@ func ComputeDiff(
 	if err != nil {
 		return nil, err
 	}
-	state, lock, src, err := loadDiffInputs(projectDir, opts)
+	state, lock, want, err := loadDiffInputs(projectDir, opts)
 	if err != nil {
 		return nil, err
 	}
 	switch what {
 	case DiffWhatUpstream:
-		return computeUpstreamDiff(ctx, projectDir, state, src, opts)
+		return computeUpstreamDiff(ctx, projectDir, state, want, opts)
 	case DiffWhatLocal:
 		return computeLocalDiff(projectDir, state, lock, opts)
 	default:
-		return computeFullDiff(ctx, projectDir, state, lock, src, opts)
+		return computeFullDiff(ctx, projectDir, state, lock, want, opts)
 	}
 }
 
@@ -102,11 +103,11 @@ func computeFullDiff(
 	projectDir string,
 	state *config.State,
 	lock *config.Lock,
-	src *template.Source,
+	want string,
 	opts DiffOptions,
 ) ([]FileDiff, error) {
 	rendered, manifest, err := renderDiffTemplate(
-		ctx, src, state, opts)
+		ctx, state, want, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -124,11 +125,11 @@ func computeUpstreamDiff(
 	ctx context.Context,
 	projectDir string,
 	state *config.State,
-	src *template.Source,
+	want string,
 	opts DiffOptions,
 ) ([]FileDiff, error) {
 	rendered, manifest, err := renderDiffTemplate(
-		ctx, src, state, opts)
+		ctx, state, want, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -136,19 +137,9 @@ func computeUpstreamDiff(
 	if err != nil {
 		return nil, err
 	}
-	byNew := make(map[string][]byte, len(base))
-	for path, data := range base {
-		byNew[config.ResolveRenames(path, manifest.Renames)] = data
-	}
+	byNew := base
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
-		ignored, err := filter.MatchAny(manifest.Ignore, path)
-		if err != nil {
-			return nil, fmt.Errorf("diff: %w", err)
-		}
-		if ignored {
-			continue
-		}
 		diff, changed, err := newFileDiff(
 			path, byNew[path], rendered[path].Data, false, false)
 		if err != nil {
@@ -165,7 +156,7 @@ func computeUpstreamDiff(
 		if _, ok := rendered[path]; ok {
 			continue
 		}
-		ignored, err := filter.MatchAny(manifest.Ignore, path)
+		ignored, err := filter.MatchAny(manifest.Excludes, path)
 		if err != nil {
 			return nil, fmt.Errorf("diff: %w", err)
 		}
@@ -267,7 +258,7 @@ func readBaseEntries(projectDir, sha string) (map[string][]byte, error) {
 			return nil
 		}
 		slash := filter.ToSlash(rel)
-		data, err := os.ReadFile(path) // #nosec G304, G122 -- reads file found by WalkDir of this run's base copy under .turutan/templates, not caller-controlled inclusion
+		data, err := os.ReadFile(path) // #nosec G304, G122 -- reads file found by WalkDir of this run's base copy under .config/turutan/templates, not caller-controlled inclusion
 		if err != nil {
 			return err
 		}
@@ -292,45 +283,147 @@ func basePaths(base map[string][]byte) []string {
 func loadDiffInputs(
 	projectDir string,
 	opts DiffOptions,
-) (*config.State, *config.Lock, *template.Source, error) {
+) (*config.State, *config.Lock, string, error) {
 	state, err := config.LoadState(os.DirFS(projectDir))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("diff: %w", err)
+		return nil, nil, "", fmt.Errorf("diff: %w", err)
 	}
 	lock, err := config.LoadLock(os.DirFS(projectDir))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("diff: %w", err)
+		return nil, nil, "", fmt.Errorf("diff: %w", err)
 	}
-	src, err := parseStoredSource(projectDir, state.Template)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("diff: %w", err)
+	if state.SourceKind != "registry" {
+		return nil, nil, "", fmt.Errorf("diff: unknown sourceKind %q", state.SourceKind)
 	}
-	if opts.Ref != "" {
-		src.RequestedRef = opts.Ref
+	want := strings.TrimSpace(opts.Ref)
+	if want == "" {
+		want = state.RequestedRef
 	}
 	vlogf(opts.Stderr, opts.Verbose,
-		"diff: template %q ref %q", state.Template, src.RequestedRef)
-	return state, lock, src, nil
+		"diff: template %q version %q", state.Template, want)
+	return state, lock, want, nil
+}
+
+func fetchDiffBundle(
+	ctx context.Context,
+	state *config.State,
+	want string,
+) (string, func(), error) {
+	if want == "" || want == state.RequestedRef {
+		return fetchPinnedBundle(ctx, state, "diff")
+	}
+	registryURI := strings.TrimSpace(state.Registry)
+	if registryURI == "" {
+		return "", nil, fmt.Errorf("diff: stored registry is empty")
+	}
+	storedRegistry, templateName, _, err := SplitStoredRef(state.Template)
+	if err != nil {
+		return "", nil, fmt.Errorf("diff: %w", err)
+	}
+	if storedRegistry != registryURI {
+		return "", nil, fmt.Errorf("diff: stored template %q does not match registry %q", state.Template, registryURI)
+	}
+	if templateName == "" {
+		return "", nil, fmt.Errorf("diff: stored template %q has no template name", state.Template)
+	}
+	rr, err := ResolveRegistry(ctx, registryURI)
+	if err != nil {
+		return "", nil, fmt.Errorf("diff: %w", err)
+	}
+	manifest, err := ResolveTemplateManifest(rr, templateName, want)
+	if err != nil {
+		return "", nil, fmt.Errorf("diff: %w", err)
+	}
+	dir, _, cleanup, err := FetchTemplateBundle(ctx, rr, manifest)
+	if err != nil {
+		return "", nil, fmt.Errorf("diff: %w", err)
+	}
+	return dir, cleanup, nil
+}
+
+func fetchPinnedBundle(ctx context.Context, state *config.State, op string) (string, func(), error) {
+	uri, err := registry.ParseURI(state.TemplateURI)
+	if err != nil {
+		return "", nil, fmt.Errorf("%s: %w", op, err)
+	}
+	if uri.IsRelative() {
+		baseURI, err := registry.ParseURI(strings.TrimSpace(state.Registry))
+		if err != nil {
+			return "", nil, fmt.Errorf("%s: %w", op, err)
+		}
+		resolved, err := resolveRelativeAgainstRegistry(uri, baseURI)
+		if err != nil {
+			return "", nil, fmt.Errorf("%s: %w", op, err)
+		}
+		uri = resolved
+	}
+	auth := registry.ResolveAuth(uri)
+	backend, err := registry.BackendFor(uri.Scheme)
+	if err != nil {
+		return "", nil, fmt.Errorf("%s: %w", op, err)
+	}
+	tmp, err := os.MkdirTemp("", "turutan-diff-*")
+	if err != nil {
+		return "", nil, fmt.Errorf("%s: creating temp dir: %w", op, err)
+	}
+	cleanup := func() { _ = os.RemoveAll(tmp) }
+	if err := backend.Fetch(ctx, uri, auth, tmp); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("%s: %w", op, err)
+	}
+	if strings.TrimSpace(state.TemplateDigest) != "" {
+		got, err := registry.DigestDir(tmp)
+		if err != nil {
+			cleanup()
+			return "", nil, fmt.Errorf("%s: %w", op, err)
+		}
+		if got != state.TemplateDigest {
+			cleanup()
+			return "", nil, fmt.Errorf("%s: pinned bundle digest mismatch: state wants %s", op, state.TemplateDigest)
+		}
+	}
+	return tmp, cleanup, nil
+}
+
+func resolveRelativeAgainstRegistry(rel, base registry.URI) (registry.URI, error) {
+	if base.Scheme == registry.SchemeFS && !base.IsRelative() {
+		joined := base.Path + "/" + strings.TrimPrefix(rel.Path, "/")
+		return registry.URI{Scheme: registry.SchemeFS, Path: joined}, nil
+	}
+	if base.Scheme == registry.SchemeHTTP || base.Scheme == registry.SchemeHTTPS {
+		return rel.ResolveRelativeTo(base.String())
+	}
+	if base.Scheme == registry.SchemeFS && base.IsRelative() {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return registry.URI{}, fmt.Errorf("resolving relative registry %q: %w", base.Path, err)
+		}
+		absBase, err := base.ResolveRelativeTo(cwd)
+		if err != nil {
+			return registry.URI{}, err
+		}
+		joined := strings.TrimSuffix(absBase.Path, "/") + "/" + strings.TrimPrefix(rel.Path, "/")
+		return registry.URI{Scheme: registry.SchemeFS, Path: joined}, nil
+	}
+	return registry.URI{}, fmt.Errorf("relative uri needs a local registry root")
 }
 
 func renderDiffTemplate(
 	ctx context.Context,
-	src *template.Source,
 	state *config.State,
+	want string,
 	opts DiffOptions,
 ) (map[string]renderedEntry, *config.Manifest, error) {
-	fetched, err := template.Fetch(ctx, src)
+	bundleDir, cleanup, err := fetchDiffBundle(ctx, state, want)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cleanup()
+	manifest, err := config.LoadManifest(os.DirFS(bundleDir))
 	if err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
-	if fetched.Cleanup != nil {
-		defer fetched.Cleanup()
-	}
-	manifest, err := config.LoadManifest(os.DirFS(fetched.Dir))
-	if err != nil {
-		return nil, nil, fmt.Errorf("diff: %w", err)
-	}
-	if _, err := checkMinEngine(
+	if _, err := checkEngineVersion(
 		manifest, opts.Engine, opts.Stderr, opts.Verbose); err != nil {
 		return nil, nil, err
 	}
@@ -339,14 +432,15 @@ func renderDiffTemplate(
 		return nil, nil, fmt.Errorf("diff: creating staging dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
-	answers := map[string]any{}
-	maps.Copy(answers, state.Answers)
-	seedMissingDefaults(answers, manifest)
-	normalizeAnswersWithManifest(answers, manifest)
-	if err := template.RenderDirWithConditionals(fetched.Dir, stage, answers, manifestConditionals(manifest)); err != nil {
+	data := map[string]any{}
+	maps.Copy(data, state.Data)
+	seedMissingDefaults(data, manifest)
+	normalizeDataWithManifest(data, manifest)
+	view := renderDataView(data)
+	if err := template.RenderDirWithConditionals(bundleDir, stage, view, manifest.Includes, manifest.Excludes, manifest.Preserves, manifestConditionals(manifest)); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
-	if err := plantLicenseFiles(fetched.Dir, stage, manifest); err != nil {
+	if err := plantLicenseFiles(bundleDir, stage, manifest); err != nil {
 		return nil, nil, fmt.Errorf("diff: %w", err)
 	}
 	if err := plantDocFiles(stage, manifest); err != nil {
@@ -366,9 +460,13 @@ func collectDiffs(
 	manifest *config.Manifest,
 	state *config.State,
 ) ([]FileDiff, error) {
+	preserved, err := preservedGlobs(state.Data, manifest)
+	if err != nil {
+		return nil, err
+	}
 	var diffs []FileDiff
 	for _, path := range renderedPaths(rendered) {
-		diff, changed, err := diffRenderedOne(projectDir, rendered[path], manifest, state)
+		diff, changed, err := diffRenderedOne(projectDir, rendered[path], manifest, state, preserved)
 		if err != nil {
 			return nil, err
 		}
@@ -377,7 +475,7 @@ func collectDiffs(
 		}
 	}
 	for _, entry := range lock.Files {
-		diff, changed, err := diffDroppedOne(projectDir, rendered, manifest, entry)
+		diff, changed, err := diffDroppedOne(projectDir, rendered, manifest, entry, preserved)
 		if err != nil {
 			return nil, err
 		}
@@ -393,6 +491,7 @@ func diffRenderedOne(
 	entry renderedEntry,
 	manifest *config.Manifest,
 	state *config.State,
+	preserved []string,
 ) (FileDiff, bool, error) {
 	local, err := filter.ReadFileWithinRoot(projectDir, entry.Path)
 	if err != nil {
@@ -406,8 +505,14 @@ func diffRenderedOne(
 		}
 		return diff, true, nil
 	}
-	if state != nil && customOwned(manifest, state.Answers, entry.Path) {
-		return FileDiff{}, false, nil
+	if state != nil {
+		owned, err := userOwned(entry.Path, manifest, state, preserved)
+		if err != nil {
+			return FileDiff{}, false, err
+		}
+		if owned {
+			return FileDiff{}, false, nil
+		}
 	}
 	diff, changed, err := newFileDiff(entry.Path, local, entry.Data, false, false)
 	if err != nil {
@@ -421,11 +526,12 @@ func diffDroppedOne(
 	rendered map[string]renderedEntry,
 	manifest *config.Manifest,
 	entry config.LockFile,
+	preserved []string,
 ) (FileDiff, bool, error) {
 	if _, ok := rendered[entry.Path]; ok {
 		return FileDiff{}, false, nil
 	}
-	ignored, err := filter.MatchAny(manifest.Ignore, entry.Path)
+	ignored, err := filter.MatchAny(manifest.Excludes, entry.Path)
 	if err != nil {
 		return FileDiff{}, false, fmt.Errorf("diff: %w", err)
 	}
@@ -439,6 +545,13 @@ func diffDroppedOne(
 		}
 		return FileDiff{}, false, fmt.Errorf(
 			"diff: reading project file %q: %w", entry.Path, err)
+	}
+	kept, err := isPreservedPath(entry.Path, manifest, preserved)
+	if err != nil {
+		return FileDiff{}, false, fmt.Errorf("diff: %w", err)
+	}
+	if kept {
+		return FileDiff{}, false, nil
 	}
 	diff, _, err := newFileDiff(entry.Path, local, nil, false, true)
 	if err != nil {
@@ -476,13 +589,6 @@ func walkRendered(stage string, manifest *config.Manifest) (map[string]renderedE
 			return nil
 		}
 		slash := filter.ToSlash(rel)
-		ignored, err := filter.MatchAny(manifest.Ignore, slash)
-		if err != nil {
-			return fmt.Errorf("matching ignore globs: %w", err)
-		}
-		if ignored {
-			return nil
-		}
 		data, err := os.ReadFile(path) // #nosec G304, G122 -- WalkDir over this run's 0700 staging dir with symlinks skipped; staging is owner-only so no cross-user TOCTOU boundary
 		if err != nil {
 			return err
