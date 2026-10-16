@@ -222,7 +222,17 @@ func writeRegistryStarter(root, dir, name string) error {
 			return fmt.Errorf("registry create: %w", err)
 		}
 	}
-	manifest := &config.Manifest{License: "MIT-0", Conflict: "inline"}
+	manifest := &config.Manifest{
+		License:  "MIT-0",
+		Conflict: "inline",
+		Inputs: map[string]config.ManifestInput{
+			"project_name": {
+				Type:    "string",
+				Label:   "Project Name",
+				Default: name,
+			},
+		},
+	}
 	templateYML := filepath.Join(dir, config.ManifestFileName)
 	schemaPath := filepath.Join(root, filepath.FromSlash(config.TemplateSchemaFileName))
 	if err := config.SaveManifestFile(templateYML, schemaPath, manifest); err != nil {
