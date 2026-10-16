@@ -1,12 +1,3 @@
-[settings]
-minimum_release_age_excludes = [
-  "github:Goldziher/ai-rulez",
-  "npm:@opencode/cli",
-  "npm:t3",
-  "npm:@earendil-works/pi-coding-agent",
-  "hk",
-]
-
 [env]
 TURUTAN_BIN = "go run {{config_root}}/cmd/turutan"
 PROTON_PASS_KEY_PROVIDER = "{{ exec(command='sh scripts/proton-pass-detect-key-provider.sh') | trim }}"
@@ -16,7 +7,7 @@ node = "24"
 "npm:@opencode/cli" = { version = "2" }
 "github:protonpass/pass-cli" = "2"
 "npm:@earendil-works/pi-coding-agent" = "1"
-"npm:t3" = { prefix = "0.0.46-nightly", prerelease = 1 }
+"npm:t3" = "0"
 
 [daemons.opencode]
 init = "mise run dev-setup:fnox"

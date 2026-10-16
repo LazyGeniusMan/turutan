@@ -9,43 +9,43 @@ importers:
   .:
     dependencies:
       t3:
-        specifier: 0.0.46-nightly.20261015.3176
-        version: 0.0.46-nightly.20261015.3176
+        specifier: 0.1.0
+        version: 0.1.0
 
 packages:
 
-  '@t3code/t3-darwin-arm64@0.0.46-nightly.20261015.3176':
-    resolution: {integrity: sha512-QCntP4jTM2+KT+TYz4dP8Of/H64u2dg1xNwnY0H2+H3a7pfCx+WepdAFgbKY5s09DkXn6FCcYexW2vEncaq2CQ==}
+  '@t3code/t3-darwin-arm64@0.1.0':
+    resolution: {integrity: sha512-Lh9Z8t6j0djYvl/u8aaQIFhVkJfccDg5payjo6q2ZWqV6+GpMVgk2lHz8/QC7rjaTWoZ+jiSCp/Fys91zPR2/A==}
     cpu: [arm64]
     os: [darwin]
 
-  '@t3code/t3-linux-arm64@0.0.46-nightly.20261015.3176':
-    resolution: {integrity: sha512-QXGXwkooC39v4Llw6ULk2QNQU80bbXiiy3bv79DLZOyWRBJX06QYb2R6P3joyZ9bJVFvwDdOqYsVvFMbcqDUHw==}
+  '@t3code/t3-linux-arm64@0.1.0':
+    resolution: {integrity: sha512-Cm2b6QolZYr3Rz1k194AUrsv3PCX9gIkEsw7AylbDN7gIY6JVCJc7rkmycCI+VAWrfB47eDJ1JVTI45nQ2mO0g==}
     cpu: [arm64]
     os: [linux]
 
-  '@t3code/t3-linux-x64@0.0.46-nightly.20261015.3176':
-    resolution: {integrity: sha512-nqRZUdh3TQ2Z2WAmKgMzvoQgr20P5OB8RYyXd53Zehq8Y2SqE3LjDQg2PlngPeHphzmtO1DK4xB+toon7ZRBrw==}
+  '@t3code/t3-linux-x64@0.1.0':
+    resolution: {integrity: sha512-y+yXTAjT//syOY+hx8l1gfGzl59U29iPfXYQRsO5oG/EFnn+vsgEL5FzRgyXDrlYDShLaVkO65hiWug8lRQx0g==}
     cpu: [x64]
     os: [linux]
 
-  '@t3code/t3-win32-arm64@0.0.46-nightly.20261015.3176':
-    resolution: {integrity: sha512-sDZ6irHvET5nS8R55BBjHb0qs4qVRlmO4XBRzk4L0nC5UXyZ0nKZpb1EgiFcUyqyFbcmw0GwnKceRrcmY8DnZg==}
+  '@t3code/t3-win32-arm64@0.1.0':
+    resolution: {integrity: sha512-QSQF2o81HaeO0uZoeqKj5AX20Brbm2RJ93LOmfs+Bd6r5WxqXW0bfOSTjfJvBF0duzCOt6yDgyl4tGVUi0L+pQ==}
     cpu: [arm64]
     os: [win32]
 
-  '@t3code/t3-win32-x64@0.0.46-nightly.20261015.3176':
-    resolution: {integrity: sha512-wTfGpMVg1AqdUGdQ4JHYxommYN3CPesbfPJQS9xN3IJPUbfCWLWSce3OZVF2krSNVITviFzjI2hYiR6xoAxBbg==}
+  '@t3code/t3-win32-x64@0.1.0':
+    resolution: {integrity: sha512-zJKhNdBND38xiBDmBRalW+YFsoqLbpvbIaCGZhjYKFy6wXXFQ0dMpyKylrAyWI3uGVtAYZuqCjYcPdAU43nhdQ==}
     cpu: [x64]
     os: [win32]
 
-  t3@0.0.46-nightly.20261015.3176:
-    resolution: {integrity: sha512-eUKYOs+J+gM1FCGiH/+s7D3gBVKMPPXNfOXwzVDDXHHmVuzR0FeMZUnGZT8ebLAUaQZJIu5VLqq4wBs13Rycdw==}
+  t3@0.1.0:
+    resolution: {integrity: sha512-kesDReGXOxh17i//xe6UIGtYZDIZBZBJeZ7CFAsjLugRBz89La1sbx9kzEW60hkjnheUikMOkdkvQfR9QP3hHg==}
     hasBin: true
 
 snapshots:
 
-  '@t3code/t3-darwin-arm64@0.0.46-nightly.20261015.3176':
+  '@t3code/t3-darwin-arm64@0.1.0':
     optional: true
     bundledDependencies:
       - '@bufbuild/protobuf'
@@ -67,7 +67,7 @@ snapshots:
       - undici
       - zod
 
-  '@t3code/t3-linux-arm64@0.0.46-nightly.20261015.3176':
+  '@t3code/t3-linux-arm64@0.1.0':
     optional: true
     bundledDependencies:
       - '@bufbuild/protobuf'
@@ -90,7 +90,7 @@ snapshots:
       - undici
       - zod
 
-  '@t3code/t3-linux-x64@0.0.46-nightly.20261015.3176':
+  '@t3code/t3-linux-x64@0.1.0':
     optional: true
     bundledDependencies:
       - '@bufbuild/protobuf'
@@ -113,7 +113,7 @@ snapshots:
       - undici
       - zod
 
-  '@t3code/t3-win32-arm64@0.0.46-nightly.20261015.3176':
+  '@t3code/t3-win32-arm64@0.1.0':
     optional: true
     bundledDependencies:
       - '@bufbuild/protobuf'
@@ -134,7 +134,7 @@ snapshots:
       - undici
       - zod
 
-  '@t3code/t3-win32-x64@0.0.46-nightly.20261015.3176':
+  '@t3code/t3-win32-x64@0.1.0':
     optional: true
     bundledDependencies:
       - '@bufbuild/protobuf'
@@ -157,10 +157,10 @@ snapshots:
       - undici
       - zod
 
-  t3@0.0.46-nightly.20261015.3176:
+  t3@0.1.0:
     optionalDependencies:
-      '@t3code/t3-darwin-arm64': 0.0.46-nightly.20261015.3176
-      '@t3code/t3-linux-arm64': 0.0.46-nightly.20261015.3176
-      '@t3code/t3-linux-x64': 0.0.46-nightly.20261015.3176
-      '@t3code/t3-win32-arm64': 0.0.46-nightly.20261015.3176
-      '@t3code/t3-win32-x64': 0.0.46-nightly.20261015.3176
+      '@t3code/t3-darwin-arm64': 0.1.0
+      '@t3code/t3-linux-arm64': 0.1.0
+      '@t3code/t3-linux-x64': 0.1.0
+      '@t3code/t3-win32-arm64': 0.1.0
+      '@t3code/t3-win32-x64': 0.1.0
