@@ -85,7 +85,7 @@ run = "${TURUTAN_BIN} state input"
 description = "List template profiles offered and enabled"
 run = "${TURUTAN_BIN} profiles"
 
-[tasks."turutan:dogfood"]
+[tasks."turutan:dogfood:setup"]
 run = """
 dir=".tmp/dogfood"
 rm -rf "$dir"
@@ -93,4 +93,17 @@ mkdir -p "$dir/templates"
 cp turutan.json "$dir/turutan.json"
 cp -r templates/. "$dir/templates/"
 (cd "$dir" && ${TURUTAN_BIN} registry release default same fs --force )
+"""
+
+[tasks."turutan:dogfood:init"]
+depends = "turutan:dogfood:setup"
+run = """
+dir=".tmp/dogfood"
+${TURUTAN_BIN} init ./ --template fs://$dir/default --force
+"""
+
+[tasks."turutan:dogfood:update"]
+depends = "turutan:dogfood:setup"
+run = """
+${TURUTAN_BIN} update --force
 """

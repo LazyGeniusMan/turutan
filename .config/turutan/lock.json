@@ -4,11 +4,11 @@
   "engine_version": "dev",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
-  "resolved_sha": "353daf3daab0628f31f9b558547a216d99b30743f3d69e640a8d848ad67d7b11",
+  "resolved_sha": "cfb098cfb7e018d6508e63a8b5558548eb12ea770a4f7e2680c7ee2cccc29840",
   "registry": "fs://.tmp/dogfood",
   "uri": "fs://templates/default/releases/0.1.0.tar.gz",
-  "digest": "sha256:353daf3daab0628f31f9b558547a216d99b30743f3d69e640a8d848ad67d7b11",
-  "manifest_hash": "sha256:669c1efc07490592e39defe74f3764a60080acf591ee73450030a89360cf037b",
+  "digest": "sha256:cfb098cfb7e018d6508e63a8b5558548eb12ea770a4f7e2680c7ee2cccc29840",
+  "manifest_hash": "sha256:37e8ad9a7ca1ec32e606d91bf346e3bb32cdfa85c88ccc34e6150eebcad4b4f0",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -232,8 +232,8 @@
     },
     {
       "path": ".config/mise/config.custom.toml",
-      "sha256": "45d2206e09388fd85aeac4ae69ad4ffd86558fa4afab99dfd5e83f71ba738f52",
-      "bytes": 2799
+      "sha256": "96b587b887517f61db760a0920b7f045e5ced34a39078b9f87b08a6a7134d947",
+      "bytes": 3097
     },
     {
       "path": ".config/mise/config.github.toml",
@@ -349,11 +349,6 @@
       "path": ".vscode/settings.json",
       "sha256": "2138c595e3a0a6d3fd29316c6ffefca48444c735994fffde8e6a79d3d04e36d2",
       "bytes": 212
-    },
-    {
-      "path": "hooks/.gitkeep",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "bytes": 0
     }
   ]
 }

@@ -18,7 +18,7 @@ import (
 	"github.com/LazyGeniusMan/turutan/internal/scaffold"
 )
 
-const defaultTestAuthor = "Andriyansyah Nurrachman <git@yansyah.my.id> (https://yansyah.my.id)"
+const defaultTestAuthor = "Andriyansyah Nurrachman <turutan@yansyah.my.id> (https://yansyah.my.id)"
 
 // repoRootDir resolves the repository root from this test file location,
 // independent of the test working directory. It pins the committed
