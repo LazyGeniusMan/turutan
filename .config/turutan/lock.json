@@ -4,11 +4,11 @@
   "engine_version": "dev",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
-  "resolved_sha": "cfb098cfb7e018d6508e63a8b5558548eb12ea770a4f7e2680c7ee2cccc29840",
+  "resolved_sha": "4e04760022af4c949e344c3ea09cb2fbf90568394493580156a973034de08583",
   "registry": "fs://.tmp/dogfood",
   "uri": "fs://templates/default/releases/0.1.0.tar.gz",
-  "digest": "sha256:cfb098cfb7e018d6508e63a8b5558548eb12ea770a4f7e2680c7ee2cccc29840",
-  "manifest_hash": "sha256:37e8ad9a7ca1ec32e606d91bf346e3bb32cdfa85c88ccc34e6150eebcad4b4f0",
+  "digest": "sha256:4e04760022af4c949e344c3ea09cb2fbf90568394493580156a973034de08583",
+  "manifest_hash": "sha256:8024e0d3e2116de8c8990de98abcb4828701c97ae9cfa1bbd1449dae3aff2aed",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -39,6 +39,11 @@
       "path": ".config/ai-rulez/domains/ai/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
+    },
+    {
+      "path": ".config/ai-rulez/domains/ai/context/ai-toolchains.md",
+      "sha256": "17355c87b450671c29a7b88b9451d25852a9343b80e1662e9096ecc26601bb8a",
+      "bytes": 407
     },
     {
       "path": ".config/ai-rulez/domains/ai/rules/ai-rulez-usage.md",
@@ -86,9 +91,9 @@
       "bytes": 0
     },
     {
-      "path": ".config/ai-rulez/domains/core/context/project-toolchains.md",
-      "sha256": "a45e43e799ebfec7d1117212bcd82c39d85091bf8fc36d6f06227c8362a3aa87",
-      "bytes": 577
+      "path": ".config/ai-rulez/domains/core/context/core-toolchains.md",
+      "sha256": "f192f371388110a7bbaf7fcff19ed2e3be43e2ddfc0127f7b0c35a67bacc0ada",
+      "bytes": 481
     },
     {
       "path": ".config/ai-rulez/domains/core/rules/dev-ci-environment.md",
@@ -166,6 +171,11 @@
       "bytes": 0
     },
     {
+      "path": ".config/ai-rulez/domains/toml/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
       "path": ".config/ai-rulez/domains/yml/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
@@ -197,13 +207,13 @@
     },
     {
       "path": ".config/hk/ai.pkl",
-      "sha256": "23cfc74f79e00c37cd75c204c27c176118a067697002c01479b7e86b16c96ba3",
-      "bytes": 815
+      "sha256": "a1a0ac0b0eaf845cc3e716fc09e9fe6fddcc87631a4707044b58affa3172d6c9",
+      "bytes": 942
     },
     {
       "path": ".config/hk/core.pkl",
-      "sha256": "7f006c7b822b8a0292ab4b36b665e8f736be25b16709febfb1a93d4c534daffb",
-      "bytes": 1829
+      "sha256": "ba2bb055b936d6009a171f555d2ad762452b82e83a50895009260da122a05ba9",
+      "bytes": 1606
     },
     {
       "path": ".config/hk/custom.pkl",
@@ -212,18 +222,33 @@
     },
     {
       "path": ".config/hk/github.pkl",
-      "sha256": "87e439b2c20ea3db96986e846374c9ff0ff8d2de0d8218849f28f8180e90fda1",
-      "bytes": 702
+      "sha256": "fd8ad6b3252bee6453ec74d0357cd1693ede76c4cafa7e3e37bed96450772da6",
+      "bytes": 549
     },
     {
       "path": ".config/hk/go.pkl",
-      "sha256": "f5a8cb3256f73b337ae288e43e60129e1276bdfa6c1396d292cc58a187a40e5d",
-      "bytes": 2977
+      "sha256": "b24c5540cb20226de5efec660377b054abf3ad24345d6aad640ffcdf03ef510b",
+      "bytes": 3173
     },
     {
       "path": ".config/hk/index.pkl",
-      "sha256": "cf316044982da02439da9d409402d9a2c1c3e2df585c105ab9488b37116be5ee",
-      "bytes": 1554
+      "sha256": "d691b77ff5532335d83b73110bd5bae762e7d8d95fd1ffca8118ef08e8a7a36b",
+      "bytes": 2191
+    },
+    {
+      "path": ".config/hk/pkl.pkl",
+      "sha256": "3d9e4c9936cbce74edd880edab2f6e6f568079551faaf3de4ab623dc9460247d",
+      "bytes": 693
+    },
+    {
+      "path": ".config/hk/toml.pkl",
+      "sha256": "ce38884b2d96661ea087b3e91d2c582e2b0b283bf1d745f90a35c1952f05b089",
+      "bytes": 699
+    },
+    {
+      "path": ".config/hk/yml.pkl",
+      "sha256": "3882090207385b42ba00ce978afa13dff0a5253c1ce92c25dd4611e66933ad5f",
+      "bytes": 683
     },
     {
       "path": ".config/mise/config.ai.toml",
@@ -232,8 +257,8 @@
     },
     {
       "path": ".config/mise/config.custom.toml",
-      "sha256": "96b587b887517f61db760a0920b7f045e5ced34a39078b9f87b08a6a7134d947",
-      "bytes": 3097
+      "sha256": "488848f8caccc7a953255795aa9bf3abfe33e1927f3110cc12a33e9484e86834",
+      "bytes": 2870
     },
     {
       "path": ".config/mise/config.github.toml",
@@ -242,8 +267,8 @@
     },
     {
       "path": ".config/mise/config.go.toml",
-      "sha256": "84acf855c7c2fcd84655a936d8fc098ea21ad6c8bd562b014858897ba61e925d",
-      "bytes": 658
+      "sha256": "a18ce469da1e536e339cead882abfe39748813ecb766c5e51ee2f60ba30a0ab1",
+      "bytes": 688
     },
     {
       "path": ".config/mise/config.toml",
@@ -272,8 +297,8 @@
     },
     {
       "path": ".config/turutan/README.md",
-      "sha256": "e22e1fbceeb121290e26b105483359f7ff0c907de4e6ff869d8b8d650618a973",
-      "bytes": 3141
+      "sha256": "3878d63ab26e38bb5f5ff175d97ff67428ef154f09b4a02345dd22f658b7b7b5",
+      "bytes": 3078
     },
     {
       "path": ".config/updatecli/github-actions.yaml",
@@ -312,18 +337,18 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "760db4484057e5d4e811c5ea2e84b57d272cc0974237591f6c00c6d642e10ae9",
-      "bytes": 1289
+      "sha256": "c6aaa136017531d96fd54c74f44fef22bf96db49651c7348207d09127d38e64f",
+      "bytes": 1389
     },
     {
       "path": ".github/workflows/release.yml",
-      "sha256": "b0f00de132f581fcf2dda87abef3e9ebac60d7d9ed99ea4cdc60a2e6d6586867",
-      "bytes": 1732
+      "sha256": "3d4a3d32ca19825db5065fce5d676ba1da347e4b139cf600d06be1a655ee2263",
+      "bytes": 1885
     },
     {
       "path": ".github/workflows/scheduled.yml",
-      "sha256": "214da9a02e63c63e28c610964b60546bc699b79b13da329661ea9aa7107d4eac",
-      "bytes": 725
+      "sha256": "1f39fa7a1a94627d856047774b15064ee360f96cf1aa2f1e0ae23e147cf426ab",
+      "bytes": 793
     },
     {
       "path": ".gitignore",
@@ -342,13 +367,13 @@
     },
     {
       "path": ".vscode/extensions.json",
-      "sha256": "aaa87917842fd86b4dc72be1f73ae92f09475783b7b5bad324ff1b5b888f165c",
-      "bytes": 114
+      "sha256": "ad05cdb255dc898d38c665e433be6e949f7bbe0533f70b991499abc9a2a64754",
+      "bytes": 170
     },
     {
       "path": ".vscode/settings.json",
-      "sha256": "2138c595e3a0a6d3fd29316c6ffefca48444c735994fffde8e6a79d3d04e36d2",
-      "bytes": 212
+      "sha256": "309bc33f0f0d2460e647e7a1f9682d0a9b09b5f793a66bfe90e413384e7535b6",
+      "bytes": 211
     }
   ]
 }

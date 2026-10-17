@@ -93,6 +93,8 @@
           "rust",
           "rust-polygot",
           "typescript",
+          "astro",
+          "svelte",
           "typst"
         ],
         "type": "string"

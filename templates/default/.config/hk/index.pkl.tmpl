@@ -1,10 +1,10 @@
-amends "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl"
 
-import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
 {{ if contains .profiles "ai" }}
 import "./ai.pkl" as ai
 {{- end }}
-{{ if contains .profiles "astro" }}
+{{- if contains .profiles "astro" }}
 import "./astro.pkl" as astro
 {{- end }}
 {{- if contains .profiles "c" }}
@@ -45,6 +45,7 @@ import "./kubernetes.pkl" as kubernetes
 {{- if contains .profiles "php" }}
 import "./php.pkl" as php
 {{- end }}
+import "./pkl.pkl" as pkl
 {{- if contains .profiles "python" }}
 import "./python.pkl" as python
 {{- end }}
@@ -60,28 +61,31 @@ import "./rust-polygot.pkl" as rustPolygot
 {{- if contains .profiles "rust" }}
 import "./rust.pkl" as rust
 {{- end }}
-{{ if contains .profiles "svelte" }}
+{{- if contains .profiles "svelte" }}
 import "./svelte.pkl" as svelte
 {{- end }}
+import "./toml.pkl" as toml
 {{- if contains .profiles "typescript" }}
 import "./typescript.pkl" as typescript
 {{- end }}
 {{- if contains .profiles "typst" }}
 import "./typst.pkl" as typst
 {{- end }}
+{{- if or (contains .profiles "go") (contains .profiles "docker") (contains .profiles "github") (contains .profiles "kubernetes") }}
+import "./yml.pkl" as yml
+{{- end }}
 
 hooks {
   ["check"] {
     steps {
       ...core.pre_commit
+      ...toml.pre_commit
+      ...pkl.pre_commit
+{{- if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "go") (contains .profiles "kubernetes") }}
+      ...yml.pre_commit
+{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_commit
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_commit
-{{- end }}
-{{- if contains .profiles "github" }}
-      ...github.pre_commit
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_commit
@@ -101,8 +105,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_commit
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_commit
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_commit
@@ -141,11 +151,11 @@ hooks {
       ...typst.pre_commit
 {{- end }}
       ...custom.pre_commit
+      ...core.pre_push_ci
+      ...toml.pre_push_ci
+      ...pkl.pre_push_ci
 {{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_push_ci
@@ -165,8 +175,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_push_ci
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_push_ci
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push_ci
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_push_ci
@@ -210,14 +226,13 @@ hooks {
   ["fix"] {
     steps {
       ...core.pre_commit
+      ...toml.pre_commit
+      ...pkl.pre_commit
+{{- if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "go") (contains .profiles "kubernetes") }}
+      ...yml.pre_commit
+{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_commit
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_commit
-{{- end }}
-{{- if contains .profiles "github" }}
-      ...github.pre_commit
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_commit
@@ -237,8 +252,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_commit
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_commit
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_commit
@@ -277,11 +298,14 @@ hooks {
       ...typst.pre_commit
 {{- end }}
       ...custom.pre_commit
+      ...core.pre_push_ci
+      ...toml.pre_push_ci
+      ...pkl.pre_push_ci
+{{- if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "go") (contains .profiles "kubernetes") }}
+      ...yml.pre_push_ci
+{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_push_ci
@@ -301,8 +325,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_push_ci
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_push_ci
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push_ci
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_push_ci
@@ -354,14 +384,13 @@ hooks {
     stash = "git"
     steps {
       ...core.pre_commit
+      ...toml.pre_commit
+      ...pkl.pre_commit
+{{- if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "go") (contains .profiles "kubernetes") }}
+      ...yml.pre_commit
+{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_commit
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_commit
-{{- end }}
-{{- if contains .profiles "github" }}
-      ...github.pre_commit
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_commit
@@ -381,8 +410,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_commit
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_commit
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_commit
@@ -426,11 +461,13 @@ hooks {
   ["pre-push"] {
     steps {
       ...core.pre_push
+      ...toml.pre_push
+      ...pkl.pre_push
+{{- if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "go") (contains .profiles "kubernetes") }}
+      ...yml.pre_commit
+{{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_push
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_push
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_push
@@ -450,8 +487,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_push
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_push
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_push
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_push

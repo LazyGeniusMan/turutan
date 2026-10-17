@@ -2,6 +2,7 @@
     "recommendations": [
         "tombi-toml.tombi",
         "hverlin.mise-vscode"{{ if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "gitlab") (contains .profiles "kubernetes") }},
+        "redhat.vscode-yaml",
         "owenlamont.ryl"{{ end }}{{ if contains .profiles "go" }},
         "golang.go"{{ end }}{{ if contains .profiles "python" }},
         "charliermarsh.ruff",

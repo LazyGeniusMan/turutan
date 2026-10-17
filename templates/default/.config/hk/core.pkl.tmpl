@@ -1,0 +1,52 @@
+module hk.Core
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["newlines"] = (Builtins.newlines) {
+    profile_condition = "profile('core')"
+  }
+  ["mixed-line-ending"] = (Builtins.mixed_line_ending) {
+    profile_condition = "profile('core')"
+    depends = "newlines"
+  }
+  ["mise"] = (Builtins.mise) {
+    profile_condition = "profile('core')"
+    depends = "tombi"
+  }
+  ["betterleaks"] = (Builtins.betterleaks) {
+    profile_condition = "profile('core')"
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+  }
+  ["detect-private-key"] = (Builtins.detect_private_key) {
+    profile_condition = "profile('core')"
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+  }
+  ["fnox-scan"] {
+    profile_condition = "profile('core')"
+    check = "fnox scan"
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+  }
+  ["fnox-check"] {
+    profile_condition = "profile('core')"
+    glob = ".config/fnox.toml"
+    check = "fnox check"
+    depends = "tombi"
+  }
+  ["updatecli-validate"] {
+    profile_condition = "profile('core')"
+    glob = List(".config/updatecli/*.yaml", ".config/updatecli/*.yml")
+    batch = true
+    check = "updatecli manifest show --config .config/updatecli/"
+    depends = "ryl"
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["no-commit-to-branch"] = (Builtins.no_commit_to_branch) {
+    profile_condition = "profile('core')"
+  }
+}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

@@ -1,0 +1,20 @@
+module hk.Typescript
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["typstyle"] = (Builtins.typstyle) {
+    profile_condition = "profile('typst')"
+    check = "ryl check {{ `{{files}}` }}"
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+  }
+  ["tinymist"] = (Builtins.tinymist) {
+    profile_condition = "profile('typst')"
+    depends = "typstyle"
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

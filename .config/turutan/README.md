@@ -26,7 +26,7 @@ Available profiles are:
 
 * `ai` (enabled)
 
-    [`ai-rulez`](https://github.com/Goldziher/ai-rulez) as centralized AI Agents configuration, rules, skill, and mcp manager; [`basemind`](https://github.com/Goldziher/basemind) as codebase context indexer; [`uncomment`](https://github.com/Goldziher/uncomment) as codebase comments removal. [`pi`](https://pi.dev) and [T3 Code](https://t3.codes) Web UI is preconfigured as AI Agent; add other AI Agents by adding it to [`.config/mise/config.ai.toml`](.config/mise/config.ai.toml).
+    [`ai-rulez`](https://github.com/Goldziher/ai-rulez) as centralized AI Agents configuration, rules, skill, and mcp manager; [`basemind`](https://github.com/Goldziher/basemind) as codebase context indexer; [`uncomment`](https://github.com/Goldziher/uncomment) as codebase comments removal.
 
 ### Programming Languages
 
@@ -85,6 +85,16 @@ Available profiles are:
 * `typst`
 
     Typst standard toolchains.
+
+### Frameworks
+
+* `astro`
+
+    [Astro](https://astro.build) Framework
+
+* `svelte`
+
+    [Svelte](https://svelte.dev) Framework
 
 ### Platforms
 

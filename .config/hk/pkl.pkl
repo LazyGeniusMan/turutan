@@ -1,0 +1,20 @@
+module hk.Core
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["pkl-format"] = (Builtins.pkl_format) {
+    profile_condition = "profile('core')"
+    depends = "uncomment"
+  }
+  ["pkl"] = (Builtins.pkl) {
+    profile_condition = "profile('core')"
+    exclude = List("templates/**/hk.pkl")
+    depends = "pkl-format"
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

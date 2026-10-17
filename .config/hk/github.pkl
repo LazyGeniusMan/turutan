@@ -1,17 +1,11 @@
 module hk.Github
 
-import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl" as Config
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
 
 pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
-  ["ryl"] = (Builtins.ryl) {
-    profiles = List("github")
-    check = "ryl check {{files}}"
-    exclude = List(".config/mise/locks/**")
-    depends = "uncomment"
-  }
   ["jactionlint"] = (Builtins.jactionlint) {
-    profiles = List("github")
+    profile_condition = "profile('github')"
     depends = "ryl"
   }
 }
