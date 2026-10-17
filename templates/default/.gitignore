@@ -1,6 +1,0 @@
-.config/turutan/templates/
-.config/ai-rulez.bak*
-**.local.*
-.env*
-!.env.example
-.tmp/

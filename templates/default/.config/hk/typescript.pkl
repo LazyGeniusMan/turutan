@@ -5,7 +5,12 @@ import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pk
 
 // Fill with typescript steps as needed; empty mappings merge into every hook automatically.
 // Keep `profiles = List("typescript")` gates on steps.
-pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["vp-check"] = (Builtins.vp_check) {
+    profiles = List("typescript")
+    depends = "uncomment"
+  }
+}
 
 pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
 

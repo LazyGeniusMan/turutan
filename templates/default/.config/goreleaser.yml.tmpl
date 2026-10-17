@@ -1,20 +1,20 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 version: 2
-project_name: turutan
+project_name: {{.project_name}}
 builds:
-  - id: turutan
-    binary: turutan
-    main: ./cmd/turutan
+  - id: {{.project_name}}
+    binary: {{.project_name}}
+    main: ./cmd/{{.project_name}}
     env:
       - CGO_ENABLED=0
     flags:
       - -trimpath
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X main.version={{ `{{.Version}}` }}
+      - -X main.commit={{ `{{.Commit}}` }}
+      - -X main.date={{ `{{.Date}}` }}
     goos:
       - linux
       - darwin
@@ -23,7 +23,7 @@ builds:
       - amd64
       - arm64
 archives:
-  - id: turutan
+  - id: {{.project_name}}
     formats:
       - tar.gz
     format_overrides:
@@ -38,7 +38,7 @@ checksum:
 sboms:
   - artifacts: archive
 snapshot:
-  version_template: "{{ .Tag }}-next"
+  version_template: "{{ `{{ .Tag }}` }}-next"
 release:
   header: >-
     CLI: Apache-2.0; default template: MIT-0; generated projects: MIT-0 or user

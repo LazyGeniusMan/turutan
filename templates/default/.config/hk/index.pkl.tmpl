@@ -4,6 +4,9 @@ import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.
 {{ if contains .profiles "ai" }}
 import "./ai.pkl" as ai
 {{- end }}
+{{ if contains .profiles "astro" }}
+import "./astro.pkl" as astro
+{{- end }}
 {{- if contains .profiles "c" }}
 import "./c.pkl" as c
 {{- end }}
@@ -56,6 +59,9 @@ import "./rust-polygot.pkl" as rustPolygot
 {{- end }}
 {{- if contains .profiles "rust" }}
 import "./rust.pkl" as rust
+{{- end }}
+{{ if contains .profiles "svelte" }}
+import "./svelte.pkl" as svelte
 {{- end }}
 {{- if contains .profiles "typescript" }}
 import "./typescript.pkl" as typescript
@@ -125,6 +131,12 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_commit
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_commit
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
@@ -182,6 +194,12 @@ hooks {
 {{- end }}
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_push_ci
+{{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_push_ci
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_push_ci
 {{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
@@ -249,6 +267,12 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_commit
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_commit
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
@@ -306,6 +330,12 @@ hooks {
 {{- end }}
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_push_ci
+{{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_push_ci
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_push_ci
 {{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
@@ -381,6 +411,12 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_commit
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_commit
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
@@ -444,6 +480,12 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_push
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_push
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_push
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_push
 {{- end }}
@@ -454,7 +496,7 @@ hooks {
     steps {
       ["mise-install"] {
         step_condition = "is_branch_checkout"
-        check = "mise install"
+        check = "mise install --locked"
       }
       ["mise-dev-setup"] {
         depends = "mise-install"

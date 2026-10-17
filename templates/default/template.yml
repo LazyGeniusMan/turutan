@@ -16,9 +16,9 @@ includes:
     - .config/miserc.toml.tmpl
     - .config/tombi.toml
     - .config/updatecli/mise-core.yaml
-    - .gitignore
+    - .gitignore.tmpl
     - .vscode/extensions.json.tmpl
-    - .vscode/settings.json
+    - .vscode/settings.json.tmpl
     - LICENSE
     - README.md.tmpl
 excludes: []
@@ -61,6 +61,8 @@ inputs:
             - rust
             - rust-polygot
             - typescript
+            - astro
+            - svelte
             - typst
         default: []
         help: Feature sets enabled per project
@@ -202,7 +204,7 @@ conditionals:
       includes:
           - .golangci.yml
           - .config/golangci-lint/**
-          - .config/goreleaser.yml
+          - .config/goreleaser.yml.tmpl
           - .config/mise/config.go.toml
           - .config/updatecli/go-version.yaml
           - .config/updatecli/mise-go.yaml
@@ -261,6 +263,18 @@ conditionals:
       includes:
           - .config/mise/config.typescript.toml
           - .config/hk/typescript.pkl
+      excludes: []
+      preserves: []
+    - if: '{{contains .profiles "astro"}}'
+      includes:
+          - .config/mise/config.astro.toml
+          - .config/hk/astro.pkl
+      excludes: []
+      preserves: []
+    - if: '{{contains .profiles "svelte"}}'
+      includes:
+          - .config/mise/config.svelte.toml
+          - .config/hk/svelte.pkl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "typst"}}'
@@ -379,6 +393,18 @@ conditionals:
       includes:
           - .config/ai-rulez/config.typescript.toml
           - .config/ai-rulez/domains/typescript/**
+      excludes: []
+      preserves: []
+    - if: '{{and (contains .profiles "ai") (contains .profiles "astro")}}'
+      includes:
+          - .config/ai-rulez/config.astro.toml
+          - .config/ai-rulez/domains/astro/**
+      excludes: []
+      preserves: []
+    - if: '{{and (contains .profiles "ai") (contains .profiles "svelte")}}'
+      includes:
+          - .config/ai-rulez/config.svelte.toml
+          - .config/ai-rulez/domains/svelte/**
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "typst")}}'

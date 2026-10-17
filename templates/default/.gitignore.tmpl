@@ -1,0 +1,19 @@
+# turutan
+.config/turutan/templates/
+
+# core
+**.local.*
+.env*
+!.env.example
+*.log*
+.tmp/
+
+{{ if contains .profiles "ai" }}
+# ai
+.config/ai-rulez.bak*
+{{ end }}
+
+{{ if contains .profiles "typescript" }}
+# typescript
+node_modules
+{{ end }}
