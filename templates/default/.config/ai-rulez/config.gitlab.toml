@@ -6,4 +6,5 @@ name = "gitlab"
 source = "https://gitlab.com/gitlab-org/ai/skills"
 trust = "warn"
 include = ["glab"]
+resources = ["*"]
 domain = "gitlab"

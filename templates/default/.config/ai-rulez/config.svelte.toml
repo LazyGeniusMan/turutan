@@ -7,6 +7,7 @@ source = "https://github.com/sveltejs/ai-tools"
 path = "tools/skills"
 trust = "warn"
 include = ["*"]
+resources = ["*"]
 domain = "svelte"
 
 [[mcp_servers]]

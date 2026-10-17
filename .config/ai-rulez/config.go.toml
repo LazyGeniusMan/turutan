@@ -9,4 +9,5 @@ name = "golang"
 source = "https://github.com/samber/cc-skills-golang"
 trust = "warn"
 include = ["golang-*"]
+resources = ["*"]
 domain = "go"

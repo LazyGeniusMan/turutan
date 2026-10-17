@@ -5,7 +5,8 @@ cloudflare = ["cloudflare"]
 name = "cloudflare"
 source = "https://github.com/cloudflare/skills"
 trust = "warn"
-include = ["cloudflare", "workers-best-practices"]
+include = ["*"]
+resources = ["*"]
 domain = "cloudflare"
 
 [[mcp_servers]]

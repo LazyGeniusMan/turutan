@@ -118,8 +118,8 @@ backend = "npm:@earendil-works/pi-coding-agent"
 specifiers = ["1"]
 
 [[tools."npm:@opencode/cli"]]
-version = "2.0.30"
-aube = { path = "locks/mise.custom/npm-opencode-cli/2.0.30", digest = "sha256:236232c44634a4b9c255860800499a38bcd3e9d2e994313bcc65a4cb60b9d45c" }
+version = "2.0.32"
+aube = { path = "locks/mise.custom/npm-opencode-cli/2.0.32", digest = "sha256:1d53710ca0ba6bede240bd9f7d0c32d6fae76ecdf53f8bc9b15dbf9e9a6fadd0" }
 backend = "npm:@opencode/cli"
 specifiers = ["2"]
 
