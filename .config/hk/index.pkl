@@ -76,7 +76,7 @@ hooks {
       ...core.pre_push
       ...toml.pre_push
       ...pkl.pre_push
-      ...yml.pre_commit
+      ...yml.pre_push
       ...ai.pre_push
       ...github.pre_push
       ...go.pre_push

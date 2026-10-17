@@ -464,7 +464,7 @@ hooks {
       ...toml.pre_push
       ...pkl.pre_push
 {{- if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "go") (contains .profiles "kubernetes") }}
-      ...yml.pre_commit
+      ...yml.pre_push
 {{- end }}
 {{- if contains .profiles "ai" }}
       ...ai.pre_push
