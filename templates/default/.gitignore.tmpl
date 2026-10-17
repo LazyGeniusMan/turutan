@@ -7,13 +7,12 @@
 !.env.example
 *.log*
 .tmp/
-
 {{ if contains .profiles "ai" }}
 # ai
 .config/ai-rulez.bak*
-{{ end }}
+{{ end -}}
 
-{{ if contains .profiles "typescript" }}
+{{- if contains .profiles "typescript" }}
 # typescript
 node_modules
-{{ end }}
+{{ end -}}
