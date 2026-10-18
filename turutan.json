@@ -7,15 +7,16 @@
   "templates": [
     {
       "name": "default",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": "Andriyansyah Nurrachman <turutan@yansyah.my.id> (https://yansyah.my.id)",
-      "uri": "oci://ghcr.io/lazygeniusman/turutan/templates/default:0.1.0",
+      "uri": "oci://ghcr.io/lazygeniusman/turutan/templates/default:0.2.0",
       "releases": [
+        "0.2.0",
         "0.1.0"
       ],
-      "digest": "sha256:a0051314114e97a17c1811e532738b5a62f2abc4cd5529df68e2ce3de075931b",
+      "digest": "sha256:32b6f64f7a96d665424b2a62bc61d4abf161dca0ce2ca1f5f7a02d0f82317f3f",
       "engine_version": "dev",
-      "manifestHash": "sha256:91193c07dce254b5ca29d8eda3398eba4c7189c05db9f38047fe62a9d097d00c",
+      "manifestHash": "sha256:aba5fa82b359fcd38ba3a13ca88b5c9f0ed660f9231d4d4f7bf6d247fda4f314",
       "license": "MIT-0"
     }
   ]

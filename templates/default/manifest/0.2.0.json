@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "$schema": "../../../.config/turutan/schemas/template-manifest.schema.json",
+  "name": "default",
+  "version": "0.2.0",
+  "author": "Andriyansyah Nurrachman <turutan@yansyah.my.id> (https://yansyah.my.id)",
+  "uri": "oci://ghcr.io/lazygeniusman/turutan/templates/default:0.2.0",
+  "digest": "sha256:32b6f64f7a96d665424b2a62bc61d4abf161dca0ce2ca1f5f7a02d0f82317f3f",
+  "engine_version": "dev",
+  "manifestHash": "sha256:aba5fa82b359fcd38ba3a13ca88b5c9f0ed660f9231d4d4f7bf6d247fda4f314",
+  "license": "MIT-0"
+}
