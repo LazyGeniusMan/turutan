@@ -4,11 +4,11 @@
   "engine_version": "dev",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
-  "resolved_sha": "3ca672afde1fc761500d75ae75d16b889652eadc87f0cd844b32552bdfce4f28",
+  "resolved_sha": "9618590dbe6c4aeee2606d17b00cbdf9ed78a75a1b94f7dcdc7de2706de088d2",
   "registry": "fs://.tmp/dogfood",
   "uri": "fs://templates/default/releases/0.1.0.tar.gz",
-  "digest": "sha256:3ca672afde1fc761500d75ae75d16b889652eadc87f0cd844b32552bdfce4f28",
-  "manifest_hash": "sha256:1acef216b86f9efcbcc5ff4a86ed6762df9db7a12d23a3ff6b16f607b4987fa2",
+  "digest": "sha256:9618590dbe6c4aeee2606d17b00cbdf9ed78a75a1b94f7dcdc7de2706de088d2",
+  "manifest_hash": "sha256:c45f0dd51da310b179d546e22aee0cbe89ecb7130450fde4fea496189561d118",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -32,8 +32,8 @@
     },
     {
       "path": ".config/ai-rulez/config.toml",
-      "sha256": "8ae260306c328c1dcdbc1bcbc046b1d7677e4ab832d47fb9e4a18aa2fbccf09e",
-      "bytes": 1879
+      "sha256": "ca605157c7d5383df731f753b31fa9e20b909fdf6418b796b1f700c764ca2593",
+      "bytes": 1907
     },
     {
       "path": ".config/ai-rulez/domains/ai/.gitkeep",
@@ -171,6 +171,11 @@
       "bytes": 0
     },
     {
+      "path": ".config/ai-rulez/domains/sh/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
       "path": ".config/ai-rulez/domains/toml/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
@@ -182,8 +187,8 @@
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards.sh",
-      "sha256": "4422951819d192e8965e91234256b72af851d7e6074794af298da1b2b640ebb0",
-      "bytes": 2150
+      "sha256": "a99cfee264ba42b42c6a09ce500885585f345ee9959b7171fa0653d6d55e6e11",
+      "bytes": 2119
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards/custom.sh",
@@ -204,6 +209,21 @@
       "path": ".config/ai-rulez/scripts/bash-guards/index.sh",
       "sha256": "723796e00563120939b352caa1a6805340909b04247a3e5538d9ab39cf9fc5fc",
       "bytes": 305
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/pkl.sh",
+      "sha256": "453f9f2a4ebb9237c02ad2fe5c4ea1ac870337a0c555bb5e9858a1cf661baf56",
+      "bytes": 243
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/sh.sh",
+      "sha256": "453f9f2a4ebb9237c02ad2fe5c4ea1ac870337a0c555bb5e9858a1cf661baf56",
+      "bytes": 243
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/toml.sh",
+      "sha256": "453f9f2a4ebb9237c02ad2fe5c4ea1ac870337a0c555bb5e9858a1cf661baf56",
+      "bytes": 243
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards/yml.sh",
@@ -237,13 +257,13 @@
     },
     {
       "path": ".config/hk/ai.pkl",
-      "sha256": "a1a0ac0b0eaf845cc3e716fc09e9fe6fddcc87631a4707044b58affa3172d6c9",
-      "bytes": 942
+      "sha256": "af4c12ff2157d7e4aafe723598f6a07e235bbbba4fb16263855b8df3b1f7f90f",
+      "bytes": 933
     },
     {
       "path": ".config/hk/core.pkl",
-      "sha256": "ba2bb055b936d6009a171f555d2ad762452b82e83a50895009260da122a05ba9",
-      "bytes": 1606
+      "sha256": "ac1597ae4e86ce59a2e581c70d2e652bd031f881237497e28fddacaf89adafed",
+      "bytes": 2882
     },
     {
       "path": ".config/hk/custom.pkl",
@@ -262,13 +282,18 @@
     },
     {
       "path": ".config/hk/index.pkl",
-      "sha256": "56630cf3d30ad300fdceb3075bc7356e5edbb56f1bdc50c3525d8f89b8e3ff8b",
-      "bytes": 2189
+      "sha256": "9125df0e67f9b321def6620c7e224c06616a2195aef651127d832f65e618b510",
+      "bytes": 2351
     },
     {
       "path": ".config/hk/pkl.pkl",
       "sha256": "3d9e4c9936cbce74edd880edab2f6e6f568079551faaf3de4ab623dc9460247d",
       "bytes": 693
+    },
+    {
+      "path": ".config/hk/sh.pkl",
+      "sha256": "50dc6c6e98d5c0572e31f3a4825214a4aa03c10b34217ade0215e1331b95f6c6",
+      "bytes": 1230
     },
     {
       "path": ".config/hk/toml.pkl",
@@ -302,8 +327,8 @@
     },
     {
       "path": ".config/mise/config.toml",
-      "sha256": "bbd18ca043ddfc4fea83feefd7de0cd89700b6d2f6d12b8c70c4fde853b415f5",
-      "bytes": 2546
+      "sha256": "04017515326266351c7c2b4a3c12b995ed469f4250524af861c2cf17a8a40a29",
+      "bytes": 2582
     },
     {
       "path": ".config/miserc.toml",

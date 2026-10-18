@@ -6,7 +6,7 @@ import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pk
 pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["vp-check"] = (Builtins.vp_check) {
     profile_condition = "profile('typescript')"
-    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"newlines"{{ end }}
   }
 }
 

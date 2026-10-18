@@ -9,7 +9,7 @@ pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
     glob = List("**")
     check = "uncomment --check {{files}}"
     fix = "uncomment {{files}}"
-    depends = "mixed-line-ending"
+    depends = "newlines"
   }
 }
 

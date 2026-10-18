@@ -8,7 +8,7 @@ presets = [{{ range $i, $p := .ai_agents }}{{ if $i }}, {{ end }}"{{ $p }}"{{ en
 agents_md = true
 
 [profiles]
-core = ["core"]
+core = ["core", "pkl", "sh", "toml", "yml"]
 
 [header]
 text = """

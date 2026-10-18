@@ -6,7 +6,7 @@ import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pk
 pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["golangci-lint-fmt"] = (Builtins.golangci_lint_fmt) {
     profile_condition = "profile('go')"
-    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"newlines"{{ end }}
     check_diff = "golangci-lint fmt --config .config/golangci-lint/.golangci.yml --diff {{ `{{files}}` }}"
     fix = "golangci-lint fmt --config .config/golangci-lint/.golangci.yml {{ `{{files}}` }}"
   }

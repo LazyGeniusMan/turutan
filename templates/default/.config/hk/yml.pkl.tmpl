@@ -9,7 +9,7 @@ pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
       "profile('docker') or profile('github') or profile('go') or profile('kubernetes')"
     check = "ryl check {{ `{{files}}` }}"
     exclude = List(".config/mise/locks/**")
-    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"newlines"{{ end }}
   }
 }
 

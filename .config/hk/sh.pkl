@@ -1,0 +1,34 @@
+module hk.Sh
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["check-executables-have-shebangs"] = (Builtins.check_executables_have_shebangs) {
+    profile_condition = "profile('core')"
+    depends = "uncomment"
+  }
+  ["check-shebang-scripts-are-executable"] = (Builtins.check_shebang_scripts_are_executable) {
+    profile_condition = "profile('core')"
+    depends = "check-executables-have-shebangs"
+  }
+  ["shellharden"] = (Builtins.shellharden) {
+    profile_condition = "profile('core')"
+    exclude = List("**.tmpl")
+    depends = "check-shebang-scripts-are-executable"
+  }
+  ["shfmt"] = (Builtins.shfmt) {
+    profile_condition = "profile('core')"
+    exclude = List("**.tmpl")
+    depends = "shellharden"
+  }
+  ["shellcheck"] = (Builtins.shellcheck) {
+    profile_condition = "profile('core')"
+    exclude = List("**.tmpl")
+    depends = "shfmt"
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

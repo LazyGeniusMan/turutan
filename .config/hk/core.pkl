@@ -4,12 +4,51 @@ import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.
 import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
 
 pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
-  ["newlines"] = (Builtins.newlines) {
+  ["check-added-large-files"] = (Builtins.check_added_large_files) {
     profile_condition = "profile('core')"
+  }
+  ["check-case-conflict"] = (Builtins.check_case_conflict) {
+    profile_condition = "profile('core')"
+  }
+  ["check-symlinks"] = (Builtins.check_symlinks) {
+    profile_condition = "profile('core')"
+  }
+  ["destroyed-symlinks"] = (Builtins.destroyed_symlinks) {
+    profile_condition = "profile('core')"
+  }
+  ["forbid-submodules"] = (Builtins.forbid_submodules) {
+    profile_condition = "profile('core')"
+  }
+  ["check-merge-conflict"] = (Builtins.check_merge_conflict) {
+    profile_condition = "profile('core')"
+  }
+  ["byte-order-marker"] = (Builtins.byte_order_marker) {
+    profile_condition = "profile('core')"
+    depends =
+      List(
+        "check-added-large-files",
+        "check-case-conflict",
+        "check-symlinks",
+        "destroyed-symlinks",
+        "forbid-submodules",
+        "check-merge-conflict",
+      )
+  }
+  ["fix-smart-quotes"] = (Builtins.fix_smart_quotes) {
+    profile_condition = "profile('core')"
+    depends = "byte-order-marker"
   }
   ["mixed-line-ending"] = (Builtins.mixed_line_ending) {
     profile_condition = "profile('core')"
-    depends = "newlines"
+    depends = "fix-smart-quotes"
+  }
+  ["trailing-whitespace"] = (Builtins.trailing_whitespace) {
+    profile_condition = "profile('core')"
+    depends = "mixed-line-ending"
+  }
+  ["newlines"] = (Builtins.newlines) {
+    profile_condition = "profile('core')"
+    depends = "trailing-whitespace"
   }
   ["mise"] = (Builtins.mise) {
     profile_condition = "profile('core')"

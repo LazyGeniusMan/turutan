@@ -7,7 +7,7 @@ pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["typstyle"] = (Builtins.typstyle) {
     profile_condition = "profile('typst')"
     check = "ryl check {{ `{{files}}` }}"
-    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"mixed-line-ending"{{ end }}
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"newlines"{{ end }}
   }
   ["tinymist"] = (Builtins.tinymist) {
     profile_condition = "profile('typst')"

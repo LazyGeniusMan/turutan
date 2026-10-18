@@ -14,9 +14,11 @@ PITCHFORK_WEB_PORT = 3120
 betterleaks = "1"
 fnox = "1"
 hk = "2"
-syft = "1"
 pitchfork = "2"
 pkl = "0"
+shellcheck = "0"
+shellharden = "4"
+shfmt = "3"
 tombi = "1"
 updatecli = "0"
 

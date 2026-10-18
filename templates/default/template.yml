@@ -10,6 +10,7 @@ includes:
     - .config/hk/core.pkl.tmpl
     - .config/hk/custom.pkl
     - .config/hk/pkl.pkl.tmpl
+    - .config/hk/sh.pkl.tmpl
     - .config/hk/toml.pkl.tmpl
     - .config/hk/yml.pkl.tmpl
     - .config/hk/index.pkl.tmpl
@@ -17,6 +18,7 @@ includes:
     - .config/mise/config.custom.toml
     - .config/mise/config.toml
     - .config/miserc.toml.tmpl
+    - .config/ryl.toml
     - .config/tombi.toml.tmpl
     - .config/updatecli/mise-core.yaml
     - .gitignore.tmpl
@@ -141,8 +143,14 @@ conditionals:
           - .config/ai-rulez/domains/core/**
           - .config/ai-rulez/domains/ai/**
           - .config/ai-rulez/domains/pkl/**
+          - .config/ai-rulez/domains/sh/**
           - .config/ai-rulez/domains/toml/**
+          - .config/ai-rulez/domains/yml/**
           - .config/ai-rulez/scripts/bash-guards/index.sh.tmpl
+          - .config/ai-rulez/scripts/bash-guards/pkl.sh
+          - .config/ai-rulez/scripts/bash-guards/sh.sh
+          - .config/ai-rulez/scripts/bash-guards/toml.sh
+          - .config/ai-rulez/scripts/bash-guards/yml.sh
           - .config/ai-rulez/scripts/bash-guards.sh
           - .config/basemind/**
           - .uncomment.toml
@@ -182,8 +190,6 @@ conditionals:
       includes:
           - .config/mise/config.docker.toml
           - .config/hk/docker.pkl.tmpl
-          - .config/hk/yml.pkl.tmpl
-          - .config/ryl.toml
       excludes: []
       preserves: []
     - if: '{{contains .profiles "elixir"}}'
@@ -194,14 +200,11 @@ conditionals:
       preserves: []
     - if: '{{contains .profiles "github"}}'
       includes:
-          - .github/**
-          - .github/jactionlint.yaml
+          - .config/hk/github.pkl.tmpl
           - .config/mise/config.github.toml
-          - .config/ryl.toml
           - .config/updatecli/github-actions.yaml
           - .config/updatecli/mise-github.yaml
-          - .config/hk/github.pkl.tmpl
-          - .config/hk/yml.pkl.tmpl
+          - .github/**
       excludes: []
       preserves: []
     - if: '{{contains .profiles "gitlab"}}'
@@ -212,15 +215,13 @@ conditionals:
       preserves: []
     - if: '{{contains .profiles "go"}}'
       includes:
-          - .golangci.yml
           - .config/golangci-lint/**
           - .config/goreleaser.yml.tmpl
+          - .config/hk/go.pkl.tmpl
           - .config/mise/config.go.toml
           - .config/updatecli/go-version.yaml
           - .config/updatecli/mise-go.yaml
-          - .config/hk/go.pkl.tmpl
-          - .config/hk/yml.pkl.tmpl
-          - .config/ryl.toml
+          - .golangci.yml
       excludes: []
       preserves: []
     - if: '{{contains .profiles "java"}}'
@@ -233,8 +234,6 @@ conditionals:
       includes:
           - .config/mise/config.kubernetes.toml
           - .config/hk/kubernetes.pkl.tmpl
-          - .config/hk/yml.pkl.tmpl
-          - .config/ryl.toml
       excludes: []
       preserves: []
     - if: '{{contains .profiles "php"}}'
@@ -329,9 +328,7 @@ conditionals:
       includes:
           - .config/ai-rulez/config.docker.toml
           - .config/ai-rulez/domains/docker/**
-          - .config/ai-rulez/domains/yml/**
           - .config/ai-rulez/scripts/bash-guards/docker.sh
-          - .config/ai-rulez/scripts/bash-guards/yml.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "elixir")}}'
@@ -345,9 +342,7 @@ conditionals:
       includes:
           - .config/ai-rulez/config.github.toml
           - .config/ai-rulez/domains/github/**
-          - .config/ai-rulez/domains/yml/**
           - .config/ai-rulez/scripts/bash-guards/github.sh
-          - .config/ai-rulez/scripts/bash-guards/yml.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "gitlab")}}'
@@ -361,9 +356,7 @@ conditionals:
       includes:
           - .config/ai-rulez/config.go.toml
           - .config/ai-rulez/domains/go/**
-          - .config/ai-rulez/domains/yml/**
           - .config/ai-rulez/scripts/bash-guards/go.sh
-          - .config/ai-rulez/scripts/bash-guards/yml.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "java")}}'
@@ -377,9 +370,7 @@ conditionals:
       includes:
           - .config/ai-rulez/config.kubernetes.toml
           - .config/ai-rulez/domains/kubernetes/**
-          - .config/ai-rulez/domains/yml/**
           - .config/ai-rulez/scripts/bash-guards/kubernetes.sh
-          - .config/ai-rulez/scripts/bash-guards/yaml.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "php")}}'
