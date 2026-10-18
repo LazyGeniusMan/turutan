@@ -121,7 +121,7 @@ Available profiles are:
 ```sh
 mise trust && mise install
 ```
-2. Setup global provider to store remote secret provider PAT, for example 
+2. Setup global provider to store remote secret provider PAT, for example
 ```sh
 fnox provider add global keychain -g # or `fnox provider add global plain -g` if os keychain is not available (insecure)
 fnox set PROTON_PASS_PERSONAL_ACCESS_TOKEN --provider global -g

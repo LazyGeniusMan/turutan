@@ -4,11 +4,11 @@
   "engine_version": "dev",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
-  "resolved_sha": "9618590dbe6c4aeee2606d17b00cbdf9ed78a75a1b94f7dcdc7de2706de088d2",
+  "resolved_sha": "32b6f64f7a96d665424b2a62bc61d4abf161dca0ce2ca1f5f7a02d0f82317f3f",
   "registry": "fs://.tmp/dogfood",
   "uri": "fs://templates/default/releases/0.1.0.tar.gz",
-  "digest": "sha256:9618590dbe6c4aeee2606d17b00cbdf9ed78a75a1b94f7dcdc7de2706de088d2",
-  "manifest_hash": "sha256:c45f0dd51da310b179d546e22aee0cbe89ecb7130450fde4fea496189561d118",
+  "digest": "sha256:32b6f64f7a96d665424b2a62bc61d4abf161dca0ce2ca1f5f7a02d0f82317f3f",
+  "manifest_hash": "sha256:aabe0ce26e0aaca4a7343af535fdc089eacbfa30ae597ceddde0a3bde7f9f8a5",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -187,8 +187,8 @@
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards.sh",
-      "sha256": "a99cfee264ba42b42c6a09ce500885585f345ee9959b7171fa0653d6d55e6e11",
-      "bytes": 2119
+      "sha256": "1ffc5774d86feb76fd703cb5fb1748ae94942d6fb1fe4f32c3c352ead264b636",
+      "bytes": 2238
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards/custom.sh",
@@ -207,8 +207,8 @@
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards/index.sh",
-      "sha256": "723796e00563120939b352caa1a6805340909b04247a3e5538d9ab39cf9fc5fc",
-      "bytes": 305
+      "sha256": "80bba41b7c0f3b3d3d14da2593e6dbb2b21fd49057cc25aaf6599d86a4e0d869",
+      "bytes": 426
     },
     {
       "path": ".config/ai-rulez/scripts/bash-guards/pkl.sh",
@@ -282,8 +282,8 @@
     },
     {
       "path": ".config/hk/index.pkl",
-      "sha256": "9125df0e67f9b321def6620c7e224c06616a2195aef651127d832f65e618b510",
-      "bytes": 2351
+      "sha256": "5718b659e574780e2df65d284b905b467babc1f43d3cd263de5e9ae4ad8243d3",
+      "bytes": 2376
     },
     {
       "path": ".config/hk/pkl.pkl",
@@ -352,8 +352,8 @@
     },
     {
       "path": ".config/turutan/README.md",
-      "sha256": "3878d63ab26e38bb5f5ff175d97ff67428ef154f09b4a02345dd22f658b7b7b5",
-      "bytes": 3078
+      "sha256": "555da8f128a812b94da08760a2162fcdc3b3a2ca0bff3a01b80211de3c91e20c",
+      "bytes": 3077
     },
     {
       "path": ".config/updatecli/github-actions.yaml",

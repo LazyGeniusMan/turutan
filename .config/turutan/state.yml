@@ -5,9 +5,9 @@ template: fs://.tmp/dogfood/default@0.1.0
 sourceKind: registry
 registry: fs://.tmp/dogfood
 templateURI: fs://templates/default/releases/0.1.0.tar.gz
-templateDigest: sha256:9618590dbe6c4aeee2606d17b00cbdf9ed78a75a1b94f7dcdc7de2706de088d2
+templateDigest: sha256:32b6f64f7a96d665424b2a62bc61d4abf161dca0ce2ca1f5f7a02d0f82317f3f
 requestedRef: 0.1.0
-resolvedCommit: 9618590dbe6c4aeee2606d17b00cbdf9ed78a75a1b94f7dcdc7de2706de088d2
+resolvedCommit: 32b6f64f7a96d665424b2a62bc61d4abf161dca0ce2ca1f5f7a02d0f82317f3f
 data:
     ai_agents:
         - pi

@@ -37,6 +37,7 @@ hooks {
   }
   ["fix"] {
     steps {
+      ...core.pre_commit
       ...pkl.pre_commit
       ...sh.pre_commit
       ...toml.pre_commit
