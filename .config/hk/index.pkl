@@ -1,22 +1,36 @@
-amends "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl"
 
-import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
 
 import "./ai.pkl" as ai
 import "./core.pkl" as core
 import "./custom.pkl" as custom
 import "./github.pkl" as github
 import "./go.pkl" as go
+import "./pkl.pkl" as pkl
+import "./sh.pkl" as sh
+import "./toml.pkl" as toml
+import "./yml.pkl" as yml
 
 hooks {
   ["check"] {
     steps {
       ...core.pre_commit
+      ...pkl.pre_commit
+      ...sh.pre_commit
+      ...toml.pre_commit
+      ...yml.pre_commit
       ...ai.pre_commit
-      ...go.pre_commit
       ...github.pre_commit
+      ...go.pre_commit
       ...custom.pre_commit
+      ...core.pre_push_ci
+      ...pkl.pre_push_ci
+      ...sh.pre_push_ci
+      ...toml.pre_push_ci
+      ...yml.pre_push_ci
       ...ai.pre_push_ci
+      ...github.pre_push_ci
       ...go.pre_push_ci
       ...custom.pre_push_ci
     }
@@ -24,11 +38,21 @@ hooks {
   ["fix"] {
     steps {
       ...core.pre_commit
+      ...pkl.pre_commit
+      ...sh.pre_commit
+      ...toml.pre_commit
+      ...yml.pre_commit
       ...ai.pre_commit
-      ...go.pre_commit
       ...github.pre_commit
+      ...go.pre_commit
       ...custom.pre_commit
+      ...core.pre_push_ci
+      ...pkl.pre_push_ci
+      ...sh.pre_push_ci
+      ...toml.pre_push_ci
+      ...yml.pre_push_ci
       ...ai.pre_push_ci
+      ...github.pre_push_ci
       ...go.pre_push_ci
       ...custom.pre_push_ci
     }
@@ -44,16 +68,25 @@ hooks {
     stash = "git"
     steps {
       ...core.pre_commit
+      ...pkl.pre_commit
+      ...sh.pre_commit
+      ...toml.pre_commit
+      ...yml.pre_commit
       ...ai.pre_commit
-      ...go.pre_commit
       ...github.pre_commit
+      ...go.pre_commit
       ...custom.pre_commit
     }
   }
   ["pre-push"] {
     steps {
       ...core.pre_push
+      ...pkl.pre_push
+      ...sh.pre_push
+      ...toml.pre_push
+      ...yml.pre_push
       ...ai.pre_push
+      ...github.pre_push
       ...go.pre_push
       ...custom.pre_push
     }
@@ -62,7 +95,7 @@ hooks {
     steps {
       ["mise-install"] {
         step_condition = "is_branch_checkout"
-        check = "mise install"
+        check = "mise install --locked"
       }
       ["mise-dev-setup"] {
         depends = "mise-install"

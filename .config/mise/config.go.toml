@@ -4,6 +4,7 @@ golangci-lint = "2"
 goreleaser = "2"
 "aqua:securego/gosec" = "2"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1"
+"github:owenlamont/ryl" = "0"
 
 [bootstrap.packages]
 "apk:musl-dev" = "latest"

@@ -1,0 +1,17 @@
+[profiles]
+svelte = ["svelte"]
+
+[[installed_skills]]
+name = "svelte"
+source = "https://github.com/sveltejs/ai-tools"
+path = "tools/skills"
+trust = "warn"
+include = ["*"]
+resources = ["*"]
+domain = "svelte"
+
+[[mcp_servers]]
+name = "svelte"
+transport = "http"
+url = "https://mcp.svelte.dev/mcp"
+domain = "svelte"

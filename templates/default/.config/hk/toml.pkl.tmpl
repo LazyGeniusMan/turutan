@@ -1,0 +1,19 @@
+module hk.Toml
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["tombi-format"] = (Builtins.tombi_format) {
+    profile_condition = "profile('core') or profile('rust')"
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"newlines"{{ end }}
+  }
+  ["tombi"] = (Builtins.tombi) {
+    profile_condition = "profile('core') or profile('rust')"
+    depends = "tombi-format"
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

@@ -26,7 +26,7 @@ Available profiles are:
 
 * `ai` (enabled)
 
-    [`ai-rulez`](https://github.com/Goldziher/ai-rulez) as centralized AI Agents configuration, rules, skill, and mcp manager; [`basemind`](https://github.com/Goldziher/basemind) as codebase context indexer; [`uncomment`](https://github.com/Goldziher/uncomment) as codebase comments removal. [`pi`](https://pi.dev) and [T3 Code](https://t3.codes) Web UI is preconfigured as AI Agent; add other AI Agents by adding it to [`.config/mise/config.ai.toml`](.config/mise/config.ai.toml).
+    [`ai-rulez`](https://github.com/Goldziher/ai-rulez) as centralized AI Agents configuration, rules, skill, and mcp manager; [`basemind`](https://github.com/Goldziher/basemind) as codebase context indexer; [`uncomment`](https://github.com/Goldziher/uncomment) as codebase comments removal.
 
 ### Programming Languages
 
@@ -86,6 +86,16 @@ Available profiles are:
 
     Typst standard toolchains.
 
+### Frameworks
+
+* `astro`
+
+    [Astro](https://astro.build) Framework
+
+* `svelte`
+
+    [Svelte](https://svelte.dev) Framework
+
 ### Platforms
 
 * `cloudflare`
@@ -111,7 +121,7 @@ Available profiles are:
 ```sh
 mise trust && mise install
 ```
-2. Setup global provider to store remote secret provider PAT, for example 
+2. Setup global provider to store remote secret provider PAT, for example
 ```sh
 fnox provider add global keychain -g # or `fnox provider add global plain -g` if os keychain is not available (insecure)
 fnox set PROTON_PASS_PERSONAL_ACCESS_TOKEN --provider global -g

@@ -1,0 +1,8 @@
+[profiles]
+astro = ["astro"]
+
+[[mcp_servers]]
+name = "astro"
+transport = "http"
+url = "https://mcp.docs.astro.build/mcp"
+domain = "astro"

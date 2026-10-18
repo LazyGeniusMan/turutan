@@ -2,6 +2,8 @@
     "recommendations": [
         "tombi-toml.tombi",
         "hverlin.mise-vscode",
+        "redhat.vscode-yaml",
+        "owenlamont.ryl",
         "golang.go"
     ]
 }

@@ -1,0 +1,91 @@
+module hk.Go
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["golangci-lint-fmt"] = (Builtins.golangci_lint_fmt) {
+    profile_condition = "profile('go')"
+    depends = {{ if contains .profiles "ai" }}"uncomment"{{ else }}"newlines"{{ end }}
+    check_diff = "golangci-lint fmt --config .config/golangci-lint/.golangci.yml --diff {{ `{{files}}` }}"
+    fix = "golangci-lint fmt --config .config/golangci-lint/.golangci.yml {{ `{{files}}` }}"
+  }
+  ["golangci-lint"] = (Builtins.golangci_lint) {
+    profile_condition = "profile('go')"
+    depends = "golangci-lint-fmt"
+    check =
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false --enable-only govet,errcheck,staticcheck ./..."
+    fix =
+      "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix --enable-only govet,errcheck,staticcheck ./..."
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["golangci-lint-full"] = (Builtins.golangci_lint) {
+    profile_condition = "profile('go')"
+    depends = "ai-rulez"
+    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false ./..."
+    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix ./..."
+  }
+  ["gomod-tidy"] = (Builtins.gomod_tidy) {
+    profile_condition = "profile('go')"
+    depends = "golangci-lint-full"
+  }
+  ["go-build"] {
+    profile_condition = "profile('go')"
+    batch = true
+    check = "go build ./..."
+    depends = "gomod-tidy"
+  }
+  ["go-unit-test"] {
+    profile_condition = "profile('go')"
+    glob = "**/*.go"
+    check = "go test -short -count=1 ./..."
+    depends = "go-build"
+  }
+  ["go-sec"] = (Builtins.go_sec) {
+    profile_condition = "profile('go')"
+    check = "gosec ./cmd/... ./internal/..."
+    depends = "go-unit-test"
+  }
+  ["go-vuln-check"] = (Builtins.go_vuln_check) {
+    profile_condition = "profile('go')"
+    depends = "go-sec"
+    allow_failure = true
+  }
+}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["golangci-lint-full"] = (Builtins.golangci_lint) {
+    profile_condition = "profile('go')"
+    depends = "golangci-lint"
+    check = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix=false ./..."
+    fix = "golangci-lint run --config .config/golangci-lint/.golangci.yml --fix ./..."
+  }
+  ["gomod-tidy"] = (Builtins.gomod_tidy) {
+    profile_condition = "profile('go')"
+    depends = "golangci-lint-full"
+  }
+  ["go-build"] {
+    profile_condition = "profile('go')"
+    batch = true
+    check = "go build ./..."
+    depends = "gomod-tidy"
+  }
+  ["go-unit-test"] {
+    profile_condition = "profile('go')"
+    glob = "**/*.go"
+    check = "go test -short -count=1 ./..."
+    depends = "go-build"
+  }
+  ["go-sec"] = (Builtins.go_sec) {
+    profile_condition = "profile('go')"
+    check = "gosec ./cmd/... ./internal/..."
+    depends = "go-unit-test"
+  }
+  ["go-vuln-check"] = (Builtins.go_vuln_check) {
+    profile_condition = "profile('go')"
+    depends = "go-sec"
+    allow_failure = true
+  }
+}

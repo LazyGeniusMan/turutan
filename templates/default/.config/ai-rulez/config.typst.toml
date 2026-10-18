@@ -6,4 +6,5 @@ name = "typst"
 source = "https://github.com/LazyGeniusMan/typst-skills"
 trust = "warn"
 include = ["*"]
+resources = ["*"]
 domain = "typst"

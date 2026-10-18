@@ -8,7 +8,7 @@ presets = ["pi", "opencode"]
 agents_md = true
 
 [profiles]
-core = ["core"]
+core = ["core", "pkl", "sh", "toml", "yml"]
 
 [header]
 text = """
@@ -56,3 +56,10 @@ delivery = "both"
 self_server = false
 # ~keep self_server_command = ["ai-rulez", "mcp"]
 skills_instructions = false
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+
+[[hooks.hooks]]
+script = ".config/ai-rulez/scripts/bash-guards.sh"

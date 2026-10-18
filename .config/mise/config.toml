@@ -14,9 +14,11 @@ PITCHFORK_WEB_PORT = 3120
 betterleaks = "1"
 fnox = "1"
 hk = "2"
-syft = "1"
 pitchfork = "2"
 pkl = "0"
+shellcheck = "0"
+shellharden = "4"
+shfmt = "3"
 tombi = "1"
 updatecli = "0"
 
@@ -91,10 +93,6 @@ run = "turutan state sync"
 [tasks."turutan:state-input"]
 description = "Re-answer stored inputs and re-render at the pinned commit"
 run = "turutan state input"
-
-[tasks."turutan:profiles"]
-description = "List template profiles offered and enabled"
-run = "turutan profiles"
 
 [tasks."dev-setup:hk"]
 run = "hk install --mise"

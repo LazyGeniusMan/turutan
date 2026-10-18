@@ -1,8 +1,11 @@
-amends "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl"
 
-import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
 {{ if contains .profiles "ai" }}
 import "./ai.pkl" as ai
+{{- end }}
+{{- if contains .profiles "astro" }}
+import "./astro.pkl" as astro
 {{- end }}
 {{- if contains .profiles "c" }}
 import "./c.pkl" as c
@@ -42,6 +45,7 @@ import "./kubernetes.pkl" as kubernetes
 {{- if contains .profiles "php" }}
 import "./php.pkl" as php
 {{- end }}
+import "./pkl.pkl" as pkl
 {{- if contains .profiles "python" }}
 import "./python.pkl" as python
 {{- end }}
@@ -57,25 +61,29 @@ import "./rust-polygot.pkl" as rustPolygot
 {{- if contains .profiles "rust" }}
 import "./rust.pkl" as rust
 {{- end }}
+import "./sh.pkl" as sh
+{{- if contains .profiles "svelte" }}
+import "./svelte.pkl" as svelte
+{{- end }}
+import "./toml.pkl" as toml
 {{- if contains .profiles "typescript" }}
 import "./typescript.pkl" as typescript
 {{- end }}
 {{- if contains .profiles "typst" }}
 import "./typst.pkl" as typst
 {{- end }}
+import "./yml.pkl" as yml
 
 hooks {
   ["check"] {
     steps {
       ...core.pre_commit
+      ...pkl.pre_commit
+      ...sh.pre_commit
+      ...toml.pre_commit
+      ...yml.pre_commit
 {{- if contains .profiles "ai" }}
       ...ai.pre_commit
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_commit
-{{- end }}
-{{- if contains .profiles "github" }}
-      ...github.pre_commit
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_commit
@@ -95,8 +103,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_commit
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_commit
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_commit
@@ -125,15 +139,23 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_commit
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_commit
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
       ...custom.pre_commit
+      ...core.pre_push_ci
+      ...pkl.pre_push_ci
+      ...sh.pre_push_ci
+      ...toml.pre_push_ci
+      ...yml.pre_push_ci
 {{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_push_ci
@@ -153,8 +175,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_push_ci
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_push_ci
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push_ci
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_push_ci
@@ -182,6 +210,12 @@ hooks {
 {{- end }}
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_push_ci
+{{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_push_ci
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_push_ci
 {{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
@@ -192,14 +226,12 @@ hooks {
   ["fix"] {
     steps {
       ...core.pre_commit
+      ...pkl.pre_commit
+      ...sh.pre_commit
+      ...toml.pre_commit
+      ...yml.pre_commit
 {{- if contains .profiles "ai" }}
       ...ai.pre_commit
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_commit
-{{- end }}
-{{- if contains .profiles "github" }}
-      ...github.pre_commit
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_commit
@@ -219,8 +251,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_commit
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_commit
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_commit
@@ -249,15 +287,23 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_commit
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_commit
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
       ...custom.pre_commit
+      ...core.pre_push_ci
+      ...pkl.pre_push_ci
+      ...sh.pre_push_ci
+      ...toml.pre_push_ci
+      ...yml.pre_push_ci
 {{- if contains .profiles "ai" }}
       ...ai.pre_push_ci
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_push_ci
@@ -277,8 +323,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_push_ci
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_push_ci
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push_ci
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_push_ci
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_push_ci
@@ -306,6 +358,12 @@ hooks {
 {{- end }}
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_push_ci
+{{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_push_ci
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_push_ci
 {{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_push_ci
@@ -324,14 +382,12 @@ hooks {
     stash = "git"
     steps {
       ...core.pre_commit
+      ...pkl.pre_commit
+      ...sh.pre_commit
+      ...toml.pre_commit
+      ...yml.pre_commit
 {{- if contains .profiles "ai" }}
       ...ai.pre_commit
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_commit
-{{- end }}
-{{- if contains .profiles "github" }}
-      ...github.pre_commit
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_commit
@@ -351,8 +407,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_commit
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_commit
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_commit
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_commit
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_commit
@@ -381,6 +443,12 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_commit
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_commit
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_commit
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_commit
 {{- end }}
@@ -390,11 +458,12 @@ hooks {
   ["pre-push"] {
     steps {
       ...core.pre_push
+      ...pkl.pre_push
+      ...sh.pre_push
+      ...toml.pre_push
+      ...yml.pre_push
 {{- if contains .profiles "ai" }}
       ...ai.pre_push
-{{- end }}
-{{- if contains .profiles "go" }}
-      ...go.pre_push
 {{- end }}
 {{- if contains .profiles "c" }}
       ...c.pre_push
@@ -414,8 +483,14 @@ hooks {
 {{- if contains .profiles "elixir" }}
       ...elixir.pre_push
 {{- end }}
+{{- if contains .profiles "github" }}
+      ...github.pre_push
+{{- end }}
 {{- if contains .profiles "gitlab" }}
       ...gitlab.pre_push
+{{- end }}
+{{- if contains .profiles "go" }}
+      ...go.pre_push
 {{- end }}
 {{- if contains .profiles "java" }}
       ...java.pre_push
@@ -444,6 +519,12 @@ hooks {
 {{- if contains .profiles "typescript" }}
       ...typescript.pre_push
 {{- end }}
+{{- if contains .profiles "astro" }}
+      ...astro.pre_push
+{{- end }}
+{{- if contains .profiles "svelte" }}
+      ...svelte.pre_push
+{{- end }}
 {{- if contains .profiles "typst" }}
       ...typst.pre_push
 {{- end }}
@@ -454,7 +535,7 @@ hooks {
     steps {
       ["mise-install"] {
         step_condition = "is_branch_checkout"
-        check = "mise install"
+        check = "mise install --locked"
       }
       ["mise-dev-setup"] {
         depends = "mise-install"

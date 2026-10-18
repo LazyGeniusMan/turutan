@@ -1,0 +1,18 @@
+module hk.Yml
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
+
+pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
+  ["ryl"] = (Builtins.ryl) {
+    profile_condition =
+      "profile('docker') or profile('github') or profile('go') or profile('kubernetes')"
+    check = "ryl check {{files}}"
+    exclude = List(".config/mise/locks/**")
+    depends = "uncomment"
+  }
+}
+
+pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}
+
+pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {}

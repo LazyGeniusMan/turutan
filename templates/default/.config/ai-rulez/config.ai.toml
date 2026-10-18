@@ -20,6 +20,7 @@ name = "ai-rulez"
 source = "https://github.com/Goldziher/ai-rulez"
 trust = "warn"
 include = ["ai-rulez"]
+resources = ["*"]
 domain = "ai"
 
 [[installed_skills]]
@@ -27,6 +28,7 @@ name = "basemind"
 source = "https://github.com/Goldziher/basemind"
 trust = "warn"
 include = ["basemind*", "multi-agent-room"]
+resources = ["*"]
 domain = "ai"
 
 [[mcp_servers]]

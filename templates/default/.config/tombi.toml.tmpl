@@ -1,0 +1,31 @@
+[[schemas]]
+path = "https://raw.githubusercontent.com/jdx/mise/refs/heads/main/schema/miserc.json"
+include = [".config/miserc.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/jdx/mise/refs/heads/main/schema/mise.json"
+include = [".config/mise/config*.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/jdx/fnox/refs/heads/main/docs/public/schema.json"
+include = [".config/fnox/config.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/Goldziher/ai-rulez/main/schema/ai-rules.schema.json"
+include = [".config/ai-rulez/config.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/Goldziher/ai-rulez/main/schema/ai-rules-local.schema.json"
+include = [".config/ai-rulez/config.*.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/Goldziher/basemind/refs/heads/main/schema/basemind-config-v1.schema.json"
+include = [".config/basemind/config.toml"]
+
+[[schemas]]
+path = "https://raw.githubusercontent.com/Goldziher/uncomment/refs/heads/main/schema/uncomment.schema.json"
+include = [".uncomment.toml"]
+{{ if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "gitlab") (contains .profiles "kubernetes") }}
+[[schemas]]
+path = "https://raw.githubusercontent.com/owenlamont/ryl/refs/heads/main/ryl.toml.schema.json"
+include = [".config/ryl.toml"]{{ end }}

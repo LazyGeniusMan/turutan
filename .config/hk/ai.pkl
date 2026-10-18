@@ -1,20 +1,21 @@
 module hk.Ai
 
-import "package://github.com/jdx/hk/releases/download/v2.6.0/hk@2.6.0#/Config.pkl" as Config
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl" as Config
 
 pre_commit: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["uncomment"] {
-    profiles = List("ai")
+    profile_condition = "profile('ai')"
     glob = List("**")
     check = "uncomment --check {{files}}"
     fix = "uncomment {{files}}"
-    depends = "mixed-line-ending"
+    depends = "newlines"
   }
 }
 
 pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["ai-rulez"] {
-    profiles = List("ai")
+    profile_condition = "profile('ai')"
     glob = ".config/ai-rulez/**"
     check = "ai-rulez validate --config-only"
     depends = "no-commit-to-branch"
@@ -23,7 +24,7 @@ pre_push: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
 
 pre_push_ci: Mapping<String, Config.Step> = new Mapping<String, Config.Step> {
   ["ai-rulez"] {
-    profiles = List("ai")
+    profile_condition = "profile('ai')"
     glob = ".config/ai-rulez/**"
     check = "ai-rulez validate --config-only"
   }

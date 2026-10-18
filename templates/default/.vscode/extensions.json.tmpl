@@ -1,10 +1,14 @@
 {
     "recommendations": [
         "tombi-toml.tombi",
-        "hverlin.mise-vscode"{{ if contains .profiles "go" }},
+        "hverlin.mise-vscode"{{ if or (contains .profiles "docker") (contains .profiles "github") (contains .profiles "gitlab") (contains .profiles "kubernetes") }},
+        "redhat.vscode-yaml",
+        "owenlamont.ryl"{{ end }}{{ if contains .profiles "go" }},
         "golang.go"{{ end }}{{ if contains .profiles "python" }},
         "charliermarsh.ruff",
         "astral-sh.ty"{{ end }}{{ if contains .profiles "typescript" }},
-        "void-zero.vite-plus-extension-pack"{{ end }}
+        "void-zero.vite-plus-extension-pack"{{ end }}{{ if contains .profiles "astro" }},
+        "astro-build.astro-vscode"{{ end }}{{ if contains .profiles "svelte" }},
+        "svelte.svelte-vscode"{{ end }}
     ]
 }

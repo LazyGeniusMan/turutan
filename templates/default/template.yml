@@ -7,18 +7,23 @@ license-files: [LICENSE]
 doc-files: [README.md]
 includes:
     - .config/fnox.toml
-    - .config/hk/core.pkl
+    - .config/hk/core.pkl.tmpl
     - .config/hk/custom.pkl
+    - .config/hk/pkl.pkl.tmpl
+    - .config/hk/sh.pkl.tmpl
+    - .config/hk/toml.pkl.tmpl
+    - .config/hk/yml.pkl.tmpl
     - .config/hk/index.pkl.tmpl
     - .config/hk.pkl
     - .config/mise/config.custom.toml
     - .config/mise/config.toml
     - .config/miserc.toml.tmpl
-    - .config/tombi.toml
+    - .config/ryl.toml
+    - .config/tombi.toml.tmpl
     - .config/updatecli/mise-core.yaml
-    - .gitignore
+    - .gitignore.tmpl
     - .vscode/extensions.json.tmpl
-    - .vscode/settings.json
+    - .vscode/settings.json.tmpl
     - LICENSE
     - README.md.tmpl
 excludes: []
@@ -61,6 +66,8 @@ inputs:
             - rust
             - rust-polygot
             - typescript
+            - astro
+            - svelte
             - typst
         default: []
         help: Feature sets enabled per project
@@ -136,236 +143,269 @@ conditionals:
           - .config/ai-rulez/domains/core/**
           - .config/ai-rulez/domains/ai/**
           - .config/ai-rulez/domains/pkl/**
+          - .config/ai-rulez/domains/sh/**
+          - .config/ai-rulez/domains/toml/**
+          - .config/ai-rulez/domains/yml/**
+          - .config/ai-rulez/scripts/bash-guards/index.sh.tmpl
+          - .config/ai-rulez/scripts/bash-guards/pkl.sh
+          - .config/ai-rulez/scripts/bash-guards/sh.sh
+          - .config/ai-rulez/scripts/bash-guards/toml.sh
+          - .config/ai-rulez/scripts/bash-guards/yml.sh
+          - .config/ai-rulez/scripts/bash-guards.sh
           - .config/basemind/**
           - .uncomment.toml
           - .config/mise/config.ai.toml
           - .config/updatecli/mise-ai.yaml
-          - .config/hk/ai.pkl
+          - .config/hk/ai.pkl.tmpl
       excludes: []
       preserves:
           - .config/ai-rulez/config.custom.toml
           - .config/ai-rulez/domains/custom/**
+          - .config/ai-rulez/scripts/bash-guards/custom.sh
     - if: '{{contains .profiles "c"}}'
       includes:
           - .config/mise/config.c.toml
-          - .config/hk/c.pkl
+          - .config/hk/c.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "cloudflare"}}'
       includes:
           - .config/mise/config.cloudflare.toml
-          - .config/hk/cloudflare.pkl
+          - .config/hk/cloudflare.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "cpp"}}'
       includes:
           - .config/mise/config.cpp.toml
-          - .config/hk/cpp.pkl
+          - .config/hk/cpp.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "csharp"}}'
       includes:
           - .config/mise/config.csharp.toml
-          - .config/hk/csharp.pkl
+          - .config/hk/csharp.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "docker"}}'
       includes:
           - .config/mise/config.docker.toml
-          - .config/hk/docker.pkl
+          - .config/hk/docker.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "elixir"}}'
       includes:
           - .config/mise/config.elixir.toml
-          - .config/hk/elixir.pkl
+          - .config/hk/elixir.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "github"}}'
       includes:
-          - .github/**
-          - .github/jactionlint.yaml
+          - .config/hk/github.pkl.tmpl
           - .config/mise/config.github.toml
-          - .config/ryl.toml
           - .config/updatecli/github-actions.yaml
           - .config/updatecli/mise-github.yaml
-          - .config/hk/github.pkl
+          - .github/**
       excludes: []
       preserves: []
     - if: '{{contains .profiles "gitlab"}}'
       includes:
           - .config/mise/config.gitlab.toml
-          - .config/hk/gitlab.pkl
+          - .config/hk/gitlab.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "go"}}'
       includes:
-          - .golangci.yml
           - .config/golangci-lint/**
-          - .config/goreleaser.yml
+          - .config/goreleaser.yml.tmpl
+          - .config/hk/go.pkl.tmpl
           - .config/mise/config.go.toml
           - .config/updatecli/go-version.yaml
           - .config/updatecli/mise-go.yaml
-          - .config/hk/go.pkl
+          - .golangci.yml
       excludes: []
       preserves: []
     - if: '{{contains .profiles "java"}}'
       includes:
           - .config/mise/config.java.toml
-          - .config/hk/java.pkl
+          - .config/hk/java.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "kubernetes"}}'
       includes:
           - .config/mise/config.kubernetes.toml
-          - .config/hk/kubernetes.pkl
+          - .config/hk/kubernetes.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "php"}}'
       includes:
           - .config/mise/config.php.toml
-          - .config/hk/php.pkl
+          - .config/hk/php.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "python"}}'
       includes:
           - .config/mise/config.python.toml
-          - .config/hk/python.pkl
+          - .config/hk/python.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "r"}}'
       includes:
           - .config/mise/config.r.toml
-          - .config/hk/r.pkl
+          - .config/hk/r.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "ruby"}}'
       includes:
           - .config/mise/config.ruby.toml
-          - .config/hk/ruby.pkl
+          - .config/hk/ruby.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "rust"}}'
       includes:
           - .config/mise/config.rust.toml
-          - .config/hk/rust.pkl
+          - .config/hk/rust.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "rust-polygot"}}'
       includes:
           - .config/mise/config.rust-polygot.toml
-          - .config/hk/rust-polygot.pkl
+          - .config/hk/rust-polygot.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "typescript"}}'
       includes:
           - .config/mise/config.typescript.toml
-          - .config/hk/typescript.pkl
+          - .config/hk/typescript.pkl.tmpl
+      excludes: []
+      preserves: []
+    - if: '{{contains .profiles "astro"}}'
+      includes:
+          - .config/mise/config.astro.toml
+          - .config/hk/astro.pkl.tmpl
+      excludes: []
+      preserves: []
+    - if: '{{contains .profiles "svelte"}}'
+      includes:
+          - .config/mise/config.svelte.toml
+          - .config/hk/svelte.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{contains .profiles "typst"}}'
       includes:
           - .config/mise/config.typst.toml
-          - .config/hk/typst.pkl
+          - .config/hk/typst.pkl.tmpl
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "c")}}'
       includes:
           - .config/ai-rulez/config.c.toml
           - .config/ai-rulez/domains/c/**
+          - .config/ai-rulez/scripts/bash-guards/c.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "cloudflare")}}'
       includes:
           - .config/ai-rulez/config.cloudflare.toml
           - .config/ai-rulez/domains/cloudflare/**
+          - .config/ai-rulez/scripts/bash-guards/cloudflare.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "cpp")}}'
       includes:
           - .config/ai-rulez/config.cpp.toml
           - .config/ai-rulez/domains/cpp/**
+          - .config/ai-rulez/scripts/bash-guards/cpp.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "csharp")}}'
       includes:
           - .config/ai-rulez/config.csharp.toml
           - .config/ai-rulez/domains/csharp/**
+          - .config/ai-rulez/scripts/bash-guards/csharp.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "docker")}}'
       includes:
           - .config/ai-rulez/config.docker.toml
           - .config/ai-rulez/domains/docker/**
-          - .config/ai-rulez/domains/yml/**
+          - .config/ai-rulez/scripts/bash-guards/docker.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "elixir")}}'
       includes:
           - .config/ai-rulez/config.elixir.toml
           - .config/ai-rulez/domains/elixir/**
+          - .config/ai-rulez/scripts/bash-guards/elixir.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "github")}}'
       includes:
           - .config/ai-rulez/config.github.toml
           - .config/ai-rulez/domains/github/**
-          - .config/ai-rulez/domains/yml/**
+          - .config/ai-rulez/scripts/bash-guards/github.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "gitlab")}}'
       includes:
           - .config/ai-rulez/config.gitlab.toml
           - .config/ai-rulez/domains/gitlab/**
+          - .config/ai-rulez/scripts/bash-guards/gitlab.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "go")}}'
       includes:
           - .config/ai-rulez/config.go.toml
           - .config/ai-rulez/domains/go/**
+          - .config/ai-rulez/scripts/bash-guards/go.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "java")}}'
       includes:
           - .config/ai-rulez/config.java.toml
           - .config/ai-rulez/domains/java/**
+          - .config/ai-rulez/scripts/bash-guards/java.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "kubernetes")}}'
       includes:
           - .config/ai-rulez/config.kubernetes.toml
           - .config/ai-rulez/domains/kubernetes/**
-          - .config/ai-rulez/domains/yml/**
+          - .config/ai-rulez/scripts/bash-guards/kubernetes.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "php")}}'
       includes:
           - .config/ai-rulez/config.php.toml
           - .config/ai-rulez/domains/php/**
+          - .config/ai-rulez/scripts/bash-guards/php.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "python")}}'
       includes:
           - .config/ai-rulez/config.python.toml
           - .config/ai-rulez/domains/python/**
+          - .config/ai-rulez/scripts/bash-guards/python.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "r")}}'
       includes:
           - .config/ai-rulez/config.r.toml
           - .config/ai-rulez/domains/r/**
+          - .config/ai-rulez/scripts/bash-guards/r.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "ruby")}}'
       includes:
           - .config/ai-rulez/config.ruby.toml
           - .config/ai-rulez/domains/ruby/**
+          - .config/ai-rulez/scripts/bash-guards/ruby.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "rust")}}'
       includes:
           - .config/ai-rulez/config.rust.toml
           - .config/ai-rulez/domains/rust/**
+          - .config/ai-rulez/scripts/bash-guards/rust.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai")
@@ -373,17 +413,34 @@ conditionals:
       includes:
           - .config/ai-rulez/config.rust-polygot.toml
           - .config/ai-rulez/domains/rust-polygot/**
+          - .config/ai-rulez/scripts/bash-guards/rust-polygot.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "typescript")}}'
       includes:
           - .config/ai-rulez/config.typescript.toml
           - .config/ai-rulez/domains/typescript/**
+          - .config/ai-rulez/scripts/bash-guards/typescript.sh
+      excludes: []
+      preserves: []
+    - if: '{{and (contains .profiles "ai") (contains .profiles "astro")}}'
+      includes:
+          - .config/ai-rulez/config.astro.toml
+          - .config/ai-rulez/domains/astro/**
+          - .config/ai-rulez/scripts/bash-guards/astro.sh
+      excludes: []
+      preserves: []
+    - if: '{{and (contains .profiles "ai") (contains .profiles "svelte")}}'
+      includes:
+          - .config/ai-rulez/config.svelte.toml
+          - .config/ai-rulez/domains/svelte/**
+          - .config/ai-rulez/scripts/bash-guards/svelte.sh
       excludes: []
       preserves: []
     - if: '{{and (contains .profiles "ai") (contains .profiles "typst")}}'
       includes:
           - .config/ai-rulez/config.typst.toml
           - .config/ai-rulez/domains/typst/**
+          - .config/ai-rulez/scripts/bash-guards/typst.sh
       excludes: []
       preserves: []

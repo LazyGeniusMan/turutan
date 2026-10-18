@@ -1,3 +1,3 @@
 # Concepts
 
-* [Project Toolchains](project-toolchains.md)
+* [Core Toolchains](core-toolchains.md)

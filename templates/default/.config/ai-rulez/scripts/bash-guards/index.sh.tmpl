@@ -1,0 +1,76 @@
+#!/bin/sh
+# ~keep
+# shellcheck disable=SC2154,SC1091 # _guard_dir is set by the sourcing loader; rule files resolve dynamically at runtime
+{{ if contains .profiles "ai" }}
+. "$_guard_dir/bash-guards/ai.sh"
+{{- end }}
+{{- if contains .profiles "astro" }}
+. "$_guard_dir/bash-guards/astro.sh"
+{{- end }}
+{{- if contains .profiles "c" }}
+. "$_guard_dir/bash-guards/c.sh"
+{{- end }}
+{{- if contains .profiles "cloudflare" }}
+. "$_guard_dir/bash-guards/cloudflare.sh"
+{{- end }}
+. "$_guard_dir/bash-guards/custom.sh"
+{{- if contains .profiles "cpp" }}
+. "$_guard_dir/bash-guards/cpp.sh"
+{{- end }}
+{{- if contains .profiles "csharp" }}
+. "$_guard_dir/bash-guards/csharp.sh"
+{{- end }}
+. "$_guard_dir/bash-guards/core.sh"
+{{- if contains .profiles "docker" }}
+. "$_guard_dir/bash-guards/docker.sh"
+{{- end }}
+{{- if contains .profiles "elixir" }}
+. "$_guard_dir/bash-guards/elixir.sh"
+{{- end }}
+{{- if contains .profiles "github" }}
+. "$_guard_dir/bash-guards/github.sh"
+{{- end }}
+{{- if contains .profiles "gitlab" }}
+. "$_guard_dir/bash-guards/gitlab.sh"
+{{- end }}
+{{- if contains .profiles "go" }}
+. "$_guard_dir/bash-guards/go.sh"
+{{- end }}
+{{- if contains .profiles "java" }}
+. "$_guard_dir/bash-guards/java.sh"
+{{- end }}
+{{- if contains .profiles "kubernetes" }}
+. "$_guard_dir/bash-guards/kubernetes.sh"
+{{- end }}
+{{- if contains .profiles "php" }}
+. "$_guard_dir/bash-guards/php.sh"
+{{- end }}
+. "$_guard_dir/bash-guards/pkl.sh"
+{{- if contains .profiles "python" }}
+. "$_guard_dir/bash-guards/python.sh"
+{{- end }}
+{{- if contains .profiles "r" }}
+. "$_guard_dir/bash-guards/r.sh"
+{{- end }}
+{{- if contains .profiles "ruby" }}
+. "$_guard_dir/bash-guards/ruby.sh"
+{{- end }}
+{{- if contains .profiles "rust-polygot" }}
+. "$_guard_dir/bash-guards/rust-polygot.sh"
+{{- end }}
+{{- if contains .profiles "rust" }}
+. "$_guard_dir/bash-guards/rust.sh"
+{{- end }}
+{{- if contains .profiles "svelte" }}
+. "$_guard_dir/bash-guards/svelte.sh"
+{{- end }}
+. "$_guard_dir/bash-guards/toml.sh"
+{{- if contains .profiles "typescript" }}
+. "$_guard_dir/bash-guards/typescript.sh"
+{{- end }}
+{{- if contains .profiles "typst" }}
+. "$_guard_dir/bash-guards/typst.sh"
+{{- end }}
+{{- if or (contains .profiles "go") (contains .profiles "docker") (contains .profiles "github") (contains .profiles "kubernetes") }}
+. "$_guard_dir/bash-guards/yml.sh"
+{{- end }}
