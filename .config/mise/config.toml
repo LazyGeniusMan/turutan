@@ -92,10 +92,6 @@ run = "turutan state sync"
 description = "Re-answer stored inputs and re-render at the pinned commit"
 run = "turutan state input"
 
-[tasks."turutan:profiles"]
-description = "List template profiles offered and enabled"
-run = "turutan profiles"
-
 [tasks."dev-setup:hk"]
 run = "hk install --mise"
 

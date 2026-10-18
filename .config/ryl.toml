@@ -1,4 +1,4 @@
-ignore = [
+exclude = [
   "registry.yml",
   "registry.yaml",
   ".config/turutan/state.yml",
@@ -15,7 +15,7 @@ yaml = [
   ".yamllint",
 ]
 
-[rules]
+[lint.rules]
 anchors = "enable"
 braces = "enable"
 brackets = "enable"
@@ -36,14 +36,14 @@ octal-values = "disable"
 quoted-strings = "disable"
 trailing-spaces = "enable"
 
-[rules.comments]
+[lint.rules.comments]
 level = "warning"
 
-[rules.comments-indentation]
+[lint.rules.comments-indentation]
 level = "warning"
 
-[rules.document-start]
+[lint.rules.document-start]
 level = "warning"
 
-[rules.truthy]
+[lint.rules.truthy]
 level = "warning"

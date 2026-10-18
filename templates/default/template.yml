@@ -17,7 +17,7 @@ includes:
     - .config/mise/config.custom.toml
     - .config/mise/config.toml
     - .config/miserc.toml.tmpl
-    - .config/tombi.toml
+    - .config/tombi.toml.tmpl
     - .config/updatecli/mise-core.yaml
     - .gitignore.tmpl
     - .vscode/extensions.json.tmpl

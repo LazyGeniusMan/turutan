@@ -4,11 +4,11 @@
   "engine_version": "dev",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
-  "resolved_sha": "549fa6f5105ee89abb4c344c06eacee9657655ace438ae946fd9a25c2254a758",
+  "resolved_sha": "0c49bfaddf1fb6f37886d32420383b7031c99071deb10f67190d5e237da16512",
   "registry": "fs://.tmp/dogfood",
   "uri": "fs://templates/default/releases/0.1.0.tar.gz",
-  "digest": "sha256:549fa6f5105ee89abb4c344c06eacee9657655ace438ae946fd9a25c2254a758",
-  "manifest_hash": "sha256:ee6a50ed84172c9afd7315749fbb3e0c8224097f3969c3297f88ff4838ff94f5",
+  "digest": "sha256:0c49bfaddf1fb6f37886d32420383b7031c99071deb10f67190d5e237da16512",
+  "manifest_hash": "sha256:dc76092b805da41c2dd62c87f085c8209d629d8958efebe199b59e275a3eaee9",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -257,8 +257,8 @@
     },
     {
       "path": ".config/mise/config.custom.toml",
-      "sha256": "488848f8caccc7a953255795aa9bf3abfe33e1927f3110cc12a33e9484e86834",
-      "bytes": 2870
+      "sha256": "e6f474305636d24a6432cfecc3cf32e938f9b98e159ecb98fa433f4a67ee5651",
+      "bytes": 2751
     },
     {
       "path": ".config/mise/config.github.toml",
@@ -272,8 +272,8 @@
     },
     {
       "path": ".config/mise/config.toml",
-      "sha256": "b02503f1656d5ede5aecc8dd50e9ceb9c703563428df475cb35b38ce367fcac3",
-      "bytes": 2658
+      "sha256": "bbd18ca043ddfc4fea83feefd7de0cd89700b6d2f6d12b8c70c4fde853b415f5",
+      "bytes": 2546
     },
     {
       "path": ".config/miserc.toml",
@@ -282,13 +282,13 @@
     },
     {
       "path": ".config/ryl.toml",
-      "sha256": "135135e52f9998298a928cc4b1433a92d87c7fa941f8a45e057875e57af3f9ab",
-      "bytes": 844
+      "sha256": "e45d80b4a6bef032134a168d97a73a8ebbe1b7a39b258b925b4fbf1cf62e129b",
+      "bytes": 870
     },
     {
       "path": ".config/tombi.toml",
-      "sha256": "ece562085ea885aec31bf2e3e9943adc4ddc199f481604b5c7335279dbf0e2e1",
-      "bytes": 902
+      "sha256": "2a1e6c76b2a5d9995c7f635d76097874de2cfd22b5539f15554e318718c6b322",
+      "bytes": 1187
     },
     {
       "path": ".config/turutan/LICENSE",
