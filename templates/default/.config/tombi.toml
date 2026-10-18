@@ -15,6 +15,10 @@ path = "https://raw.githubusercontent.com/Goldziher/ai-rulez/main/schema/ai-rule
 include = [".config/ai-rulez/config.toml"]
 
 [[schemas]]
+path = "https://raw.githubusercontent.com/Goldziher/ai-rulez/main/schema/ai-rules-local.schema.json"
+include = [".config/ai-rulez/config.*.toml"]
+
+[[schemas]]
 path = "https://raw.githubusercontent.com/Goldziher/basemind/refs/heads/main/schema/basemind-config-v1.schema.json"
 include = [".config/basemind/config.toml"]
 
