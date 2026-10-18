@@ -14,7 +14,9 @@ dist
 .mcp.json
 .opencode/agents/
 .opencode/commands/
+.opencode/plugins/ai-rulez-hooks.js
 .pi/agents/
+.pi/extensions/ai-rulez-hooks.ts
 .pi/mcp.json
 .pi/prompts/
 AGENTS.md

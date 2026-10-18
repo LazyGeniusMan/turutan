@@ -4,11 +4,11 @@
   "engine_version": "dev",
   "source": "fs://.tmp/dogfood/default@0.1.0",
   "ref": "0.1.0",
-  "resolved_sha": "0c49bfaddf1fb6f37886d32420383b7031c99071deb10f67190d5e237da16512",
+  "resolved_sha": "3ca672afde1fc761500d75ae75d16b889652eadc87f0cd844b32552bdfce4f28",
   "registry": "fs://.tmp/dogfood",
   "uri": "fs://templates/default/releases/0.1.0.tar.gz",
-  "digest": "sha256:0c49bfaddf1fb6f37886d32420383b7031c99071deb10f67190d5e237da16512",
-  "manifest_hash": "sha256:dc76092b805da41c2dd62c87f085c8209d629d8958efebe199b59e275a3eaee9",
+  "digest": "sha256:3ca672afde1fc761500d75ae75d16b889652eadc87f0cd844b32552bdfce4f28",
+  "manifest_hash": "sha256:1acef216b86f9efcbcc5ff4a86ed6762df9db7a12d23a3ff6b16f607b4987fa2",
   "files": [
     {
       "path": ".config/ai-rulez/config.ai.toml",
@@ -32,8 +32,8 @@
     },
     {
       "path": ".config/ai-rulez/config.toml",
-      "sha256": "336d8e06d04206eeda392e8a981ebd4bf1553af30c4ef0fa7cb9bcbcb733c44a",
-      "bytes": 1762
+      "sha256": "8ae260306c328c1dcdbc1bcbc046b1d7677e4ab832d47fb9e4a18aa2fbccf09e",
+      "bytes": 1879
     },
     {
       "path": ".config/ai-rulez/domains/ai/.gitkeep",
@@ -179,6 +179,36 @@
       "path": ".config/ai-rulez/domains/yml/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "bytes": 0
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards.sh",
+      "sha256": "4422951819d192e8965e91234256b72af851d7e6074794af298da1b2b640ebb0",
+      "bytes": 2150
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/custom.sh",
+      "sha256": "0e5272dc2bc234cfb8de72e258ab9b6c7b9c4b51622921b204473c59fab3c109",
+      "bytes": 275
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/github.sh",
+      "sha256": "453f9f2a4ebb9237c02ad2fe5c4ea1ac870337a0c555bb5e9858a1cf661baf56",
+      "bytes": 243
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/go.sh",
+      "sha256": "453f9f2a4ebb9237c02ad2fe5c4ea1ac870337a0c555bb5e9858a1cf661baf56",
+      "bytes": 243
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/index.sh",
+      "sha256": "723796e00563120939b352caa1a6805340909b04247a3e5538d9ab39cf9fc5fc",
+      "bytes": 305
+    },
+    {
+      "path": ".config/ai-rulez/scripts/bash-guards/yml.sh",
+      "sha256": "453f9f2a4ebb9237c02ad2fe5c4ea1ac870337a0c555bb5e9858a1cf661baf56",
+      "bytes": 243
     },
     {
       "path": ".config/basemind/config.toml",
@@ -352,8 +382,8 @@
     },
     {
       "path": ".gitignore",
-      "sha256": "406b719ecda47dfbc28b03d00a4004e0964b71f6c0ddd98ffb4142515d95a091",
-      "bytes": 361
+      "sha256": "0454685d013fc51f80666c8af9f1486d9737fe825d4075a4549e18580c7d6255",
+      "bytes": 430
     },
     {
       "path": ".golangci.yml",
